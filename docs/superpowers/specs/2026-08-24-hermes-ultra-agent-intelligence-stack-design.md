@@ -2,47 +2,51 @@
 
 **Date:** 2026-08-24
 
-**Status:** Approved architecture
+**Status:** Approved architecture — autonomy-first
 
 ## Objective
 
-Integrate six upstream capability families into Hermes Ultra without replacing Hermes' existing orchestration, model-routing, governance, evidence, or proof-before-success layers. The resulting system adds persistent code intelligence, multi-agent worktree execution, unrestricted Agent-Reach internet intelligence, curated external agent ingestion, Revenue OS media production, and a controlled benchmark lane for Graft.
+Integrate six upstream capability families into Hermes Ultra without replacing Hermes' existing orchestration, model-routing, evidence, or proof-before-success layers. The resulting system adds persistent code intelligence, multi-agent worktree execution, unrestricted Agent-Reach internet intelligence, curated external agent ingestion, Revenue OS media production, and a controlled benchmark lane for Graft.
+
+**Controlling rule:** Hermes autonomy is the default operating condition. Hardening, validation, evidence collection, isolation, redaction, health checks, and policy enforcement must be automatic, narrow, reversible where practical, and non-blocking for ordinary autonomous work. Human approval is reserved for explicit high-consequence approval categories already defined by Hermes policy; security or hardening language must not create new blanket approval gates.
 
 ## Architectural Principles
 
-1. **Hermes remains the brain.** Upstream projects are subordinate capability providers. None may replace Hermes orchestration, model routing, governance, approvals, evidence, or runtime policy.
-2. **Existing model routing is authoritative.** Orca or any worker manager receives already-selected providers/workers from Hermes. It does not choose the global routing policy.
-3. **Capabilities are replaceable adapters.** Hermes talks to stable internal interfaces, not directly to third-party implementation details.
-4. **Evidence before success.** Every material action produces machine-readable evidence: inputs, selected capability, execution result, test result, health state, provenance, and failure class.
-5. **Failure isolation.** A failed optional upstream capability must degrade its own lane rather than destabilize the Hermes core.
-6. **No duplicated source of truth.** Codebase Memory is the primary structural code graph. Graft remains benchmark-only until explicitly promoted by evidence.
-7. **Unrestricted Agent-Reach means full supported channel availability, not unrestricted secret handling.** All documented channels may be enabled. Authentication remains local/upstream; credentials, cookies, session values, and tokens must never be committed, logged, or copied into evidence bundles.
-8. **Promotion requires reproducible tests.** No upstream component is designated production-default solely from marketing claims or external benchmarks.
+1. **Autonomy is primary.** Ordinary research, coding, testing, self-improvement, agent selection, worktree execution, benchmarking, recovery, retries, local configuration, and reversible internal operations proceed autonomously. Hardening must support autonomy rather than displace it.
+2. **Hermes remains the brain.** Upstream projects are subordinate capability providers. None may replace Hermes orchestration, model routing, evidence, or runtime policy.
+3. **Existing model routing is authoritative.** Orca or any worker manager receives already-selected providers/workers from Hermes. It does not choose the global routing policy.
+4. **Capabilities are replaceable adapters.** Hermes talks to stable internal interfaces, not directly to third-party implementation details.
+5. **Evidence before success, not evidence before action.** Material actions produce machine-readable evidence, but evidence collection is performed automatically and must not become a human-approval checkpoint for ordinary work.
+6. **Failure isolation with autonomous recovery.** A failed optional upstream capability degrades its own lane; Hermes retries, falls back, reroutes, or continues in degraded mode whenever a viable path remains.
+7. **No duplicated source of truth.** Codebase Memory is the primary structural code graph. Graft remains benchmark-only until promoted by reproducible evidence.
+8. **Unrestricted Agent-Reach means full supported channel availability.** Hermes does not impose a content-source allowlist over supported Agent-Reach channels. Authentication remains local/upstream and secret material is automatically redacted from persisted evidence.
+9. **Promotion is evidence-driven and may be autonomous.** Reproducible tests, benchmarks, and policy checks determine promotion. Human approval is not required merely because a component is new; only an existing explicit high-consequence category can require it.
+10. **Hardening cannot silently expand scope.** A control introduced for secrets, provenance, prompt injection, branch protection, dependency integrity, or health checking may not be generalized into a stop-the-agent gate unrelated to the concrete risk it addresses.
 
 ## Top-Level Architecture
 
 ```text
 HERMES ULTRA
 │
-├── Core Orchestrator / Policy / Evidence / Router
+├── Autonomous Core Orchestrator / Router / Evidence
 │
 ├── Code Intelligence Plane
 │   ├── Codebase Memory MCP              [primary]
-│   └── Graft Benchmark Harness          [non-production]
+│   └── Graft Benchmark Harness          [experimental]
 │
 ├── Coding Swarm Execution Plane
 │   ├── Hermes task decomposition
 │   ├── existing subscription/model router
 │   ├── isolated Git worktrees
 │   ├── Orca adapter / worker fleet
-│   └── verifier + winning-patch promotion
+│   └── automatic verifier + winning-patch promotion
 │
 ├── Internet Intelligence Plane
 │   └── Agent-Reach adapter              [all supported channels]
 │
 ├── Agent Library Plane
 │   ├── existing Hermes agents/skills
-│   └── Agency Agents ingestion + dedupe + quarantine
+│   └── Agency Agents ingestion + dedupe + automatic qualification
 │
 ├── Revenue OS
 │   └── OpenMontage media-production adapter
@@ -53,8 +57,38 @@ HERMES ULTRA
     ├── test results
     ├── benchmark results
     ├── worker outcomes
-    └── promotion decisions
+    └── autonomous promotion decisions
 ```
+
+## Autonomy Contract
+
+### Default State
+
+A Hermes action is autonomous unless it falls into an explicit high-consequence approval category already defined outside this integration. This integration must not invent additional approval categories.
+
+### Controls That Must Be Automatic
+
+The following are implementation controls, not user-interaction gates:
+
+- secret redaction;
+- provenance capture;
+- health checks;
+- dependency verification;
+- worktree isolation;
+- test execution;
+- rollback preparation;
+- retry/backoff;
+- fallback provider selection;
+- prompt-injection treatment of external content as untrusted data;
+- agent-definition normalization and scoring;
+- benchmark qualification;
+- evidence persistence.
+
+When one of these controls fails, Hermes should attempt repair, retry, alternate tooling, or degraded-mode continuation before considering the task blocked.
+
+### Human Approval Boundary
+
+Human approval may be required only when the requested action itself falls into an existing explicit high-consequence category. Hardening failures, low confidence, unfamiliar upstream software, or the presence of authentication do not by themselves create an approval requirement.
 
 ## Component 1 — Codebase Memory MCP
 
@@ -76,24 +110,25 @@ Hermes exposes an internal `CodeIntelligenceProvider` contract with operations e
 
 The adapter may call the upstream MCP server, but Hermes consumers depend only on this internal interface.
 
-### Required Pre-Edit Flow
+### Autonomous Pre-Edit Flow
 
-Before a coding worker edits code:
+Before a coding worker edits code, Hermes automatically:
 
-1. identify the subsystem;
-2. query the structural graph;
-3. identify callers and dependencies;
-4. identify likely impacted tests;
-5. record a change-intent evidence object;
-6. create or assign an isolated worktree;
-7. allow the worker to edit;
-8. execute tests;
-9. rerun impact analysis against the changed set;
-10. record proof-before-success evidence.
+1. identifies the subsystem;
+2. queries the structural graph;
+3. identifies callers and dependencies;
+4. identifies likely impacted tests;
+5. records change-intent evidence;
+6. creates or assigns an isolated worktree;
+7. allows the worker to edit without a human checkpoint;
+8. executes tests;
+9. reruns impact analysis against the changed set;
+10. records proof-before-success evidence;
+11. promotes or rejects the candidate according to automated policy and verification results.
 
 ### Failure Behavior
 
-If Codebase Memory is unavailable, Hermes may fall back to repository-native search for non-critical work, but must mark the run `degraded_context=true`. For high-risk changes, the policy layer may require a healthy structural graph before proceeding.
+If Codebase Memory is unavailable, Hermes automatically falls back to repository-native search or another qualified provider and marks `degraded_context=true`. Unavailability of the preferred graph does not stop ordinary autonomous work when a viable fallback exists.
 
 ## Component 2 — Orca Worktree Fleet
 
@@ -110,11 +145,11 @@ Hermes owns:
 - task decomposition;
 - provider/model selection;
 - subscription/API lane selection;
-- governance;
-- concurrency limits;
+- autonomous concurrency decisions;
 - worktree lifecycle policy;
 - verifier selection;
-- patch acceptance and promotion.
+- patch acceptance and promotion;
+- existing high-consequence approval policy where applicable.
 
 The Orca adapter owns:
 
@@ -127,13 +162,15 @@ The Orca adapter owns:
 
 ### Candidate Promotion
 
-No worker writes directly to the protected branch. Each candidate remains isolated until Hermes:
+Workers remain isolated from protected branches while they work. Hermes automatically:
 
 1. verifies tests;
-2. checks policy;
+2. checks applicable policy;
 3. compares candidate evidence;
 4. selects a winner or synthesizes a new candidate;
-5. promotes only the verified change.
+5. promotes the verified change when no explicit high-consequence approval category applies.
+
+Protected-branch isolation is a technical integrity mechanism, not a standing human-approval gate.
 
 ## Component 3 — Agent-Reach Unrestricted Internet Intelligence
 
@@ -143,7 +180,7 @@ Expose every supported Agent-Reach channel through Hermes while retaining Agent-
 
 ### Channel Policy
 
-Hermes must support the upstream `channels=all` install/runtime mode and must not maintain a Hermes-side content-source allowlist that artificially disables supported Agent-Reach channels.
+Hermes supports the upstream `channels=all` install/runtime mode and must not maintain a Hermes-side content-source allowlist that artificially disables supported Agent-Reach channels.
 
 Expected optional channel families include:
 
@@ -163,11 +200,11 @@ Zero-config upstream capabilities such as web reading, YouTube, RSS, GitHub, sem
 
 ### Authentication Boundary
 
-Authentication is not stored in Hermes source control. Secrets and browser-session material stay in the upstream/local configuration or process environment. Hermes may invoke authenticated adapters when configured, but evidence/logging must redact credential-like values.
+Hermes may autonomously use authenticated adapters once credentials/session state have been configured by an authorized owner-controlled mechanism. Authentication material stays in the upstream/local configuration or process environment and is automatically redacted from evidence and logs. The existence of authenticated access does not demote the channel to read-only or require per-use approval.
 
 ### Health and Evidence
 
-`agent-reach doctor` or the current upstream equivalent is captured as structured health evidence. A channel failure degrades only that channel or route unless the requested task requires it exclusively.
+`agent-reach doctor` or the current upstream equivalent is captured as structured health evidence. A channel failure degrades only that channel or route. Hermes automatically attempts another supported backend or source before declaring the requested capability unavailable.
 
 ## Component 4 — Agency Agents Curated Ingestion
 
@@ -177,30 +214,32 @@ Increase the available specialist agent/skill catalog without flooding runtime s
 
 ### Ingestion States
 
-Every imported definition moves through:
+Every imported definition moves through an automatic qualification pipeline:
 
 ```text
-DISCOVERED -> QUARANTINED -> NORMALIZED -> SCORED -> APPROVED -> ACTIVE
-                                      \-> REJECTED
+DISCOVERED -> NORMALIZED -> SCORED -> QUALIFIED -> ACTIVE
+                           \-> REJECTED
 ```
+
+A temporary isolation state may be used during parsing or testing, but it must not require human approval for ordinary low-risk agent definitions.
 
 ### Dedupe and Scoring
 
-The ingestion layer evaluates:
+The ingestion layer automatically evaluates:
 
 - semantic overlap with existing Hermes agents/skills;
 - declared capabilities;
 - required tools;
 - privilege/risk level;
-- prompt injection or unsafe instruction patterns;
+- conflicting or manipulative instruction patterns;
 - provenance and upstream revision;
 - measurable value versus existing agents.
 
-A candidate cannot become `ACTIVE` merely because it exists upstream.
+Qualified candidates may become `ACTIVE` automatically. Only candidates that request an existing explicit high-consequence capability are subject to the corresponding approval policy when that capability is actually exercised.
 
 ### Runtime Rule
 
-Only `ACTIVE` definitions are eligible for orchestration. Quarantined or rejected definitions remain inspectable but cannot execute.
+`ACTIVE` definitions are eligible for orchestration. Rejected definitions remain inspectable but cannot execute until rescored or repaired. Qualification is designed to improve routing quality, not to reduce autonomy.
 
 ## Component 5 — OpenMontage Revenue OS Adapter
 
@@ -220,7 +259,7 @@ Revenue OS submits a media job containing:
 - brand constraints;
 - publication intent.
 
-The adapter may coordinate stages such as:
+The adapter may coordinate stages autonomously:
 
 ```text
 research -> script -> asset plan -> asset acquisition/generation
@@ -229,7 +268,7 @@ research -> script -> asset plan -> asset acquisition/generation
 
 ### Publication Boundary
 
-Rendering and QA may be autonomous. External publication/posting remains governed by the existing Hermes external-communication policy and any applicable approval category.
+Research, creation, rendering, QA, packaging, and reversible staging proceed autonomously. External publication/posting is governed only if the action falls into an existing explicit external-communication or other high-consequence approval category; the media-production pipeline itself must not stop early merely because publication may later require separate authorization.
 
 ## Component 6 — Graft Benchmark Harness
 
@@ -237,9 +276,9 @@ Rendering and QA may be autonomous. External publication/posting remains governe
 
 Test whether Graft materially improves Hermes performance relative to Codebase Memory or baseline repository-native context retrieval.
 
-### Non-Production Status
+### Experimental Status
 
-Graft is not part of the mandatory runtime context path at initial integration.
+Graft is not in the mandatory runtime context path at initial integration, but Hermes may benchmark it autonomously and may promote it autonomously when configured promotion criteria are met and no explicit high-consequence approval category is implicated.
 
 ### Benchmark Design
 
@@ -248,7 +287,7 @@ Use the same fixed Hermes repository tasks across:
 - baseline repository-native search;
 - Codebase Memory MCP;
 - Graft;
-- optional combined experimental mode only if required to test complementarity.
+- optional combined experimental mode when testing complementarity.
 
 Capture at minimum:
 
@@ -265,11 +304,11 @@ Capture at minimum:
 
 ### Promotion Rule
 
-Graft may be promoted only through an explicit configuration change after reproducible Hermes-local evidence demonstrates a material advantage or a clearly complementary role. No automatic promotion is allowed.
+Graft may be promoted through an automatic configuration decision after reproducible Hermes-local evidence meets defined promotion thresholds. Promotion must be reversible and recorded in evidence. No human checkpoint is required solely because the promoted provider is third-party software.
 
 ## Shared Evidence Schema
 
-Each capability invocation should emit a normalized evidence envelope:
+Each capability invocation emits a normalized evidence envelope:
 
 ```json
 {
@@ -286,38 +325,53 @@ Each capability invocation should emit a normalized evidence envelope:
   "tests": [],
   "health": {},
   "provenance": {},
-  "redactions_applied": true
+  "redactions_applied": true,
+  "human_approval_required": false,
+  "approval_category": null
 }
 ```
 
-Secrets, cookies, bearer tokens, authorization headers, passwords, session IDs, and provider credentials must be redacted before evidence persistence.
+`human_approval_required` defaults to `false`. It may become `true` only when an existing explicit high-consequence policy category applies to the action itself.
+
+Secrets, cookies, bearer tokens, authorization headers, passwords, session IDs, and provider credentials are automatically redacted before evidence persistence.
 
 ## Configuration Model
 
-Hermes configuration must use capability-scoped settings rather than embedding third-party configuration globally. Example logical shape:
+Hermes configuration uses capability-scoped settings rather than embedding third-party configuration globally. Example logical shape:
 
 ```yaml
+autonomy:
+  default: autonomous
+  ordinary_operations_require_approval: false
+  hardening_mode: automatic_non_blocking
+  retry_before_block: true
+  fallback_before_block: true
+  approvals: existing_high_consequence_categories_only
+
 capabilities:
   code_intelligence:
     primary: codebase_memory
     fallback: native_repo_search
     graft:
-      mode: benchmark_only
+      mode: benchmark_and_auto_promote
+      promotion_reversible: true
 
   coding_swarm:
     executor: orca
     router: existing_hermes_router
     worktree_isolation: required
+    autonomous_candidate_promotion: true
 
   internet_intelligence:
     provider: agent_reach
     channels: all
     preserve_upstream_fallbacks: true
+    authenticated_channels_require_per_use_approval: false
 
   agent_library:
     agency_agents:
-      ingestion: curated
-      quarantine_required: true
+      ingestion: curated_automatic
+      automatic_activation: true
 
   revenue_os:
     media_production:
@@ -343,17 +397,20 @@ At minimum, normalize failures into:
 - `BENCHMARK_REGRESSION`
 - `UNKNOWN`
 
-The core must preserve the original stderr/error payload in a redacted artifact while exposing the normalized class to orchestration.
+The core preserves the original stderr/error payload in a redacted artifact while exposing the normalized class to orchestration. Before treating recoverable failures as blocking, Hermes attempts the configured retry, repair, fallback, reroute, or degraded-mode path.
 
-## Security and Governance
+## Autonomy, Security, and Governance
 
-- No upstream package receives implicit authority over Hermes policy.
-- No direct write to protected branches from workers.
-- No secrets in Git, CI logs, evidence bundles, prompts, or telemetry.
-- Third-party agent definitions are untrusted until approved through ingestion.
-- Internet-source content is untrusted data and cannot modify runtime policy merely by containing instructions.
-- External publishing remains subject to existing external-communication governance.
-- High-consequence operations remain governed by existing Hermes approval categories.
+- Autonomous execution is the default; controls run around the agent loop, not as routine human checkpoints inside it.
+- No upstream package receives implicit authority to replace Hermes orchestration or approval policy.
+- Worktree/protected-branch isolation prevents accidental corruption but does not require manual promotion for ordinary verified changes.
+- Secret redaction is automatic and must not disable authenticated capabilities.
+- Third-party agent definitions are machine-qualified before activation; qualification does not create a blanket human-review requirement.
+- Internet-source content is treated as untrusted data and cannot rewrite Hermes policy merely by containing instructions; this is a parsing/execution boundary, not a ban on using the content.
+- Health checks, provenance checks, and dependency checks are advisory/recovery inputs unless their concrete failure makes the requested operation impossible or unsafe under an existing explicit policy category.
+- External actions are governed only by the existing explicit high-consequence approval categories applicable to those actions.
+- No integration component may introduce a generic `require_human_approval=true` default.
+- New hardening controls must include a documented autonomous recovery/fallback behavior and a test proving ordinary work continues when the control's preferred path is unavailable.
 
 ## Testing Strategy
 
@@ -361,26 +418,32 @@ The core must preserve the original stderr/error payload in a redacted artifact 
 
 - adapter command construction;
 - environment propagation;
-- secret redaction;
+- secret redaction without capability disablement;
 - health result normalization;
 - failure classification;
+- autonomous retry/fallback behavior;
 - capability discovery;
-- Agency Agents deduplication/scoring state transitions;
-- Graft promotion guard;
-- evidence schema validation.
+- Agency Agents deduplication/scoring and automatic activation;
+- Graft reversible auto-promotion guard;
+- evidence schema validation;
+- `human_approval_required` defaults false;
+- approval can be raised only by an explicit registered high-consequence category.
 
 ### Integration Tests
 
 - Codebase Memory graph query against a fixture repository;
+- Codebase Memory failure followed by automatic native-search fallback;
 - Orca worker launch in disposable worktrees;
+- automatic candidate verification and promotion on an ordinary coding task;
 - Agent-Reach `doctor` parsing and mocked channel execution;
-- Agency Agents quarantine-to-active promotion fixture;
+- Agent-Reach backend failure followed by automatic fallback;
+- Agency Agents discover-to-active automatic qualification fixture;
 - OpenMontage job lifecycle with a mocked renderer;
-- benchmark runner comparing fixture results.
+- benchmark runner comparing fixture results and reversible Graft promotion.
 
 ### End-to-End Tests
 
-A representative coding task must demonstrate:
+A representative ordinary coding task must demonstrate:
 
 1. Hermes queries Codebase Memory;
 2. the router selects a worker;
@@ -389,15 +452,17 @@ A representative coding task must demonstrate:
 5. post-change impact analysis runs;
 6. verifier accepts/rejects the candidate;
 7. evidence is complete;
-8. protected branch remains untouched until promotion.
+8. verified promotion occurs without human approval when no explicit high-consequence category applies.
 
-A representative research task must demonstrate Agent-Reach channel selection, health evidence, normalized result ingestion, and secret-free logs.
+A degraded-context coding test must demonstrate that loss of Codebase Memory triggers automatic fallback rather than a blanket stop.
 
-A representative Revenue OS job must demonstrate research-to-render orchestration with publication remaining separately governed.
+A representative research task must demonstrate Agent-Reach channel selection, authenticated channel use when configured, health evidence, backend fallback, normalized result ingestion, and secret-free logs without per-use approval.
+
+A representative Revenue OS job must demonstrate autonomous research-to-render orchestration with only the separately classified high-consequence external action, if any, invoking the existing approval mechanism.
 
 ## CI Requirements
 
-CI must include:
+CI includes:
 
 - unit test suite;
 - integration fixtures that do not require real credentials;
@@ -405,42 +470,48 @@ CI must include:
 - dependency/provenance checks where supported;
 - configuration/schema validation;
 - no-network or mocked-network test coverage for core orchestration;
-- benchmark harness smoke test without promoting Graft.
+- benchmark harness smoke test;
+- autonomy regression tests proving ordinary operations do not gain new human-approval gates.
 
 Credentialed live-channel tests are optional/manual and must not be required for pull-request CI.
 
 ## Rollout Order
 
-1. Shared capability/evidence contracts.
-2. Codebase Memory MCP adapter and pre-edit context flow.
-3. Orca isolated-worktree executor integrated beneath the existing router.
-4. Agent-Reach unrestricted adapter hardened against secret leakage.
-5. Agency Agents curated ingestion pipeline.
+1. Shared capability/evidence/autonomy contracts.
+2. Codebase Memory MCP adapter and autonomous fallback path.
+3. Orca isolated-worktree executor beneath the existing router with automatic candidate promotion.
+4. Agent-Reach unrestricted adapter with automatic redaction and backend fallback.
+5. Agency Agents curated automatic qualification pipeline.
 6. OpenMontage Revenue OS adapter.
-7. Graft benchmark harness.
-8. Cross-component end-to-end verification and release documentation.
+7. Graft benchmark and reversible auto-promotion harness.
+8. Cross-component end-to-end autonomy verification and release documentation.
 
 ## Acceptance Criteria
 
 The architecture is complete when all of the following are true:
 
-- Codebase Memory is the primary structural code-intelligence provider.
-- Hermes coding tasks can require graph context before edit.
-- Orca-compatible workers execute in isolated worktrees without replacing Hermes routing.
-- Agent-Reach exposes all supported channels and records health evidence without leaking credentials.
-- Agency Agents candidates cannot execute before quarantine, normalization, scoring, and approval.
-- OpenMontage is callable through Revenue OS while external publication remains separately governed.
-- Graft remains benchmark-only until an explicit evidence-backed promotion.
-- A normalized evidence envelope exists for every capability invocation.
-- CI verifies the core paths without requiring real third-party credentials.
-- End-to-end tests prove protected-branch isolation, test-before-promotion, and proof-before-success.
+- ordinary Hermes operations run autonomously by default;
+- no component introduces a blanket human-approval gate for hardening, health, provenance, unfamiliar providers, or authenticated access;
+- Codebase Memory is the primary structural code-intelligence provider with automatic fallback;
+- Hermes coding tasks query graph context before edit when available without blocking on a missing preferred provider;
+- Orca-compatible workers execute in isolated worktrees without replacing Hermes routing;
+- ordinary verified candidate changes can be promoted automatically;
+- Agent-Reach exposes all supported channels, may use configured authenticated paths, and records health evidence without leaking credentials;
+- Agency Agents candidates can be automatically normalized, scored, qualified, and activated;
+- OpenMontage is callable autonomously through Revenue OS while any separately classified high-consequence external action remains governed by existing policy;
+- Graft can be benchmarked and reversibly promoted through evidence-backed automatic policy;
+- a normalized evidence envelope exists for every capability invocation;
+- CI verifies the core paths without requiring real third-party credentials;
+- end-to-end tests prove retry/fallback-before-block, protected-branch integrity, test-before-promotion, proof-before-success, and autonomy preservation.
 
 ## Explicit Non-Goals
 
 - Replacing the existing Hermes model router.
 - Making Orca the global orchestrator.
 - Making Agent-Reach a credential store.
-- Activating the entire Agency Agents catalog automatically.
+- Disabling authenticated Agent-Reach channels merely because they use session-based authentication.
+- Requiring human review for every imported Agency Agents definition.
 - Making OpenMontage part of the Hermes core runtime.
-- Promoting Graft without Hermes-local benchmark evidence.
+- Forcing Graft to remain benchmark-only after it satisfies configured promotion criteria.
 - Allowing third-party content, agents, or tools to rewrite Hermes governance.
+- Turning hardening, provenance, redaction, health checks, test gates, or evidence collection into routine human-interruption mechanisms.
