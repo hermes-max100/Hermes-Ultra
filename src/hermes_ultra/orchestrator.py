@@ -37,6 +37,7 @@ class HermesUltraOrchestrator:
         candidate_verifier=None,
         agent_reach=None,
         media_adapter=None,
+        capability_context=None,
         evidence_recorder: EvidenceRecorder | None = None,
     ) -> None:
         self.code_intelligence = code_intelligence
@@ -44,6 +45,7 @@ class HermesUltraOrchestrator:
         self.candidate_verifier = candidate_verifier
         self.agent_reach = agent_reach
         self.media_adapter = media_adapter
+        self.capability_context = capability_context
         self.evidence_recorder = evidence_recorder or EvidenceRecorder()
 
     def _record_failure(
@@ -65,6 +67,16 @@ class HermesUltraOrchestrator:
         }
         envelope.finish(status="failure", failure_class=envelope.failure_class)
         self.evidence_recorder.record(envelope)
+
+    def run_task(self, task) -> CapabilityResult:
+        """Delegate a generic task to the additive capability/context layer."""
+        if self.capability_context is None:
+            return CapabilityResult.failure(
+                FailureClass.DEPENDENCY_MISSING,
+                "capability/context orchestrator is not configured",
+                recoverable=False,
+            )
+        return self.capability_context.run(task)
 
     def run_coding_task(
         self,
