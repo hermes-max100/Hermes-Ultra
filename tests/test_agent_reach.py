@@ -104,3 +104,70 @@ def test_upstream_rejects_option_injection():
     adapter = AgentReachAdapter()
     with pytest.raises(ValueError):
         adapter.upstream("--help")
+
+
+def test_authenticated_environment_is_passed_without_per_use_gate(monkeypatch):
+    calls, fake_run = fake_run_factory()
+    monkeypatch.setattr("hermes_ultra.agent_reach.subprocess.run", fake_run)
+    monkeypatch.setattr("hermes_ultra.agent_reach.shutil.which", lambda name: f"/usr/bin/{name}")
+    adapter = AgentReachAdapter(
+        env={
+            "PATH": "/bin",
+            "TWITTER_AUTH_TOKEN": "auth-secret",
+            "TWITTER_CT0": "csrf-secret",
+        }
+    )
+
+    result = adapter.upstream("twitter", "search", "agents")
+
+    assert result.ok
+    assert calls[0][1]["env"]["TWITTER_AUTH_TOKEN"] == "auth-secret"
+    assert calls[0][1]["env"]["TWITTER_CT0"] == "csrf-secret"
+
+
+def test_error_text_redacts_secret_values(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        return SimpleNamespace(
+            returncode=2,
+            stdout="",
+            stderr="Authorization: Bearer auth-secret; auth_token=cookie-secret",
+        )
+
+    monkeypatch.setattr("hermes_ultra.agent_reach.subprocess.run", fake_run)
+    adapter = AgentReachAdapter(env={"PATH": "/bin"})
+
+    with pytest.raises(AgentReachError) as excinfo:
+        adapter.install_all()
+
+    rendered = str(excinfo.value)
+    assert "auth-secret" not in rendered
+    assert "cookie-secret" not in rendered
+    assert "[REDACTED]" in rendered
+
+
+def test_execute_with_fallback_uses_next_backend(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[0] == "twitter":
+            return SimpleNamespace(returncode=3, stdout="", stderr="primary down")
+        return SimpleNamespace(returncode=0, stdout="fallback ok", stderr="")
+
+    monkeypatch.setattr("hermes_ultra.agent_reach.subprocess.run", fake_run)
+    monkeypatch.setattr("hermes_ultra.agent_reach.shutil.which", lambda name: f"/usr/bin/{name}")
+    adapter = AgentReachAdapter(env={"PATH": "/bin"})
+
+    result = adapter.execute_with_fallback(
+        [
+            ("twitter", ("search", "hermes")),
+            ("opencli", ("twitter", "search", "hermes")),
+        ]
+    )
+
+    assert result.ok
+    assert result.value.stdout == "fallback ok"
+    assert result.metadata["selected_backend"] == "opencli"
+    assert result.metadata["attempted_backends"] == ["twitter", "opencli"]
+    assert calls[0][0] == "twitter"
+    assert calls[1][0] == "opencli"
