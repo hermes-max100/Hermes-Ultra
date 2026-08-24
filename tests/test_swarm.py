@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 from hermes_ultra.autonomy import ApprovalRegistry
 from hermes_ultra.swarm import (
     Candidate,
     CandidateVerifier,
+    OrcaAdapter,
+    OrcaTask,
     WorkerAssignment,
     WorktreeExecutor,
 )
@@ -66,6 +69,92 @@ def test_worker_failure_is_recoverable_for_orchestrator():
 
     assert not result.ok
     assert result.recoverable is True
+
+
+def test_orca_create_uses_agent_first_native_cli_without_routing():
+    calls = []
+    payload = {
+        "worktree": {"id": "repo::feature-1", "path": "/tmp/orca/feature-1"},
+        "terminal": {"handle": "term-123"},
+    }
+
+    def runner(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    adapter = OrcaAdapter(runner=runner)
+    task = OrcaTask(
+        task_id="feature-1",
+        agent="codex",
+        prompt="Implement the verified patch",
+        repo_path="/repo",
+        setup="inherit",
+    )
+
+    result = adapter.create(task)
+
+    assert result.ok
+    assert result.value.worktree_id == "repo::feature-1"
+    assert result.value.terminal_handle == "term-123"
+    assert calls[0][0] == [
+        "orca", "worktree", "create",
+        "--name", "feature-1",
+        "--no-parent",
+        "--agent", "codex",
+        "--prompt", "Implement the verified patch",
+        "--setup", "inherit",
+        "--json",
+    ]
+    assert calls[0][1]["cwd"] == "/repo"
+
+
+def test_orca_wait_stop_and_remove_use_returned_handles():
+    calls = []
+
+    def runner(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[1:3] == ["terminal", "wait"]:
+            payload = {"status": "exited", "exitCode": 0}
+        else:
+            payload = {"ok": True}
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+    adapter = OrcaAdapter(runner=runner)
+
+    wait = adapter.wait("term-123", timeout_ms=45000)
+    stop = adapter.stop("repo::feature-1")
+    remove = adapter.remove("repo::feature-1")
+
+    assert wait.ok and stop.ok and remove.ok
+    assert calls[0] == [
+        "orca", "terminal", "wait", "--terminal", "term-123",
+        "--for", "exit", "--timeout-ms", "45000", "--json",
+    ]
+    assert calls[1] == [
+        "orca", "terminal", "stop", "--worktree", "repo::feature-1", "--json",
+    ]
+    assert calls[2] == [
+        "orca", "worktree", "rm", "--worktree", "repo::feature-1", "--force", "--json",
+    ]
+
+
+def test_orca_failure_is_recoverable_and_does_not_change_agent_choice():
+    def runner(cmd, **kwargs):
+        return SimpleNamespace(returncode=5, stdout="", stderr="orca unavailable")
+
+    adapter = OrcaAdapter(runner=runner)
+    task = OrcaTask(
+        task_id="t1",
+        agent="kimi",
+        prompt="Fix the issue",
+        repo_path="/repo",
+    )
+
+    result = adapter.create(task)
+
+    assert not result.ok
+    assert result.recoverable is True
+    assert result.metadata["agent"] == "kimi"
 
 
 def test_verified_ordinary_candidate_promotes_without_human_approval():
