@@ -17,4 +17,35 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -U pip
       - run: python -m pip install -e '.[test]'
-      - run: pytest -q
+      - name: Compile source
+        run: python -m compileall -q src
+      - name: Full test suite
+        run: pytest -q
+      - name: Autonomy regression suite
+        run: pytest tests/test_autonomy.py tests/test_orchestrator_e2e.py -q
+      - name: Source secret scan
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          patterns = {
+              "bearer": re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+\-/]{16,}"),
+              "auth_token": re.compile(r"(?i)auth_token=[A-Za-z0-9._~+\-/]{8,}"),
+              "password": re.compile(r"(?i)password\s*[=:]\s*['\"]?[A-Za-z0-9._~+\-/]{8,}"),
+          }
+          violations = []
+          for path in Path("src").rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              for name, pattern in patterns.items():
+                  for match in pattern.finditer(text):
+                      value = match.group(0)
+                      if "REDACTED" not in value:
+                          violations.append(f"{path}: {name}")
+          if violations:
+              print("Potential committed secrets:")
+              print("\n".join(violations))
+              sys.exit(1)
+          PY
