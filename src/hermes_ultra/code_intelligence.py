@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Callable, Protocol, Sequence
 
 from .contracts import CapabilityResult, FailureClass
@@ -16,25 +18,41 @@ class ImpactReport:
     changed: tuple[str, ...] = ()
     matches: tuple[str, ...] = ()
     degraded_context: bool = False
+    payload: object | None = None
 
 
 class CodeIntelligenceProvider(Protocol):
+    def index_repository(self) -> CapabilityResult[object]: ...
+    def lookup_symbol(self, symbol: str) -> CapabilityResult[object]: ...
+    def find_callers(self, symbol: str) -> CapabilityResult[object]: ...
+    def find_dependencies(self, symbol: str) -> CapabilityResult[object]: ...
+    def find_routes(self, pattern: str) -> CapabilityResult[object]: ...
     def impact_analysis(self, changed_paths_or_symbols: Sequence[str]) -> CapabilityResult[ImpactReport]: ...
+    def health(self) -> CapabilityResult[object]: ...
 
 
 class CodebaseMemoryAdapter:
+    """One-shot CLI adapter for DeusData/codebase-memory-mcp.
+
+    The adapter deliberately uses upstream `cli` mode instead of managing the
+    long-lived coordination daemon. Every query is local and bounded, and the
+    Hermes-facing interface stays stable if upstream implementation details move.
+    """
+
     def __init__(
         self,
-        binary: str = "codebase-memory",
+        binary: str = "codebase-memory-mcp",
         *,
         repo_path: str = ".",
+        project: str | None = None,
         runner: Runner = subprocess.run,
     ) -> None:
         self.binary = binary
         self.repo_path = repo_path
+        self.project = project or Path(repo_path).resolve().name
         self._runner = runner
 
-    def _run(self, args: Sequence[str]) -> CapabilityResult[str]:
+    def _run_raw(self, args: Sequence[str]) -> CapabilityResult[str]:
         if self._runner is subprocess.run and shutil.which(self.binary) is None:
             return CapabilityResult.failure(
                 FailureClass.DEPENDENCY_MISSING,
@@ -52,7 +70,7 @@ class CodebaseMemoryAdapter:
         except subprocess.TimeoutExpired:
             return CapabilityResult.failure(
                 FailureClass.TIMEOUT,
-                "code intelligence command timed out",
+                "Codebase Memory command timed out",
                 recoverable=True,
             )
         except OSError as exc:
@@ -67,15 +85,14 @@ class CodebaseMemoryAdapter:
         if returncode != 0:
             return CapabilityResult.failure(
                 FailureClass.UPSTREAM_UNAVAILABLE,
-                stderr.strip() or f"code intelligence exited {returncode}",
+                stderr.strip() or f"Codebase Memory exited {returncode}",
                 recoverable=True,
                 metadata={"returncode": returncode},
             )
         return CapabilityResult.success(stdout)
 
-    def impact_analysis(self, changed_paths_or_symbols: Sequence[str]) -> CapabilityResult[ImpactReport]:
-        changed = tuple(changed_paths_or_symbols)
-        result = self._run(["impact", "--repo", self.repo_path, *changed])
+    def _cli(self, tool: str, *flags: str) -> CapabilityResult[object]:
+        result = self._run_raw(["cli", "--json", tool, *flags])
         if not result.ok:
             return CapabilityResult.failure(
                 result.failure_class or FailureClass.UNKNOWN,
@@ -83,13 +100,72 @@ class CodebaseMemoryAdapter:
                 recoverable=result.recoverable,
                 metadata=result.metadata,
             )
-        matches = tuple(line for line in (result.value or "").splitlines() if line.strip())
-        return CapabilityResult.success(
-            ImpactReport(provider="codebase-memory", changed=changed, matches=matches)
+        try:
+            payload = json.loads(result.value or "null")
+        except json.JSONDecodeError as exc:
+            return CapabilityResult.failure(
+                FailureClass.EVIDENCE_INCOMPLETE,
+                f"Codebase Memory returned malformed JSON: {exc}",
+                recoverable=True,
+            )
+        return CapabilityResult.success(payload)
+
+    def index_repository(self) -> CapabilityResult[object]:
+        return self._cli("index_repository", "--repo-path", self.repo_path)
+
+    def lookup_symbol(self, symbol: str) -> CapabilityResult[object]:
+        return self._cli(
+            "search_graph",
+            "--project", self.project,
+            "--name-pattern", symbol,
+            "--label", "Function",
         )
 
-    def health(self) -> CapabilityResult[str]:
-        return self._run(["health"])
+    def find_callers(self, symbol: str) -> CapabilityResult[object]:
+        return self._cli(
+            "trace_path",
+            "--project", self.project,
+            "--function-name", symbol,
+            "--direction", "in",
+        )
+
+    def find_dependencies(self, symbol: str) -> CapabilityResult[object]:
+        return self._cli(
+            "trace_path",
+            "--project", self.project,
+            "--function-name", symbol,
+            "--direction", "out",
+        )
+
+    def find_routes(self, pattern: str) -> CapabilityResult[object]:
+        return self._cli(
+            "search_graph",
+            "--project", self.project,
+            "--name-pattern", pattern,
+            "--label", "Route",
+        )
+
+    def impact_analysis(self, changed_paths_or_symbols: Sequence[str]) -> CapabilityResult[ImpactReport]:
+        changed = tuple(changed_paths_or_symbols)
+        result = self._cli("detect_changes", "--project", self.project)
+        if not result.ok:
+            return CapabilityResult.failure(
+                result.failure_class or FailureClass.UNKNOWN,
+                result.message,
+                recoverable=result.recoverable,
+                metadata=result.metadata,
+            )
+        return CapabilityResult.success(
+            ImpactReport(
+                provider="codebase-memory",
+                changed=changed,
+                payload=result.value,
+            )
+        )
+
+    def health(self) -> CapabilityResult[object]:
+        # list_projects has no input schema and is a cheap one-shot readiness check.
+        return self._cli("list_projects")
 
 
 class NativeRepoSearchAdapter:
@@ -97,8 +173,23 @@ class NativeRepoSearchAdapter:
         self.repo_path = repo_path
         self._runner = runner
 
-    def impact_analysis(self, changed_paths_or_symbols: Sequence[str]) -> CapabilityResult[ImpactReport]:
-        changed = tuple(changed_paths_or_symbols)
+    def index_repository(self) -> CapabilityResult[object]:
+        return CapabilityResult.success({"provider": "native-repo-search", "indexed": False})
+
+    def lookup_symbol(self, symbol: str) -> CapabilityResult[object]:
+        return self._search((symbol,))
+
+    def find_callers(self, symbol: str) -> CapabilityResult[object]:
+        return self._search((symbol,))
+
+    def find_dependencies(self, symbol: str) -> CapabilityResult[object]:
+        return self._search((symbol,))
+
+    def find_routes(self, pattern: str) -> CapabilityResult[object]:
+        return self._search((pattern,))
+
+    def _search(self, terms: Sequence[str]) -> CapabilityResult[ImpactReport]:
+        changed = tuple(terms)
         if not changed:
             return CapabilityResult.success(ImpactReport(provider="native-repo-search"))
         pattern = "|".join(changed)
@@ -137,7 +228,10 @@ class NativeRepoSearchAdapter:
             ImpactReport(provider="native-repo-search", changed=changed, matches=matches)
         )
 
-    def health(self) -> CapabilityResult[str]:
+    def impact_analysis(self, changed_paths_or_symbols: Sequence[str]) -> CapabilityResult[ImpactReport]:
+        return self._search(changed_paths_or_symbols)
+
+    def health(self) -> CapabilityResult[object]:
         return CapabilityResult.success("native-repo-search")
 
 
