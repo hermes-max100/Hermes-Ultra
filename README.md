@@ -1,6 +1,6 @@
 # Hermes-Ultra
 
-Hermes Ultra is an autonomy-first integration layer for code intelligence, coding swarms, internet intelligence, specialist-agent ingestion, Revenue OS media production, and evidence-backed provider benchmarking.
+Hermes Ultra is an autonomy-first integration layer for code intelligence, coding swarms, internet intelligence, specialist-agent ingestion, Revenue OS media production, evidence-backed provider benchmarking, and capability-aware context orchestration.
 
 ## Autonomy contract
 
@@ -15,7 +15,15 @@ See `docs/architecture/autonomy-contract.md`.
 ```text
 HERMES ULTRA
 │
+├── Capability + Context Orchestrator
+│   ├── task capability classification
+│   ├── bounded relevant context assembly
+│   ├── evidence-driven tool escalation
+│   ├── verification
+│   └── memory writeback
+│
 ├── Existing Hermes Orchestrator / Model Router
+│   └── remains provider/model selection authority
 │
 ├── Code Intelligence
 │   ├── Codebase Memory                 [primary]
@@ -43,6 +51,26 @@ HERMES ULTRA
 ```
 
 Hermes remains the orchestration and routing authority. None of the integrated upstream capabilities may replace the existing model router or invent new approval policy.
+
+## Capability + Context Orchestrator
+
+The additive `CapabilityContextOrchestrator` sits above the existing Hermes model/subscription router. It classifies task requirements, assembles the most relevant context inside a token budget, delegates model selection to the existing router with `quality_first=true`, verifies the response, escalates tools only when evidence is insufficient, and writes verified results back to memory.
+
+It contains **no provider ranking table, no pricing optimization, and no approval registry**. The current router continues to decide which subscription/provider/model handles the task.
+
+Default escalation is capability-driven:
+
+```text
+files           -> file retrieval
+research        -> search -> deep research
+coding/compute  -> code execution
+connectors      -> connector
+specialist      -> specialist worker
+```
+
+Recoverable tool failure advances automatically to the next eligible step. Verification failure cannot be reported as success. Context items that do not fit the budget are dropped by priority and surfaced in metadata.
+
+See `docs/architecture/capability-context-orchestrator.md`.
 
 ## Agent-Reach — unrestricted channels
 
