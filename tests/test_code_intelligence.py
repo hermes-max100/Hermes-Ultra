@@ -86,5 +86,5 @@ def test_native_repo_search_returns_matches():
 
     assert result.ok
     assert result.value.provider == "native-repo-search"
-    assert "src/app.py:42:def target()" in result.value.matches
+    assert "src/app.py:42:def target():" in result.value.matches
     assert calls[0][:3] == ["git", "-C", "/repo"]
