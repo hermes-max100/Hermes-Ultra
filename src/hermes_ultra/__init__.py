@@ -4,10 +4,76 @@ from .agent_reach import (
     AgentReachError,
     AgentReachResult,
 )
+from .agency_agents import (
+    AgentDefinition,
+    AgentState,
+    AgencyAgentIngestor,
+    IngestionResult,
+    QualificationScore,
+)
+from .autonomy import ApprovalRegistry, AutonomyDecision
+from .benchmarks import (
+    BenchmarkMetrics,
+    BenchmarkReport,
+    PromotionDecision,
+    PromotionPolicy,
+    ProviderRegistry,
+)
+from .code_intelligence import (
+    CodeIntelligenceRouter,
+    CodebaseMemoryAdapter,
+    ImpactReport,
+    NativeRepoSearchAdapter,
+)
+from .contracts import CapabilityResult, FailureClass
+from .evidence import EvidenceEnvelope, EvidenceRecorder, redact_secrets
+from .openmontage import MediaJob, MediaPipelineResult, OpenMontageAdapter
+from .orchestrator import CodingTaskResult, HermesUltraOrchestrator, ResearchTaskResult
+from .swarm import (
+    Candidate,
+    CandidateVerifier,
+    VerificationDecision,
+    WorkerAssignment,
+    WorkerOutcome,
+    WorktreeExecutor,
+)
 
 __all__ = [
     "SUPPORTED_CHANNELS",
     "AgentReachAdapter",
     "AgentReachError",
     "AgentReachResult",
+    "AgentDefinition",
+    "AgentState",
+    "AgencyAgentIngestor",
+    "IngestionResult",
+    "QualificationScore",
+    "ApprovalRegistry",
+    "AutonomyDecision",
+    "BenchmarkMetrics",
+    "BenchmarkReport",
+    "PromotionDecision",
+    "PromotionPolicy",
+    "ProviderRegistry",
+    "CodeIntelligenceRouter",
+    "CodebaseMemoryAdapter",
+    "ImpactReport",
+    "NativeRepoSearchAdapter",
+    "CapabilityResult",
+    "FailureClass",
+    "EvidenceEnvelope",
+    "EvidenceRecorder",
+    "redact_secrets",
+    "MediaJob",
+    "MediaPipelineResult",
+    "OpenMontageAdapter",
+    "CodingTaskResult",
+    "HermesUltraOrchestrator",
+    "ResearchTaskResult",
+    "Candidate",
+    "CandidateVerifier",
+    "VerificationDecision",
+    "WorkerAssignment",
+    "WorkerOutcome",
+    "WorktreeExecutor",
 ]
