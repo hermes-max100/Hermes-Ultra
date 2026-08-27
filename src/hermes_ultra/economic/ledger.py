@@ -29,6 +29,7 @@ class LedgerEntry:
     status: str
     metadata: Mapping[str, object]
     created_at: datetime
+    event_key: str | None = None
 
 
 class EconomicLedger:
@@ -73,9 +74,19 @@ class EconomicLedger:
                     status TEXT NOT NULL,
                     metadata_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    event_key TEXT,
                     FOREIGN KEY(transaction_id) REFERENCES transactions(transaction_id)
                 )
                 """
+            )
+            columns = {
+                row[1] for row in self._conn.execute("PRAGMA table_info(events)").fetchall()
+            }
+            if "event_key" not in columns:
+                self._conn.execute("ALTER TABLE events ADD COLUMN event_key TEXT")
+            self._conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_events_event_key "
+                "ON events(event_key) WHERE event_key IS NOT NULL"
             )
 
     def __enter__(self) -> "EconomicLedger":
@@ -177,7 +188,9 @@ class EconomicLedger:
         amount: Decimal | int | str,
         currency: str,
         metadata: Mapping[str, object] | None = None,
+        idempotency_key: str | None = None,
     ) -> LedgerEntry:
+        event_key = None if idempotency_key is None else f"revenue:{idempotency_key}"
         return self._insert_event(
             kind="revenue",
             transaction_id=None,
@@ -188,7 +201,31 @@ class EconomicLedger:
             currency=currency,
             status="received",
             metadata=metadata,
+            event_key=event_key,
         )
+
+    @staticmethod
+    def _row_to_entry(row: sqlite3.Row) -> LedgerEntry:
+        return LedgerEntry(
+            entry_id=int(row["entry_id"]),
+            kind=row["kind"],
+            transaction_id=row["transaction_id"],
+            run_id=row["run_id"],
+            strategy_id=row["strategy_id"],
+            bucket=None if row["bucket"] is None else TreasuryBucket(row["bucket"]),
+            amount=Decimal(row["amount"]),
+            currency=row["currency"],
+            status=row["status"],
+            metadata=json.loads(row["metadata_json"]),
+            created_at=datetime.fromisoformat(row["created_at"]),
+            event_key=row["event_key"],
+        )
+
+    def find_event_by_key(self, event_key: str) -> LedgerEntry | None:
+        row = self._conn.execute(
+            "SELECT * FROM events WHERE event_key = ?", (event_key,)
+        ).fetchone()
+        return None if row is None else self._row_to_entry(row)
 
     def _insert_event(
         self,
@@ -202,30 +239,43 @@ class EconomicLedger:
         currency: str,
         status: str,
         metadata: Mapping[str, object] | None,
+        event_key: str | None = None,
     ) -> LedgerEntry:
+        if event_key is not None:
+            prior = self.find_event_by_key(event_key)
+            if prior is not None:
+                return prior
         created_at = utc_now()
         metadata_json = self._metadata_json(metadata)
-        with self._conn:
-            cursor = self._conn.execute(
-                """
-                INSERT INTO events (
-                    kind, transaction_id, run_id, strategy_id, bucket,
-                    amount, currency, status, metadata_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    kind,
-                    transaction_id,
-                    run_id,
-                    strategy_id,
-                    None if bucket is None else bucket.value,
-                    str(amount),
-                    currency.upper(),
-                    status,
-                    metadata_json,
-                    created_at.isoformat(),
-                ),
-            )
+        try:
+            with self._conn:
+                cursor = self._conn.execute(
+                    """
+                    INSERT INTO events (
+                        kind, transaction_id, run_id, strategy_id, bucket,
+                        amount, currency, status, metadata_json, created_at, event_key
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        kind,
+                        transaction_id,
+                        run_id,
+                        strategy_id,
+                        None if bucket is None else bucket.value,
+                        str(amount),
+                        currency.upper(),
+                        status,
+                        metadata_json,
+                        created_at.isoformat(),
+                        event_key,
+                    ),
+                )
+        except sqlite3.IntegrityError:
+            if event_key is not None:
+                prior = self.find_event_by_key(event_key)
+                if prior is not None:
+                    return prior
+            raise
         return LedgerEntry(
             entry_id=int(cursor.lastrowid),
             kind=kind,
@@ -238,23 +288,9 @@ class EconomicLedger:
             status=status,
             metadata=json.loads(metadata_json),
             created_at=created_at,
+            event_key=event_key,
         )
 
     def entries(self) -> list[LedgerEntry]:
         rows = self._conn.execute("SELECT * FROM events ORDER BY entry_id ASC").fetchall()
-        return [
-            LedgerEntry(
-                entry_id=int(row["entry_id"]),
-                kind=row["kind"],
-                transaction_id=row["transaction_id"],
-                run_id=row["run_id"],
-                strategy_id=row["strategy_id"],
-                bucket=None if row["bucket"] is None else TreasuryBucket(row["bucket"]),
-                amount=Decimal(row["amount"]),
-                currency=row["currency"],
-                status=row["status"],
-                metadata=json.loads(row["metadata_json"]),
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
-            for row in rows
-        ]
+        return [self._row_to_entry(row) for row in rows]
