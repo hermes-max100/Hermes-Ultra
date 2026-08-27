@@ -11,6 +11,7 @@ from .contracts import EconomicMode, ExperimentStatus, TreasuryBucket, as_decima
 class ExperimentState:
     experiment_id: str
     strategy_id: str
+    run_id: str = ""
     status: ExperimentStatus = ExperimentStatus.PLANNED
     reserved_budget: Decimal = Decimal("0")
     realized_revenue: Decimal = Decimal("0")
@@ -20,6 +21,7 @@ class ExperimentState:
         return {
             "experiment_id": self.experiment_id,
             "strategy_id": self.strategy_id,
+            "run_id": self.run_id,
             "status": self.status.value,
             "reserved_budget": str(self.reserved_budget),
             "realized_revenue": str(self.realized_revenue),
@@ -31,6 +33,7 @@ class ExperimentState:
         return cls(
             experiment_id=str(payload["experiment_id"]),
             strategy_id=str(payload["strategy_id"]),
+            run_id=str(payload.get("run_id", "")),
             status=ExperimentStatus(str(payload["status"])),
             reserved_budget=as_decimal(payload.get("reserved_budget", "0")),
             realized_revenue=as_decimal(payload.get("realized_revenue", "0")),
