@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Iterable
+from types import MappingProxyType
+from typing import Iterable, Mapping
 from uuid import uuid4
 
 
@@ -12,6 +13,12 @@ class EconomicMode(str, Enum):
     SIMULATED = "SIMULATED"
     SANDBOX = "SANDBOX"
     LIVE = "LIVE"
+
+
+class EconomicOperation(str, Enum):
+    START_SERVICE_SALES = "START_SERVICE_SALES"
+    STOP_EXPERIMENT = "STOP_EXPERIMENT"
+    RECORD_REVENUE = "RECORD_REVENUE"
 
 
 class TreasuryBucket(str, Enum):
@@ -26,6 +33,20 @@ class ExperimentStatus(str, Enum):
     STOPPED = "STOPPED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+
+
+@dataclass(frozen=True)
+class EconomicTask:
+    task_id: str
+    run_id: str
+    operation: EconomicOperation
+    payload: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.task_id.strip() or not self.run_id.strip():
+            raise ValueError("task_id and run_id are required")
+        object.__setattr__(self, "operation", EconomicOperation(self.operation))
+        object.__setattr__(self, "payload", MappingProxyType(dict(self.payload)))
 
 
 def utc_now() -> datetime:
