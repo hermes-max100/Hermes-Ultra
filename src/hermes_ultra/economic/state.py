@@ -41,6 +41,31 @@ class ExperimentState:
         )
 
 
+@dataclass(frozen=True)
+class TreasuryReservationState:
+    transaction_id: str
+    bucket: TreasuryBucket
+    amount: Decimal
+    status: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "transaction_id": self.transaction_id,
+            "bucket": self.bucket.value,
+            "amount": str(self.amount),
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, object]) -> "TreasuryReservationState":
+        return cls(
+            transaction_id=str(payload["transaction_id"]),
+            bucket=TreasuryBucket(str(payload["bucket"])),
+            amount=as_decimal(payload["amount"]),
+            status=str(payload["status"]),
+        )
+
+
 def _zero_balances() -> dict[TreasuryBucket, Decimal]:
     return {bucket: Decimal("0") for bucket in TreasuryBucket}
 
@@ -50,6 +75,8 @@ class EconomicState:
     mode: EconomicMode
     balances: dict[TreasuryBucket, Decimal] = field(default_factory=_zero_balances)
     experiments: dict[str, ExperimentState] = field(default_factory=dict)
+    reservations: dict[str, TreasuryReservationState] = field(default_factory=dict)
+    revenue_credit_keys: dict[str, Decimal] = field(default_factory=dict)
     version: int = 1
 
     def __post_init__(self) -> None:
@@ -57,6 +84,9 @@ class EconomicState:
         for bucket, value in self.balances.items():
             normalized[TreasuryBucket(bucket)] = as_decimal(value)
         self.balances = normalized
+        self.revenue_credit_keys = {
+            str(key): as_decimal(value) for key, value in self.revenue_credit_keys.items()
+        }
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -66,6 +96,13 @@ class EconomicState:
             "experiments": {
                 experiment_id: experiment.to_dict()
                 for experiment_id, experiment in sorted(self.experiments.items())
+            },
+            "reservations": {
+                transaction_id: reservation.to_dict()
+                for transaction_id, reservation in sorted(self.reservations.items())
+            },
+            "revenue_credit_keys": {
+                key: str(value) for key, value in sorted(self.revenue_credit_keys.items())
             },
         }
 
@@ -90,4 +127,25 @@ class EconomicState:
             for experiment_id, experiment_payload in raw_experiments.items()
             if isinstance(experiment_payload, Mapping)
         }
-        return cls(mode=mode, balances=balances, experiments=experiments, version=version)
+        raw_reservations = payload.get("reservations", {})
+        if not isinstance(raw_reservations, Mapping):
+            raise ValueError("reservations must be a mapping")
+        reservations = {
+            str(transaction_id): TreasuryReservationState.from_dict(reservation_payload)
+            for transaction_id, reservation_payload in raw_reservations.items()
+            if isinstance(reservation_payload, Mapping)
+        }
+        raw_credit_keys = payload.get("revenue_credit_keys", {})
+        if not isinstance(raw_credit_keys, Mapping):
+            raise ValueError("revenue_credit_keys must be a mapping")
+        revenue_credit_keys = {
+            str(key): as_decimal(value) for key, value in raw_credit_keys.items()
+        }
+        return cls(
+            mode=mode,
+            balances=balances,
+            experiments=experiments,
+            reservations=reservations,
+            revenue_credit_keys=revenue_credit_keys,
+            version=version,
+        )
