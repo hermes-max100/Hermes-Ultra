@@ -38,6 +38,7 @@ class HermesUltraOrchestrator:
         agent_reach=None,
         media_adapter=None,
         capability_context=None,
+        economic_engine=None,
         evidence_recorder: EvidenceRecorder | None = None,
     ) -> None:
         self.code_intelligence = code_intelligence
@@ -46,6 +47,7 @@ class HermesUltraOrchestrator:
         self.agent_reach = agent_reach
         self.media_adapter = media_adapter
         self.capability_context = capability_context
+        self.economic_engine = economic_engine
         self.evidence_recorder = evidence_recorder or EvidenceRecorder()
 
     def _record_failure(
@@ -77,6 +79,44 @@ class HermesUltraOrchestrator:
                 recoverable=False,
             )
         return self.capability_context.run(task)
+
+    def run_economic_task(self, task) -> CapabilityResult:
+        """Delegate a typed economic task without transferring routing authority."""
+        task_id = str(getattr(task, "task_id", "economic-task"))
+        if self.economic_engine is None:
+            return CapabilityResult.failure(
+                FailureClass.DEPENDENCY_MISSING,
+                "economic engine is not configured",
+                recoverable=False,
+            )
+        try:
+            result = self.economic_engine.run(task)
+        except Exception:
+            result = CapabilityResult.failure(
+                FailureClass.UNKNOWN,
+                "economic engine execution failed",
+                recoverable=False,
+            )
+        if not isinstance(result, CapabilityResult):
+            result = CapabilityResult.failure(
+                FailureClass.UNKNOWN,
+                "economic engine returned an invalid result contract",
+                recoverable=False,
+            )
+        if not result.ok:
+            self._record_failure(task_id=task_id, capability="economic-engine", result=result)
+            return result
+
+        operation = getattr(task, "operation", None)
+        operation_value = getattr(operation, "value", str(operation))
+        envelope = EvidenceEnvelope.new(task_id, "economic-engine")
+        envelope.health = {
+            "operation": operation_value,
+            "metadata": dict(result.metadata),
+        }
+        envelope.finish(status="success")
+        self.evidence_recorder.record(envelope)
+        return result
 
     def run_coding_task(
         self,
