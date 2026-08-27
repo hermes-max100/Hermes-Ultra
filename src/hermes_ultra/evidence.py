@@ -47,7 +47,7 @@ def redact_secrets(value: Any) -> Any:
     if isinstance(value, list):
         return [redact_secrets(item) for item in value]
     if isinstance(value, tuple):
-        return tuple(redact_secrets(item) for item in value]
+        return tuple(redact_secrets(item) for item in value)
     if isinstance(value, str):
         return _redact_string(value)
     return value
