@@ -16,6 +16,11 @@ _SECRET_KEY_PARTS = (
     "secret",
     "api_key",
     "apikey",
+    "private_key",
+    "signing_key",
+    "seed_phrase",
+    "recovery_phrase",
+    "mnemonic",
 )
 
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*")
@@ -42,7 +47,7 @@ def redact_secrets(value: Any) -> Any:
     if isinstance(value, list):
         return [redact_secrets(item) for item in value]
     if isinstance(value, tuple):
-        return tuple(redact_secrets(item) for item in value)
+        return tuple(redact_secrets(item) for item in value]
     if isinstance(value, str):
         return _redact_string(value)
     return value
