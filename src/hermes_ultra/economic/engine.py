@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 
-from .contracts import ExperimentStatus, TreasuryBucket, as_decimal
+from ..contracts import CapabilityResult, FailureClass
+from .contracts import (
+    EconomicOperation,
+    EconomicTask,
+    ExperimentStatus,
+    TreasuryBucket,
+    as_decimal,
+)
 from .ledger import EconomicLedger
 from .state import EconomicState, ExperimentState
 from .strategies.base import RevenueExperiment, RevenueOpportunity
@@ -17,6 +24,99 @@ class EconomicEngine:
         self.state = state
         self.ledger = ledger
         self.payment_adapter = payment_adapter
+        self.service_sales_strategy = ServiceSalesStrategy()
+
+    def run(self, task: EconomicTask | object) -> CapabilityResult:
+        if not isinstance(task, EconomicTask):
+            return CapabilityResult.failure(
+                FailureClass.POLICY_BLOCKED,
+                "economic task contract is required",
+                recoverable=False,
+            )
+        try:
+            if task.operation is EconomicOperation.START_SERVICE_SALES:
+                opportunity = task.payload.get("opportunity")
+                if not isinstance(opportunity, RevenueOpportunity):
+                    return CapabilityResult.failure(
+                        FailureClass.POLICY_BLOCKED,
+                        "service-sales task requires a RevenueOpportunity",
+                        recoverable=False,
+                    )
+                value = self.start_service_sales_experiment(
+                    self.service_sales_strategy,
+                    opportunity,
+                    run_id=task.run_id,
+                )
+                return CapabilityResult.success(value, metadata={"operation": task.operation.value})
+
+            if task.operation is EconomicOperation.STOP_EXPERIMENT:
+                experiment_id = task.payload.get("experiment_id")
+                if not isinstance(experiment_id, str) or not experiment_id:
+                    return CapabilityResult.failure(
+                        FailureClass.POLICY_BLOCKED,
+                        "stop task requires experiment_id",
+                        recoverable=False,
+                    )
+                value = self.stop_experiment(experiment_id)
+                return CapabilityResult.success(value, metadata={"operation": task.operation.value})
+
+            if task.operation is EconomicOperation.RECORD_REVENUE:
+                experiment_id = task.payload.get("experiment_id")
+                currency = task.payload.get("currency")
+                idempotency_key = task.payload.get("idempotency_key")
+                amount = task.payload.get("amount")
+                if (
+                    not isinstance(experiment_id, str)
+                    or not experiment_id
+                    or not isinstance(currency, str)
+                    or not currency
+                    or not isinstance(idempotency_key, str)
+                    or not idempotency_key
+                    or amount is None
+                ):
+                    return CapabilityResult.failure(
+                        FailureClass.POLICY_BLOCKED,
+                        "revenue task payload is incomplete",
+                        recoverable=False,
+                    )
+                result = self.record_revenue(
+                    experiment_id,
+                    amount=amount,
+                    currency=currency,
+                    idempotency_key=idempotency_key,
+                )
+                if not result.ok:
+                    return CapabilityResult.failure(
+                        FailureClass.ADAPTER_REJECTED,
+                        "payment adapter rejected revenue event",
+                        recoverable=False,
+                        metadata={"adapter_status": result.status},
+                    )
+                return CapabilityResult.success(result, metadata={"operation": task.operation.value})
+
+            return CapabilityResult.failure(
+                FailureClass.POLICY_BLOCKED,
+                "unsupported economic operation",
+                recoverable=False,
+            )
+        except KeyError:
+            return CapabilityResult.failure(
+                FailureClass.EVIDENCE_INCOMPLETE,
+                "referenced economic state was not found",
+                recoverable=False,
+            )
+        except (TypeError, ValueError):
+            return CapabilityResult.failure(
+                FailureClass.POLICY_BLOCKED,
+                "economic task failed contract validation",
+                recoverable=False,
+            )
+        except RuntimeError:
+            return CapabilityResult.failure(
+                FailureClass.DEPENDENCY_MISSING,
+                "economic execution dependency is not configured",
+                recoverable=False,
+            )
 
     def start_service_sales_experiment(
         self,
