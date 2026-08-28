@@ -5,7 +5,7 @@ INSTALLER="$ROOT_DIR/scripts/install-cloud-release-local.sh"
 ORCA_INSTALLER="$ROOT_DIR/scripts/install-orca-runtime.sh"
 BOOTSTRAP="$ROOT_DIR/scripts/bootstrap-hermes-orca-client.sh"
 
-[[ -x "$BOOTSTRAP" ]] || { echo 'Hermes Orca client bootstrap missing' >&2; exit 1; }
+[[ -f "$BOOTSTRAP" ]] || { echo 'Hermes Orca client bootstrap missing' >&2; exit 1; }
 grep -F 'Environment=ORCA_CLI_COMMAND=/opt/orca/bin/orca-ide' "$INSTALLER" >/dev/null
 grep -F 'Environment=ORCA_USER_DATA_PATH=/var/lib/hermes/.config/hermes/orca-client/orca' "$INSTALLER" >/dev/null
 grep -F 'Environment=ORCA_ENVIRONMENT=hermes-runtime' "$INSTALLER" >/dev/null
