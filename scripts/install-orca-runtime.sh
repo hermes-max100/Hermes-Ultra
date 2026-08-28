@@ -11,8 +11,12 @@ ORCA_HOME="${ORCA_HOME:-/home/$RUNTIME_USER}"
 PORT="${ORCA_PORT:-6768}"
 TEST_MODE="${HERMES_ORCA_TEST_MODE:-0}"
 INSTALL_DEPS="${ORCA_INSTALL_DEPS:-1}"
+CLI_WRAPPER_SOURCE="$ROOT_DIR/scripts/orca-ide-cli-wrapper.sh"
+BOOTSTRAP="$ROOT_DIR/scripts/bootstrap-hermes-orca-client.sh"
 
 [[ -f "$PIN_FILE" ]] || { echo "missing Orca production pin: $PIN_FILE" >&2; exit 2; }
+[[ -f "$CLI_WRAPPER_SOURCE" ]] || { echo "missing Orca CLI wrapper source: $CLI_WRAPPER_SOURCE" >&2; exit 2; }
+[[ -f "$BOOTSTRAP" ]] || { echo "missing Hermes Orca bootstrap: $BOOTSTRAP" >&2; exit 2; }
 read -r TAG VERSION ASSET URL EXPECTED_SHA < <(
   python3 - "$PIN_FILE" <<'PY'
 import json,re,sys
@@ -52,11 +56,11 @@ if [[ "$TEST_MODE" != 1 ]]; then
     useradd --system --create-home --home-dir "$ORCA_HOME" --shell /usr/sbin/nologin "$RUNTIME_USER"
   fi
   RUNTIME_GROUP="$(id -gn "$RUNTIME_USER")"
-  install -d -o root -g root -m 0755 "$INSTALL_ROOT" "$INSTALL_ROOT/releases"
+  install -d -o root -g root -m 0755 "$INSTALL_ROOT" "$INSTALL_ROOT/releases" "$INSTALL_ROOT/bin"
   install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0750 "$ORCA_HOME"
   install -d -o root -g root -m 0755 "$SYSTEMD_DIR"
 else
-  mkdir -p "$INSTALL_ROOT/releases" "$SYSTEMD_DIR" "$ORCA_HOME"
+  mkdir -p "$INSTALL_ROOT/releases" "$INSTALL_ROOT/bin" "$SYSTEMD_DIR" "$ORCA_HOME"
 fi
 
 TMP="$(mktemp -d)"
@@ -93,6 +97,8 @@ if [[ -d "$TARGET" ]]; then
 else
   mv "$STAGED" "$TARGET"
 fi
+[[ -x "$TARGET/orca-ide" ]] || { echo "Orca release is missing the Electron runtime: $TARGET/orca-ide" >&2; exit 1; }
+[[ -f "$TARGET/resources/app.asar.unpacked/out/cli/index.js" ]] || { echo "Orca release is missing the CLI entrypoint" >&2; exit 1; }
 if [[ "$TEST_MODE" != 1 ]]; then
   chown -R root:root "$TARGET"
 fi
@@ -100,8 +106,9 @@ TMP_LINK="$INSTALL_ROOT/.current.$$"
 ln -s "$TARGET" "$TMP_LINK"
 mv -Tf "$TMP_LINK" "$INSTALL_ROOT/current"
 printf '%s\n' "$TAG" > "$INSTALL_ROOT/VERSION"
+install -m 0755 "$CLI_WRAPPER_SOURCE" "$INSTALL_ROOT/bin/orca-ide"
 if [[ "$TEST_MODE" != 1 ]]; then
-  chown root:root "$INSTALL_ROOT/VERSION"
+  chown root:root "$INSTALL_ROOT/VERSION" "$INSTALL_ROOT/bin/orca-ide"
   chmod 0644 "$INSTALL_ROOT/VERSION"
 fi
 
@@ -154,6 +161,11 @@ if [[ "$TEST_MODE" != 1 ]]; then
     echo "Orca service health check failed" >&2
     exit 1
   }
+  if id hermes >/dev/null 2>&1; then
+    ORCA_CLI_COMMAND="$INSTALL_ROOT/bin/orca-ide" bash "$BOOTSTRAP"
+  else
+    echo "HERMES_ORCA_CLIENT=DEFERRED reason=hermes_user_missing"
+  fi
 fi
 
 printf 'ORCA_RUNTIME_INSTALL=PASS tag=%s sha256=%s address=%s port=%s\n' "$TAG" "$EXPECTED_SHA" "$PAIRING_ADDRESS" "$PORT"
