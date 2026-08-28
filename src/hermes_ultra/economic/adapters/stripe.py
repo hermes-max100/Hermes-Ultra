@@ -7,32 +7,53 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from ..authority import AuthorityDecision
+from ..authority import AuthorityDecision, FinancialAuthority
 from ..contracts import EconomicMode, TransactionEnvelope
 from . import AdapterResult
 
 Transport = Callable[..., Mapping[str, Any]]
 
+_CURRENCY_MINOR_UNITS = {
+    "USD": 2,
+    "EUR": 2,
+    "GBP": 2,
+    "CAD": 2,
+    "AUD": 2,
+    "NZD": 2,
+    "JPY": 0,
+    "KRW": 0,
+    "BHD": 3,
+    "JOD": 3,
+    "KWD": 3,
+    "OMR": 3,
+    "TND": 3,
+}
+
 
 class StripeAdapter:
     """Guarded Stripe API v1 adapter.
 
-    The adapter owns no policy authority. It requires a precomputed allowed
-    AuthorityDecision and refuses simulated mode. Provider credentials are
-    used only in request headers and are never returned in adapter metadata.
+    The adapter owns no policy authority. It requires a FinancialAuthority
+    validator and an attested allowed decision bound to the exact transaction.
+    Provider credentials are used only in request headers and are never returned
+    in adapter metadata.
     """
 
     def __init__(
         self,
         *,
         api_key: str,
+        authority: FinancialAuthority,
         transport: Transport | None = None,
         base_url: str = "https://api.stripe.com/v1",
         timeout_seconds: float = 20.0,
     ) -> None:
         if not api_key:
             raise ValueError("api_key is required")
+        if not isinstance(authority, FinancialAuthority):
+            raise TypeError("authority must be a FinancialAuthority")
         self._api_key = api_key
+        self._authority = authority
         self._transport = transport or self._default_transport
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
@@ -43,20 +64,36 @@ class StripeAdapter:
             f"timeout_seconds={self._timeout_seconds!r}, api_key='[REDACTED]')"
         )
 
-    @staticmethod
     def _validate_authority(
+        self,
         envelope: TransactionEnvelope,
         authority: AuthorityDecision | object,
     ) -> AuthorityDecision:
         if not isinstance(authority, AuthorityDecision):
             raise TypeError("authority must be an AuthorityDecision")
+        if not self._authority.validate_decision(envelope, authority):
+            raise PermissionError("invalid financial authority attestation")
         if not authority.allowed:
             raise PermissionError(f"financial authority denied: {authority.reason}")
-        if authority.category != envelope.authority_category:
-            raise PermissionError("authority category does not match transaction category")
         if envelope.mode is EconomicMode.SIMULATED:
             raise PermissionError("Stripe adapter is unavailable in simulated mode")
         return authority
+
+    @staticmethod
+    def _expected_amount_minor(envelope: TransactionEnvelope, currency: str) -> int:
+        normalized = currency.strip().upper()
+        if normalized != envelope.currency.upper():
+            raise ValueError("currency does not match authorized transaction envelope")
+        exponent = _CURRENCY_MINOR_UNITS.get(normalized)
+        if exponent is None:
+            raise ValueError(f"unsupported currency minor-unit mapping: {normalized}")
+        scaled = envelope.amount * (Decimal(10) ** exponent)
+        if scaled != scaled.to_integral_value():
+            raise ValueError("authorized amount has excess precision for currency")
+        expected = int(scaled)
+        if expected <= 0:
+            raise ValueError("authorized amount must be positive")
+        return expected
 
     @staticmethod
     def _flatten_form(
@@ -65,11 +102,7 @@ class StripeAdapter:
         currency: str,
         metadata: Mapping[str, object] | None,
     ) -> bytes:
-        if not isinstance(amount_minor, int) or isinstance(amount_minor, bool) or amount_minor <= 0:
-            raise ValueError("amount_minor must be a positive integer")
         normalized_currency = currency.strip().lower()
-        if len(normalized_currency) != 3 or not normalized_currency.isalpha():
-            raise ValueError("currency must be a three-letter code")
         fields: list[tuple[str, str]] = [
             ("amount", str(amount_minor)),
             ("currency", normalized_currency),
@@ -89,8 +122,13 @@ class StripeAdapter:
         metadata: Mapping[str, object] | None = None,
     ) -> AdapterResult:
         self._validate_authority(envelope, authority)
+        if not isinstance(amount_minor, int) or isinstance(amount_minor, bool):
+            raise ValueError("amount_minor must be an integer")
+        expected_minor = self._expected_amount_minor(envelope, currency)
+        if amount_minor != expected_minor:
+            raise ValueError("amount_minor does not match authorized transaction envelope")
         body = self._flatten_form(
-            amount_minor=amount_minor,
+            amount_minor=expected_minor,
             currency=currency,
             metadata=metadata,
         )
