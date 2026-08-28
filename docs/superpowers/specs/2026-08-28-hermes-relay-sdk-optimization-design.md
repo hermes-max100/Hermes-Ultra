@@ -19,8 +19,8 @@ Initial pinned inputs:
 
 - Android: `android-v1.13.2`, upstream commit `a5cc0104bfbda8542667ab50eb70ab02b02a47e5`.
 - Android sideload APK SHA-256: `ee301ab1cdcaa9255b1c81899ee0719ed842603f2b6e05ce9dd1a8861df6391d`.
-- Relay server/plugin: `server-v1.10.0`; published wheel SHA-256 `26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663`.
-- Desktop CLI: do not infer a production pin from the Android tag. The currently documented binary release is prerelease `desktop-v0.3.0-alpha.18`; implementation must verify the newest compatible desktop release or build from the pinned upstream source commit and record its provenance before installation.
+- Relay server/plugin: `server-v1.10.0`, upstream commit `08545ed32db07609c14730a7fc02cdd758f12434`; published wheel SHA-256 `26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663`.
+- Desktop CLI: do not infer a production pin from the Android tag. The currently documented binary release is prerelease `desktop-v0.3.0-alpha.18` at commit `ab1924d44089c06b99afd1d64afc1d7da42fcb28`; implementation must verify the newest compatible desktop release or build from a separately pinned upstream source commit and record its provenance before installation.
 
 Hermes-Ultra will add a machine-readable Relay provenance manifest containing component tag, commit, artifact digest, source URL, license, verification date, and compatibility status. The existing `config/production-versions.json` Android pin will move from `1.12.0` to `1.13.2` only together with this provenance record and regression tests.
 
@@ -78,7 +78,7 @@ Relay must not become a second authority path around Hermes-Ultra governance.
 
 Hermes-Ultra will map remote capabilities into the existing consequential-action gate before dispatching actions that can materially affect a device, filesystem, process, communication, credentials, money, or external system. The Relay server's own grants and the Android/desktop on-device controls remain additional independent gates, not substitutes for Hermes governance.
 
-New desktop hosts default to Relay's `Ask Every Time`/restricted posture rather than Full Access. Full Access is never granted automatically. Android Device Control remains sideload-only and retains upstream phone-side blocklists, destructive-action confirmation, idle auto-disable, and activity logging.
+Newly paired desktop hosts use upstream `Ask Every Time` as the default interactive access policy. If a host has no explicit access selection, the daemon remains `Restricted` with zero desktop tools until a policy is selected. Existing host policies remain unchanged. Full Access is never granted automatically. Android Device Control remains sideload-only and retains upstream phone-side blocklists, destructive-action confirmation, idle auto-disable, and activity logging.
 
 For every consequential remote dispatch, the evidence record binds at minimum:
 
