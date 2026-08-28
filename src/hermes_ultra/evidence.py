@@ -16,10 +16,34 @@ _SECRET_KEY_PARTS = (
     "secret",
     "api_key",
     "apikey",
+    "private_key",
+    "signing_key",
+    "seed_phrase",
+    "recovery_phrase",
+    "mnemonic",
 )
 
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+\-/]+=*")
 _COOKIE_RE = re.compile(r"(?i)\b(auth_token|ct0|sessionid|session_id)=([^;\s]+)")
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(?P<key>[A-Za-z0-9_.-]*(?:"
+    r"api[_-]?key|client[_-]?secret|secret[_-]?access[_-]?key|"
+    r"access[_-]?token|refresh[_-]?token|authorization|auth[_-]?token|token|"
+    r"password|passwd|private[_-]?key|signing[_-]?key|seed[_-]?phrase|"
+    r"recovery[_-]?phrase|mnemonic|cookie|session(?:[_-]?id)?"
+    r")[A-Za-z0-9_.-]*)"
+    r"(?P<sep>\s*[:=]\s*)"
+    r"(?P<value>\"[^\"]*\"|'[^']*'|[^\s;,]+)"
+)
+_PEM_PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----.*?"
+    r"-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----",
+    re.DOTALL,
+)
+_OPENAI_STYLE_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b")
+_GITHUB_STYLE_KEY_RE = re.compile(
+    r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"
+)
 
 
 def _is_secret_key(key: object) -> bool:
@@ -27,9 +51,17 @@ def _is_secret_key(key: object) -> bool:
     return any(part in text for part in _SECRET_KEY_PARTS)
 
 
+def _redact_assignment(match: re.Match[str]) -> str:
+    return f"{match.group('key')}{match.group('sep')}[REDACTED]"
+
+
 def _redact_string(value: str) -> str:
+    value = _PEM_PRIVATE_KEY_RE.sub("[REDACTED PRIVATE KEY]", value)
     value = _BEARER_RE.sub("Bearer [REDACTED]", value)
     value = _COOKIE_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", value)
+    value = _SECRET_ASSIGNMENT_RE.sub(_redact_assignment, value)
+    value = _OPENAI_STYLE_KEY_RE.sub("[REDACTED]", value)
+    value = _GITHUB_STYLE_KEY_RE.sub("[REDACTED]", value)
     return value
 
 
