@@ -1,4 +1,3 @@
-from .client import OrcaClient
 from .contracts import (
     OrcaExecutionReceipt,
     OrcaPolicyDecision,
@@ -15,7 +14,6 @@ __all__ = [
     "DEFAULT_ALLOWED_ACTIONS",
     "HermesOrcaRuntime",
     "OrcaAuthorityPolicy",
-    "OrcaClient",
     "OrcaExecutionReceipt",
     "OrcaPolicyDecision",
     "OrcaResultVerifier",

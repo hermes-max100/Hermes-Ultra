@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import hermes_ultra.orca as canonical_orca
 from hermes_ultra.contracts import FailureClass
 from hermes_ultra.integrations.orca import (
     HermesOrcaRuntime,
     OrcaAuthorityPolicy,
-    OrcaClient,
     OrcaTaskSpec,
     OrcaVerificationInput,
 )
+from hermes_ultra.integrations.orca.client import OrcaClient
+
+
+def test_canonical_orca_api_does_not_export_raw_execution_client():
+    assert not hasattr(canonical_orca, "OrcaClient")
 
 
 def test_policy_is_fail_closed_for_production_financial_and_legal_authority():
