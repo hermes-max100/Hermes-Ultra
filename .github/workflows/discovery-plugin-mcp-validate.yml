@@ -1,0 +1,69 @@
+name: discovery-plugin-mcp-validate
+
+on:
+  pull_request:
+    branches: [hermes-max-setup]
+    paths:
+      - '.github/workflows/discovery-plugin-mcp-validate.yml'
+      - 'src/system/tool-discovery.py'
+      - 'src/system/plugin-intake.py'
+      - 'src/system/mcp-stateless-gateway.py'
+      - 'src/system/hermes-dispatch.sh'
+      - 'config/tool-registry.json'
+      - 'tests/test_tool_discovery.py'
+      - 'tests/test_plugin_intake.py'
+      - 'tests/test_mcp_stateless_gateway.py'
+      - 'tests/test_hermes_dispatch_tool_discovery.sh'
+      - 'docs/superpowers/specs/2026-08-19-discovery-plugin-mcp-design.md'
+      - 'docs/superpowers/plans/2026-08-19-discovery-plugin-mcp.md'
+      - 'docs/deployment/mcp-stateless.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Tool discovery tests
+        run: python3 tests/test_tool_discovery.py
+      - name: Plugin intake tests
+        run: python3 tests/test_plugin_intake.py
+      - name: Stateless MCP tests
+        run: python3 tests/test_mcp_stateless_gateway.py
+      - name: Dispatch tool discovery integration
+        run: bash tests/test_hermes_dispatch_tool_discovery.sh
+
+      - name: Existing dispatch and observability regressions
+        run: |
+          bash tests/test_hermes_dispatch.sh
+          bash tests/test_hermes_dispatch_otel.sh
+      - name: Existing Memory and Trajectory regressions
+        run: |
+          bash tests/test_memory_fabric.sh
+          bash tests/test_trajectory_fabric.sh
+      - name: Existing skill and Trust Gate regressions
+        run: |
+          bash tests/test_skill_router_v3.sh
+          bash tests/test_trust_gate.sh
+          bash tests/test_external_skill_sources.sh
+      - name: Existing containment regressions
+        run: |
+          python3 tests/test_containment_gateway.py
+          bash tests/test_containment_gateway.sh
+      - name: Workflow supply-chain regression
+        run: python3 tests/test_github_actions_pinning.py
+
+      - name: Syntax checks
+        run: |
+          bash -n src/system/hermes-dispatch.sh
+          python3 -m py_compile src/system/tool-discovery.py src/system/plugin-intake.py src/system/mcp-stateless-gateway.py
