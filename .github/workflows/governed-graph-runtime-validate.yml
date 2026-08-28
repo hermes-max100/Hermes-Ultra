@@ -1,0 +1,72 @@
+name: governed-graph-runtime-validate
+
+on:
+  push:
+    branches:
+      - 'ai/**'
+    paths:
+      - '.github/workflows/governed-graph-runtime-validate.yml'
+      - 'src/system/governed_graph_runtime.py'
+      - 'src/system/execution_state.py'
+      - 'src/system/native_execution_backends.py'
+      - 'src/system/codex_app_server.py'
+      - 'src/system/background_task_reconciler.py'
+      - 'src/system/governed-graph-runtime.sh'
+      - 'config/governed-graph-runtime.json'
+      - 'config/governed-graph-plan.example.json'
+      - 'config/governed-graph-plan.schema.json'
+      - 'docs/governed-graph-runtime.md'
+      - 'docs/native-execution-backends.md'
+      - 'docs/execution-state-ledger.md'
+      - 'docs/codex-app-server-reconciliation.md'
+      - 'tests/test_governed_graph_runtime.py'
+      - 'tests/test_execution_state.py'
+      - 'tests/test_codex_app_server.py'
+      - 'tests/test_background_task_reconciler.py'
+      - 'tests/test_governed_graph_runtime.sh'
+      - 'src/system/hermes-power-up.sh'
+  pull_request:
+    branches:
+      - main
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/governed-graph-runtime-validate.yml'
+      - 'src/system/governed_graph_runtime.py'
+      - 'src/system/execution_state.py'
+      - 'src/system/native_execution_backends.py'
+      - 'src/system/codex_app_server.py'
+      - 'src/system/background_task_reconciler.py'
+      - 'src/system/governed-graph-runtime.sh'
+      - 'config/governed-graph-runtime.json'
+      - 'config/governed-graph-plan.example.json'
+      - 'config/governed-graph-plan.schema.json'
+      - 'docs/governed-graph-runtime.md'
+      - 'docs/native-execution-backends.md'
+      - 'docs/execution-state-ledger.md'
+      - 'docs/codex-app-server-reconciliation.md'
+      - 'tests/test_governed_graph_runtime.py'
+      - 'tests/test_execution_state.py'
+      - 'tests/test_codex_app_server.py'
+      - 'tests/test_background_task_reconciler.py'
+      - 'tests/test_governed_graph_runtime.sh'
+      - 'src/system/hermes-power-up.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Governed graph runtime regression suite
+        run: bash tests/test_governed_graph_runtime.sh
