@@ -62,7 +62,8 @@ def test_live_money_cannot_bypass_authority_and_model_text_cannot_grant_it():
         EconomicState(
             mode=EconomicMode.LIVE,
             balances={TreasuryBucket.EXPERIMENTS: Decimal("100")},
-        )
+        ),
+        authority,
     )
     with pytest.raises(PermissionError):
         treasury.reserve(live, missing)
@@ -74,7 +75,7 @@ def test_simulated_execution_replay_cannot_double_spend_and_survives_restart():
         balances={TreasuryBucket.EXPERIMENTS: Decimal("100")},
     )
     authority = FinancialAuthority(policy())
-    treasury = TreasuryManager(state)
+    treasury = TreasuryManager(state, authority)
     wallet = SimulatedWalletAdapter({TreasuryBucket.EXPERIMENTS: Decimal("100")})
     tx = envelope()
     decision = authority.evaluate(tx)
