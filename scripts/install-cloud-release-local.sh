@@ -135,6 +135,9 @@ WorkingDirectory=$RUNTIME_ROOT
 Environment=HOME=$VAR_ROOT
 Environment=HERMES_HOME=$VAR_ROOT/.hermes
 Environment=PATH=$VAR_ROOT/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=ORCA_CLI_COMMAND=/opt/orca/current/AppRun
+Environment=DO_NOT_TRACK=1
+Environment=ORCA_TELEMETRY_DISABLED=1
 ExecStart=$VAR_ROOT/.local/bin/hermes serve --host 127.0.0.1 --port 9119
 Restart=on-failure
 RestartSec=3
