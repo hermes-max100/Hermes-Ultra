@@ -6,6 +6,7 @@ import subprocess
 from typing import Callable
 
 from ...contracts import CapabilityResult, FailureClass
+from ...evidence import redact_secrets
 from .contracts import OrcaExecutionReceipt, OrcaSession, OrcaTaskSpec
 
 Runner = Callable[..., object]
@@ -57,14 +58,14 @@ class OrcaClient:
         except OSError as exc:
             return CapabilityResult.failure(
                 FailureClass.UPSTREAM_UNAVAILABLE,
-                str(exc),
+                str(redact_secrets(str(exc))),
                 recoverable=True,
                 metadata=meta,
             )
 
         returncode = int(getattr(proc, "returncode", 1))
         stdout = str(getattr(proc, "stdout", ""))
-        stderr = str(getattr(proc, "stderr", ""))
+        stderr = str(redact_secrets(str(getattr(proc, "stderr", ""))))
         if returncode != 0:
             return CapabilityResult.failure(
                 FailureClass.WORKER_FAILED,
