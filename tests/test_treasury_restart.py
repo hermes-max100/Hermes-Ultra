@@ -1,9 +1,25 @@
 from decimal import Decimal
 
-from hermes_ultra.economic.authority import AuthorityDecision
+from hermes_ultra.economic.authority import AuthorityPolicy, FinancialAuthority
 from hermes_ultra.economic.contracts import EconomicMode, TransactionEnvelope, TreasuryBucket
 from hermes_ultra.economic.state import EconomicState
 from hermes_ultra.economic.treasury import TreasuryManager
+
+AUTHORITY_SECRET = b"restart-authority-key-32-bytes-long!!"
+
+
+def make_authority():
+    return FinancialAuthority(
+        AuthorityPolicy(
+            policy_revision="finance-v1",
+            registered_live_categories=frozenset({"external_spend"}),
+            max_transaction_amount=Decimal("1000"),
+            bucket_limits={TreasuryBucket.EXPERIMENTS: Decimal("1000")},
+            simulated_auto_limit=Decimal("1000"),
+            sandbox_auto_limit=Decimal("1000"),
+        ),
+        authority_secret=AUTHORITY_SECRET,
+    )
 
 
 def test_reservations_and_revenue_credit_keys_survive_state_restart():
@@ -11,7 +27,8 @@ def test_reservations_and_revenue_credit_keys_survive_state_restart():
         mode=EconomicMode.SIMULATED,
         balances={TreasuryBucket.EXPERIMENTS: Decimal("100"), TreasuryBucket.GROWTH: Decimal("0")},
     )
-    treasury = TreasuryManager(state)
+    authority = make_authority()
+    treasury = TreasuryManager(state, authority)
     envelope = TransactionEnvelope.new(
         run_id="run-restart",
         strategy_id="service-sales",
@@ -26,13 +43,13 @@ def test_reservations_and_revenue_credit_keys_survive_state_restart():
         authority_category="external_spend",
         mode=EconomicMode.SIMULATED,
     )
-    decision = AuthorityDecision(True, False, "external_spend", "allowed", "finance-v1")
+    decision = authority.evaluate(envelope)
 
     treasury.reserve(envelope, decision)
     treasury.credit_revenue(TreasuryBucket.GROWTH, Decimal("125"), event_key="sale-restart")
 
     restored_state = EconomicState.from_dict(state.to_dict())
-    restored = TreasuryManager(restored_state)
+    restored = TreasuryManager(restored_state, make_authority())
 
     assert restored.available(TreasuryBucket.EXPERIMENTS) == Decimal("60")
     assert restored.reserve(envelope, decision).transaction_id == envelope.transaction_id
