@@ -31,4 +31,11 @@ MANIFEST_A="$(tar -xOf "$A" hermes-max/CLOUD_RELEASE_MANIFEST.sha256 | sha256sum
 MANIFEST_B="$(tar -xOf "$B" hermes-max/CLOUD_RELEASE_MANIFEST.sha256 | sha256sum | awk '{print $1}')"
 [[ "$MANIFEST_A" == "$MANIFEST_B" ]] || { echo 'release content manifest changed across umasks' >&2; exit 1; }
 
+CHECK="$TMP/check"
+mkdir -p "$CHECK"
+tar -xzf "$A" -C "$CHECK"
+[[ "$(stat -c '%a' "$CHECK/hermes-max")" == 755 ]] || { echo 'release root mode is not 0755' >&2; exit 1; }
+[[ "$(stat -c '%a' "$CHECK/hermes-max/scripts/build-cloud-release.sh")" == 755 ]] || { echo 'release script mode is not 0755' >&2; exit 1; }
+[[ "$(stat -c '%a' "$CHECK/hermes-max/config/production-versions.json")" == 644 ]] || { echo 'ordinary release file mode is not 0644' >&2; exit 1; }
+
 echo "cloud release determinism passed sha256=$SHA_A"
