@@ -13,9 +13,9 @@ STATE="${ORCA_FAKE_STATE:?}"
 COUNT="${ORCA_FAKE_ADD_COUNT:?}"
 if [[ "${1:-} ${2:-}" == 'environment list' ]]; then
   if [[ -f "$STATE" ]]; then
-    printf '%s\n' '{"id":"local","ok":true,"result":{"environments":[{"name":"hermes-runtime","id":"env-1"}]}}'
+    printf '%s\n' '{"ok":true,"environments":[{"name":"hermes-runtime","id":"env-1"}]}'
   else
-    printf '%s\n' '{"id":"local","ok":true,"result":{"environments":[]}}'
+    printf '%s\n' '{"ok":true,"environments":[]}'
   fi
   exit 0
 fi
@@ -24,13 +24,13 @@ if [[ "${1:-} ${2:-}" == 'environment add' ]]; then
   [[ "$*" == *'--pairing-code orca://pair?code=FAKE-PAIRING-CAPABILITY'* ]]
   printf '1\n' >> "$COUNT"
   : > "$STATE"
-  printf '%s\n' '{"id":"local","ok":true,"result":{"environment":{"name":"hermes-runtime","id":"env-1"}}}'
+  printf '%s\n' '{"ok":true,"environment":{"name":"hermes-runtime","id":"env-1"}}'
   exit 0
 fi
 if [[ "${1:-}" == 'status' ]]; then
   [[ -f "$STATE" ]] || exit 1
   [[ "$*" == *'--environment hermes-runtime'* ]]
-  printf '%s\n' '{"id":"1","ok":true,"result":{"runtime":{"state":"ready","reachable":true,"appVersion":"1.4.190"},"graph":{"state":"ready"}}}'
+  printf '%s\n' '{"ok":true,"target":{"kind":"environment","environment":"hermes-runtime"},"runtime":{"state":"ready","reachable":true,"appVersion":"1.4.190"},"graph":{"state":"ready"}}'
   exit 0
 fi
 echo "unexpected fake CLI invocation: $*" >&2
