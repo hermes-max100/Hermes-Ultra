@@ -1,0 +1,59 @@
+name: agent-reach-security-validate
+
+on:
+  push:
+    branches:
+      - ai/agent-reach-red-team-hardening
+    paths:
+      - '.github/workflows/agent-reach-security-validate.yml'
+      - 'src/system/agent-reach.sh'
+      - 'src/system/agent-reach-safe-fetch.py'
+      - 'src/system/agent-reach-source-verify.py'
+      - 'src/system/agent-reach-query.py'
+      - 'src/system/agent-reach-github-query.py'
+      - 'src/system/agent-reach-envelope.py'
+      - 'scripts/provision-agent-reach.sh'
+      - 'config/agent-reach-source-policy.json'
+      - 'config/agent-reach-mcporter.json'
+      - '.skills/skills.d/agent-reach/**'
+      - 'docs/agent-reach-local-linux.md'
+      - 'tests/test_agent_reach_security.py'
+      - 'tests/test_agent_reach.sh'
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/agent-reach-security-validate.yml'
+      - 'src/system/agent-reach.sh'
+      - 'src/system/agent-reach-safe-fetch.py'
+      - 'src/system/agent-reach-source-verify.py'
+      - 'src/system/agent-reach-query.py'
+      - 'src/system/agent-reach-github-query.py'
+      - 'src/system/agent-reach-envelope.py'
+      - 'scripts/provision-agent-reach.sh'
+      - 'config/agent-reach-source-policy.json'
+      - 'config/agent-reach-mcporter.json'
+      - '.skills/skills.d/agent-reach/**'
+      - 'docs/agent-reach-local-linux.md'
+      - 'tests/test_agent_reach_security.py'
+      - 'tests/test_agent_reach.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Agent Reach security regression suite
+        run: bash tests/test_agent_reach.sh
