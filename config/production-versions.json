@@ -10,5 +10,12 @@
     "version": "1.12.0",
     "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.12.0"
   },
-  "frozen_at": "2026-08-22"
+  "orca_runtime": {
+    "tag": "v1.4.190",
+    "version": "1.4.190",
+    "asset": "orca-linux.AppImage",
+    "url": "https://github.com/stablyai/orca/releases/download/v1.4.190/orca-linux.AppImage",
+    "sha256": "f5b321576d9c909f9e6987aa3bd20e8ff9f214d881b43c7109281cbc87878cde"
+  },
+  "frozen_at": "2026-08-28"
 }
