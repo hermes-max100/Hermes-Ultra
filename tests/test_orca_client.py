@@ -83,3 +83,19 @@ def test_start_task_gates_prompt_on_tui_readiness_and_never_claims_completion():
     assert calls[2][1:3] == ["terminal", "send"]
     assert calls[3][1:3] == ["terminal", "wait"]
     assert calls[4][1:3] == ["terminal", "read"]
+
+
+def test_failed_command_redacts_secret_bearing_stderr():
+    def runner(cmd, **kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="OPENAI_API_KEY=sk-test-super-secret client_secret=oauth-secret-value",
+        )
+
+    result = OrcaClient(runner=runner).status()
+
+    assert not result.ok
+    assert "sk-test-super-secret" not in result.message
+    assert "oauth-secret-value" not in result.message
+    assert result.message.count("[REDACTED]") == 2
