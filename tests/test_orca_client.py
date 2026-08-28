@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from hermes_ultra.integrations.orca import OrcaClient, OrcaTaskSpec
+from hermes_ultra.integrations.orca.client import OrcaClient
+from hermes_ultra.integrations.orca.contracts import OrcaTaskSpec
 
 
 def test_current_create_response_uses_startup_terminal_handle():
