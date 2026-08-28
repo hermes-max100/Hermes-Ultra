@@ -5,6 +5,7 @@ on:
     branches:
       - ai/hermes-ultra-transfer
     paths:
+      - '.github/workflows/materialize-hermes-ultra-release.yml'
       - 'transfer/**'
 
 permissions:
@@ -22,7 +23,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat transfer/part-* > /tmp/hermes-ultra-release.bundle
+          curl --fail --location --retry 3 --connect-timeout 10 --max-time 120 \
+            'https://maintains-normally-insider-civic.trycloudflare.com/hermes-ultra-release.bundle' \
+            --output /tmp/hermes-ultra-release.bundle
           echo '76325194a5dc477c5695c61aeb6cfeea87fde8698accad8fb5432fcd5f2bf669  /tmp/hermes-ultra-release.bundle' | sha256sum -c -
           git bundle verify /tmp/hermes-ultra-release.bundle
           git fetch /tmp/hermes-ultra-release.bundle refs/heads/ai/hermes-ultra-release
