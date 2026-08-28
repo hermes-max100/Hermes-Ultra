@@ -46,6 +46,28 @@
       "source": "src/system/browser-workflow-cache.py"
     },
     {
+      "name": "orca.develop",
+      "namespace": "orca",
+      "description": "Delegate scoped coding implementation, testing, review, or build work to an isolated Orca agent worktree beneath Hermes verification authority.",
+      "keywords": ["orca", "coding", "code", "implementation", "developer", "agent", "worktree", "isolated", "test", "build", "review"],
+      "mutating": true,
+      "data_classes": ["PUBLIC", "INTERNAL"],
+      "required_capabilities": [],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "task_id": {"type": "string", "minLength": 1},
+          "agent": {"type": "string", "minLength": 1},
+          "prompt": {"type": "string", "minLength": 1},
+          "repo_path": {"type": "string", "minLength": 1},
+          "setup": {"type": "string", "enum": ["inherit", "run", "skip"]},
+          "action_category": {"type": "string", "enum": ["code_edit", "code_review", "test", "lint", "build", "local_package", "local_git", "local_browser"]}
+        },
+        "required": ["task_id", "agent", "prompt", "repo_path"]
+      },
+      "source": "src/system/orca_execution_backend.py"
+    },
+    {
       "name": "revenue.report",
       "namespace": "revenue",
       "description": "Read Revenue OS ledger metrics and attribution reports without sending or spending.",

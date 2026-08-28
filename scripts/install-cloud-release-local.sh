@@ -48,8 +48,8 @@ for cmd in sha256sum tar find python3; do command -v "$cmd" >/dev/null || { echo
 if [[ "$TEST_MODE" == 1 ]]; then
   mkdir -p "$RELEASES_DIR" "$STATE_ROOT" "$VAR_ROOT/.hermes"
 else
-  command -v runuser >/dev/null || { echo 'runuser is required' >&2; exit 1; }
-  command -v systemctl >/dev/null || { echo 'systemctl is required' >&2; exit 1; }
+  command -v runuser >/dev/null 2>&1 || { echo 'runuser is required' >&2; exit 1; }
+  command -v systemctl >/dev/null 2>&1 || { echo 'systemctl is required' >&2; exit 1; }
   if ! id hermes >/dev/null 2>&1; then useradd --system --create-home --home-dir "$VAR_ROOT" --shell /bin/bash hermes; fi
   install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" "$VAR_ROOT/.hermes" "$VAR_ROOT/.config/hermes" "$STATE_ROOT"
 fi
@@ -135,6 +135,9 @@ WorkingDirectory=$RUNTIME_ROOT
 Environment=HOME=$VAR_ROOT
 Environment=HERMES_HOME=$VAR_ROOT/.hermes
 Environment=PATH=$VAR_ROOT/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=ORCA_CLI_COMMAND=/opt/orca/current/AppRun
+Environment=DO_NOT_TRACK=1
+Environment=ORCA_TELEMETRY_DISABLED=1
 ExecStart=$VAR_ROOT/.local/bin/hermes serve --host 127.0.0.1 --port 9119
 Restart=on-failure
 RestartSec=3
@@ -186,6 +189,11 @@ PYHEALTH
     sleep 2
   done
   [[ "$ready" == 1 ]] || { echo 'Hermes runtime health check failed' >&2; exit 1; }
+  if command -v tailscale >/dev/null 2>&1; then
+    if tailscale status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("BackendState")=="Running" and d.get("Self",{}).get("Online") is True else 1)'; then
+      "$TARGET/scripts/configure-tailscale-hermes.sh"
+    fi
+  fi
 fi
 SUCCESS=1
 printf 'HERMES_LOCAL_INSTALL=PASS release=%s\n' "$RELEASE_ID"

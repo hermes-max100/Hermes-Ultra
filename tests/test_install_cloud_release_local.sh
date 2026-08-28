@@ -48,6 +48,8 @@ UNIT="$SYSTEMD_DIR/hermes-runtime.service"
 grep -q 'User=hermes' "$UNIT"
 grep -q 'serve --host 127.0.0.1 --port 9119' "$UNIT"
 grep -q 'Restart=on-failure' "$UNIT"
+grep -q 'Environment=ORCA_CLI_COMMAND=/opt/orca/current/AppRun' "$UNIT"
+grep -q 'Environment=ORCA_TELEMETRY_DISABLED=1' "$UNIT"
 grep -q '/api/health' "$INSTALLER"
 if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
   bash "$INSTALLER" "$A1" "$(printf 'f%.0s' {1..64})" >/dev/null 2>&1; then

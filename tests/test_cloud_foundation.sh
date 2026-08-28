@@ -8,6 +8,7 @@ AWS="$ROOT_DIR/infra/aws-primary/main.tf"
 VARS="$ROOT_DIR/infra/aws-primary/variables.tf"
 BOOT="$ROOT_DIR/infra/aws-primary/templates/bootstrap-hermes.sh.tftpl"
 BUILD="$ROOT_DIR/scripts/build-cloud-release.sh"
+INSTALLER="$ROOT_DIR/scripts/install-cloud-release-local.sh"
 
 ! grep -Eq 'from_port *= *22|to_port *= *22' "$AWS"
 grep -q 'http_tokens.*=.*"required"' "$AWS"
@@ -18,6 +19,8 @@ grep -q 'enable_ec2_compute' "$VARS"
 grep -q 'default     = \[\]' "$VARS"
 grep -q 'sha256sum -c' "$BOOT"
 grep -q 'restore-vps-transfer.sh' "$BOOT"
+grep -q 'vendor/hermes-agent/0.20.5' "$BOOT" || { echo 'bootstrap does not use pinned Hermes Agent 0.20.5' >&2; exit 1; }
+grep -q 'configure-tailscale-hermes.sh' "$INSTALLER" || { echo 'local installer does not activate private Hermes/Orca runtime' >&2; exit 1; }
 grep -q -- "--exclude='./.codex-project'" "$BUILD"
 grep -q -- "--exclude='./.hermes'" "$BUILD"
 grep -q -- "--exclude='./prospects.jsonl'" "$BUILD"
@@ -44,6 +47,7 @@ for gate in \
   test_stage_hermes_agent_source.sh \
   test_export_hermes_dependency_locks.sh \
   test_install_cloud_release_local.sh \
+  test_install_orca_runtime.sh \
   test_aws_runtime_secrets.sh \
   test_secret_scan_production.sh
 do
@@ -53,9 +57,11 @@ for watched in \
   "scripts/**" \
   "tests/**" \
   "config/production-versions.json" \
-  "src/system/load-aws-runtime-secrets.sh"
+  "src/system/load-aws-runtime-secrets.sh" \
+  "src/system/orca_execution_backend.py"
 do
   grep -Fq -- "- '$watched'" "$WORKFLOW" || { echo "cloud CI missing path trigger: $watched" >&2; exit 1; }
 done
+grep -Fq -- "- ai/hermes-ultra-release" "$WORKFLOW" || { echo 'cloud CI does not run on release branch' >&2; exit 1; }
 
 echo 'cloud foundation tests passed'

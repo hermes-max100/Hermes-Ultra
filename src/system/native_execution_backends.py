@@ -95,3 +95,54 @@ class NativeMultiAgentExecutor:
         rows=tuple(await asyncio.gather(*(one(x) for x in subtasks)))
         data=await _await(self.synthesizer(rows))
         return MultiAgentResult(data,rows)
+
+
+def build_orca_development_tool(*, backend=None, timeout_ms: int = 60000) -> Callable[..., dict[str, Any]]:
+    """Return a caller-supplied native tool that yields only an unverified candidate.
+
+    This adapter intentionally does not run Hermes verification or promote the
+    candidate. The governed caller must independently run tests and policy gates.
+    """
+    if timeout_ms < 1:
+        raise ExecutionBackendError("Orca timeout must be positive")
+    if backend is None:
+        from orca_execution_backend import OrcaExecutionBackend
+        backend = OrcaExecutionBackend()
+
+    def orca_develop(
+        *,
+        task_id: str,
+        agent: str,
+        prompt: str,
+        repo_path: str,
+        action_category: str = "code_edit",
+        classification: str = "INTERNAL",
+        setup: str = "inherit",
+    ) -> dict[str, Any]:
+        from orca_execution_backend import OrcaTask
+
+        session = backend.create(
+            OrcaTask(
+                task_id=task_id,
+                agent=agent,
+                prompt=prompt,
+                repo_path=repo_path,
+                setup=setup,
+                action_category=action_category,
+                classification=classification,
+            )
+        )
+        idle_evidence = backend.wait_tui_idle(session.terminal_handle, timeout_ms=timeout_ms)
+        return {
+            "status": "candidate",
+            "task_id": session.task_id,
+            "agent": session.agent,
+            "worktree_id": session.worktree_id,
+            "worktree_path": session.worktree_path,
+            "terminal_handle": session.terminal_handle,
+            "idle_evidence": dict(idle_evidence),
+            "verified": False,
+            "approved_for_promotion": False,
+        }
+
+    return orca_develop
