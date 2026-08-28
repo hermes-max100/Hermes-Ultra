@@ -6,7 +6,6 @@ on:
       - ai/hermes-ultra-transfer
     paths:
       - '.github/workflows/materialize-hermes-ultra-release.yml'
-      - 'transfer/**'
 
 permissions:
   contents: write
@@ -19,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Reconstruct and verify release history
+      - name: Verify bundle and materialize non-workflow release tree
         shell: bash
         run: |
           set -euo pipefail
@@ -30,5 +29,15 @@ jobs:
           git bundle verify /tmp/hermes-ultra-release.bundle
           git fetch /tmp/hermes-ultra-release.bundle refs/heads/ai/hermes-ultra-release
           test "$(git rev-parse FETCH_HEAD)" = '22ad98e53b1e0ddc4543842955083e19bc9d68ce'
-          git push origin FETCH_HEAD:refs/heads/ai/hermes-ultra-release
-          git push origin FETCH_HEAD:refs/tags/hermes-ultra-release-v1
+          mkdir -p /tmp/hermes-release-tree
+          git archive FETCH_HEAD | tar -x -C /tmp/hermes-release-tree
+          git checkout -B ai/hermes-ultra-release origin/main
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.github/workflows/' \
+            /tmp/hermes-release-tree/ ./
+          git add -A -- . ':(exclude).github/workflows'
+          git config user.name 'Hermes Ultra Release Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'release: materialize verified Hermes Ultra snapshot 22ad98e'
+          git push origin HEAD:refs/heads/ai/hermes-ultra-release
