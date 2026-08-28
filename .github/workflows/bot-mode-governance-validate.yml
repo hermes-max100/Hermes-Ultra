@@ -1,0 +1,51 @@
+name: bot-mode-governance-validate
+
+on:
+  push:
+    branches:
+      - ai/governed-bot-mode
+    paths:
+      - '.github/workflows/bot-mode-governance-validate.yml'
+      - 'config/bot-mode-policy.json'
+      - 'src/system/bot-mode-governance.py'
+      - 'profiles/**'
+      - 'docs/bot-mode-governance.md'
+      - 'docs/plans/2026-08-19-bot-mode-governance-*.md'
+      - 'tests/test_bot_mode_governance.py'
+      - 'tests/test_bot_mode_redteam.py'
+      - 'tests/test_bot_mode_lifecycle.py'
+      - 'tests/test_bot_mode_governance.sh'
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/bot-mode-governance-validate.yml'
+      - 'config/bot-mode-policy.json'
+      - 'src/system/bot-mode-governance.py'
+      - 'profiles/**'
+      - 'docs/bot-mode-governance.md'
+      - 'docs/plans/2026-08-19-bot-mode-governance-*.md'
+      - 'tests/test_bot_mode_governance.py'
+      - 'tests/test_bot_mode_redteam.py'
+      - 'tests/test_bot_mode_lifecycle.py'
+      - 'tests/test_bot_mode_governance.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+
+      - name: Governed Bot Mode security regression suite
+        run: bash tests/test_bot_mode_governance.sh
