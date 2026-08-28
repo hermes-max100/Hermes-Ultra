@@ -48,7 +48,7 @@ fi
 mv "$TARGET.tmp" "$TARGET"
 chown -R hermes:hermes "$TARGET"
 
-VENDORED_HERMES="$TARGET/vendor/hermes-agent/0.20.4"
+VENDORED_HERMES="$TARGET/vendor/hermes-agent/0.20.5"
 if [[ -d "$VENDORED_HERMES" ]]; then
   install -d -o hermes -g hermes -m 0750 /var/lib/hermes/.hermes
   RUNTIME_TMP="$HERMES_RUNTIME_ROOT.tmp.$RELEASE_ID"
