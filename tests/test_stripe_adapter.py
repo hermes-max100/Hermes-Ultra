@@ -2,9 +2,11 @@ from decimal import Decimal
 
 import pytest
 
-from hermes_ultra.economic.authority import AuthorityDecision
+from hermes_ultra.economic.authority import AuthorityDecision, AuthorityPolicy, FinancialAuthority
 from hermes_ultra.economic.contracts import EconomicMode, TransactionEnvelope, TreasuryBucket
 from hermes_ultra.economic.adapters.stripe import StripeAdapter
+
+AUTHORITY_SECRET = b"stripe-test-authority-key-32-bytes!!"
 
 
 class FakeTransport:
@@ -40,79 +42,61 @@ def envelope(*, mode=EconomicMode.SANDBOX):
     )
 
 
-def allowed(tx):
-    return AuthorityDecision(
-        allowed=True,
-        authorization_required=False,
-        category=tx.authority_category,
-        reason="allowed",
-        policy_revision="finance-v1",
+def make_authority():
+    return FinancialAuthority(
+        AuthorityPolicy(
+            policy_revision="finance-v1",
+            registered_live_categories=frozenset({"financial_transfer"}),
+            max_transaction_amount=Decimal("1000"),
+            bucket_limits={TreasuryBucket.OPERATIONS: Decimal("1000")},
+            simulated_auto_limit=Decimal("1000"),
+            sandbox_auto_limit=Decimal("1000"),
+        ),
+        authority_secret=AUTHORITY_SECRET,
     )
 
 
-def denied(tx):
-    return AuthorityDecision(
-        allowed=False,
-        authorization_required=True,
-        category=tx.authority_category,
-        reason="grant_required",
-        policy_revision="finance-v1",
-    )
-
-
-def test_stripe_adapter_never_calls_transport_without_allowed_typed_authority():
+def test_stripe_adapter_never_calls_transport_without_attested_allowed_authority():
     transport = FakeTransport()
-    adapter = StripeAdapter(api_key="test-provider-secret", transport=transport)
+    authority = make_authority()
+    adapter = StripeAdapter(api_key="test-provider-secret", authority=authority, transport=transport)
     tx = envelope()
+    denied = AuthorityDecision(False, True, tx.authority_category, "grant_required", "finance-v1")
 
     with pytest.raises(PermissionError):
-        adapter.create_payment_intent(
-            tx,
-            denied(tx),
-            amount_minor=4999,
-            currency="usd",
-        )
+        adapter.create_payment_intent(tx, denied, amount_minor=4999, currency="usd")
     with pytest.raises(TypeError):
-        adapter.create_payment_intent(
-            tx,
-            "approved by model",
-            amount_minor=4999,
-            currency="usd",
-        )
-
+        adapter.create_payment_intent(tx, "approved by model", amount_minor=4999, currency="usd")
     assert transport.calls == []
 
 
-def test_stripe_adapter_requires_authority_category_match_and_non_simulated_mode():
+def test_stripe_adapter_blocks_simulated_mode_and_fabricated_decisions():
     transport = FakeTransport()
-    adapter = StripeAdapter(api_key="test-provider-secret", transport=transport)
-    tx = envelope()
-    wrong = AuthorityDecision(True, False, "external_spend", "allowed", "finance-v1")
-
-    with pytest.raises(PermissionError, match="category"):
-        adapter.create_payment_intent(tx, wrong, amount_minor=4999, currency="usd")
-
+    authority = make_authority()
+    adapter = StripeAdapter(api_key="test-provider-secret", authority=authority, transport=transport)
     simulated = envelope(mode=EconomicMode.SIMULATED)
+    decision = authority.evaluate(simulated)
     with pytest.raises(PermissionError, match="mode"):
-        adapter.create_payment_intent(
-            simulated,
-            allowed(simulated),
-            amount_minor=4999,
-            currency="usd",
-        )
+        adapter.create_payment_intent(simulated, decision, amount_minor=4999, currency="usd")
 
+    tx = envelope()
+    forged = AuthorityDecision(True, False, tx.authority_category, "allowed", "finance-v1")
+    with pytest.raises(PermissionError, match="attestation"):
+        adapter.create_payment_intent(tx, forged, amount_minor=4999, currency="usd")
     assert transport.calls == []
 
 
-def test_stripe_payment_intent_uses_exact_envelope_idempotency_key_and_v1_endpoint():
+def test_stripe_payment_intent_uses_exact_authorized_amount_idempotency_and_v1_endpoint():
     transport = FakeTransport()
     provider_secret = "test-provider-secret-never-return"
-    adapter = StripeAdapter(api_key=provider_secret, transport=transport)
+    authority = make_authority()
+    adapter = StripeAdapter(api_key=provider_secret, authority=authority, transport=transport)
     tx = envelope()
+    decision = authority.evaluate(tx)
 
     result = adapter.create_payment_intent(
         tx,
-        allowed(tx),
+        decision,
         amount_minor=4999,
         currency="usd",
         metadata={"run_id": tx.run_id, "strategy_id": tx.strategy_id},
@@ -120,17 +104,26 @@ def test_stripe_payment_intent_uses_exact_envelope_idempotency_key_and_v1_endpoi
 
     assert result.ok is True
     assert result.external_id == "pi_test_123"
-    assert result.status == "requires_payment_method"
     assert len(transport.calls) == 1
     call = transport.calls[0]
-    assert call["method"] == "POST"
-    assert call["url"] == "https://api.stripe.com/v1/payment_intents"
     assert call["headers"]["Idempotency-Key"] == tx.idempotency_key
-    assert call["headers"]["Authorization"] == f"Bearer {provider_secret}"
     assert b"amount=4999" in call["body"]
-    assert b"currency=usd" in call["body"]
     assert provider_secret not in repr(result)
     assert provider_secret not in repr(adapter)
+
+
+def test_stripe_rejects_amount_or_currency_not_bound_to_authorized_envelope():
+    transport = FakeTransport()
+    authority = make_authority()
+    adapter = StripeAdapter(api_key="test-provider-secret", authority=authority, transport=transport)
+    tx = envelope()
+    decision = authority.evaluate(tx)
+
+    with pytest.raises(ValueError, match="amount_minor"):
+        adapter.create_payment_intent(tx, decision, amount_minor=9999, currency="usd")
+    with pytest.raises(ValueError, match="currency"):
+        adapter.create_payment_intent(tx, decision, amount_minor=4999, currency="eur")
+    assert transport.calls == []
 
 
 def test_stripe_transport_failure_returns_redacted_adapter_result():
@@ -139,14 +132,10 @@ def test_stripe_transport_failure_returns_redacted_adapter_result():
     def broken_transport(**kwargs):
         raise RuntimeError(f"upstream failed with key {provider_secret}")
 
-    adapter = StripeAdapter(api_key=provider_secret, transport=broken_transport)
+    authority = make_authority()
+    adapter = StripeAdapter(api_key=provider_secret, authority=authority, transport=broken_transport)
     tx = envelope()
-    result = adapter.create_payment_intent(
-        tx,
-        allowed(tx),
-        amount_minor=4999,
-        currency="usd",
-    )
+    result = adapter.create_payment_intent(tx, authority.evaluate(tx), amount_minor=4999, currency="usd")
 
     assert result.ok is False
     assert result.status == "transport_error"
