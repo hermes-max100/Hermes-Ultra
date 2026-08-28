@@ -4,7 +4,7 @@ name: cloud-foundation-validate
 on:
   push:
     branches:
-      - ai/hermes-max-cloud-foundation
+      - ai/hermes-ultra-release
     paths:
       - '.github/workflows/cloud-foundation-validate.yml'
       - 'infra/**'
@@ -14,6 +14,20 @@ on:
       - 'config/production-versions.json'
       - 'src/system/load-hermes-runtime-env.sh'
       - 'src/system/load-aws-runtime-secrets.sh'
+      - 'src/system/orca_execution_backend.py'
+  pull_request:
+    branches:
+      - ai/hermes-ultra-release
+    paths:
+      - '.github/workflows/cloud-foundation-validate.yml'
+      - 'infra/**'
+      - 'docs/deployment/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'config/production-versions.json'
+      - 'src/system/load-hermes-runtime-env.sh'
+      - 'src/system/load-aws-runtime-secrets.sh'
+      - 'src/system/orca_execution_backend.py'
   workflow_dispatch:
 
 permissions:
@@ -46,8 +60,10 @@ jobs:
           bash tests/test_stage_hermes_agent_source.sh
           bash tests/test_export_hermes_dependency_locks.sh
           bash tests/test_install_cloud_release_local.sh
+          bash tests/test_install_orca_runtime.sh
           bash tests/test_aws_runtime_secrets.sh
           bash tests/test_secret_scan_production.sh
+          python3 -m unittest tests.test_orca_execution_backend tests.test_orca_release_integration
 
       - name: Build deterministic cloud release
         env:
