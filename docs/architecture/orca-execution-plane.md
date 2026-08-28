@@ -15,9 +15,11 @@ The Orca plane is fail-closed. Its default allowlist is limited to reversible de
 
 Production deployment/deletion, credentials, financial actions, legal filing or service, settlement, and external communications are outside Orca authority.
 
+The raw CLI client is an internal implementation detail and is not exported by the canonical Orca facade. In particular, the client exposes no public force-worktree-removal operation. Any future destructive cleanup path must be introduced separately behind explicit Hermes authority and evidence controls.
+
 ## Canonical interface
 
-Use `hermes_ultra.orca` (or `hermes_ultra.integrations.orca`) for new work. The earlier `swarm.OrcaAdapter` remains a compatibility prototype until callers are migrated; it is not the authority boundary described here.
+Use `hermes_ultra.orca.HermesOrcaRuntime` for governed execution. `hermes_ultra.integrations.orca.client.OrcaClient` exists only for runtime wiring and focused unit tests; it is not an authority-bearing public execution interface. The earlier `swarm.OrcaAdapter` remains a compatibility prototype until callers are migrated; it is not the authority boundary described here.
 
 ## Current integration mode
 

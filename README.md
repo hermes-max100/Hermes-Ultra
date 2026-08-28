@@ -1,6 +1,6 @@
 # Hermes-Ultra
 
-Hermes Ultra is an autonomy-first integration layer for code intelligence, coding swarms, internet intelligence, specialist-agent ingestion, Revenue OS media production, evidence-backed provider benchmarking, and capability-aware context orchestration.
+Hermes Ultra is an autonomy-first integration layer for code intelligence, coding swarms, internet intelligence, specialist-agent ingestion, Revenue OS media production, evidence-backed provider benchmarking, capability-aware context orchestration, and governed economic execution.
 
 ## Autonomy contract
 
@@ -42,7 +42,13 @@ HERMES ULTRA
 │   └── Agency Agents automatic qualification
 │
 ├── Revenue OS
-│   └── OpenMontage autonomous media pipeline
+│   ├── OpenMontage autonomous media pipeline
+│   └── Economic Engine
+│       ├── service-sales strategy
+│       ├── SQLite economic ledger
+│       ├── treasury reservations
+│       ├── typed financial authority
+│       └── simulated / Stripe / Safe adapters
 │
 ├── Experimental Context
 │   └── Graft benchmark + reversible promotion
@@ -166,6 +172,92 @@ research -> script -> assets -> narration -> subtitles -> render -> qa
 
 A potential external-publication approval boundary is checked only after the render/QA pipeline completes. It does not block the production workflow itself.
 
+## Economic Engine
+
+The Economic Engine is a native Revenue OS capability behind `HermesUltraOrchestrator`. It does not choose models, expand approval policy, or treat LLM output as financial authority.
+
+The first strategy is service sales:
+
+```text
+qualified opportunity
+    -> deterministic sales experiment
+    -> measured expected economics
+    -> external-communication boundary
+    -> payment/revenue attribution
+    -> ledger-derived revenue, cost, gross profit, and ROI
+```
+
+Trading and speculative crypto execution are deliberately not represented by this Revenue OS subsystem.
+
+### Modes
+
+Execution mode is explicit and restart-safe:
+
+- `SIMULATED` — no external financial adapter may execute.
+- `SANDBOX` — provider sandbox/test APIs may execute inside policy limits.
+- `LIVE` — live-capital operations are technically eligible only after `FinancialAuthority` returns an allowed decision for an exact registered category and transaction-specific typed authorization grant.
+
+Credentials, provider responses, internet content, or model text cannot promote a mode or create an authorization grant.
+
+### Core contracts
+
+Every attempted financial side effect starts as an immutable `TransactionEnvelope` with transaction/run/strategy attribution, treasury bucket, `Decimal` amount, maximum loss, evidence references, authority category, expiration, explicit mode, and an idempotency key.
+
+`EconomicState` persists balances, experiment state, active reservations, and revenue-credit idempotency keys. `EconomicLedger` stores append-only application events in SQLite and applies shared Hermes secret redaction before metadata reaches disk.
+
+`TreasuryManager` uses reserve -> commit/release semantics. A replay cannot reserve or debit the same transaction twice, including after state serialization and restart.
+
+### Simulated service-sales loop
+
+```python
+from decimal import Decimal
+from hermes_ultra import (
+    EconomicEngine,
+    EconomicLedger,
+    EconomicMode,
+    EconomicOperation,
+    EconomicState,
+    EconomicTask,
+    HermesUltraOrchestrator,
+    MockStripeAdapter,
+    RevenueOpportunity,
+)
+
+state = EconomicState(mode=EconomicMode.SIMULATED)
+ledger = EconomicLedger("economic.sqlite3")
+engine = EconomicEngine(state=state, ledger=ledger, payment_adapter=MockStripeAdapter())
+hermes = HermesUltraOrchestrator(economic_engine=engine)
+
+result = hermes.run_economic_task(
+    EconomicTask(
+        task_id="sales-1",
+        run_id="run-1",
+        operation=EconomicOperation.START_SERVICE_SALES,
+        payload={
+            "opportunity": RevenueOpportunity(
+                prospect_id="prospect-1",
+                offer="AI receptionist",
+                contract_value=Decimal("499"),
+                estimated_cost=Decimal("49"),
+                evidence=("qualified-lead:1",),
+            )
+        },
+    )
+)
+```
+
+### Stripe boundary
+
+`StripeAdapter` is unavailable in `SIMULATED` mode. For sandbox/live API v1 POST requests, the transaction envelope's `idempotency_key` becomes Stripe's `Idempotency-Key` header. The adapter requires an already-allowed typed `AuthorityDecision`, uses an injectable transport for testing, and never returns the API credential in diagnostics or result metadata.
+
+### Safe boundary
+
+`SafeAdapter` submits already-signed transaction proposals to the Safe Transaction Service v2 multisig endpoint. It intentionally exposes no private-key, seed-phrase, mnemonic, or signing interface. The Safe transaction hash, sender address, sender signature, and complete Safe transaction data must already exist before the adapter is called.
+
+Provider-side execution/signing remains outside the LLM boundary.
+
+See `docs/superpowers/specs/2026-08-27-hermes-ultra-economic-engine-design.md` for the full invariant set and `docs/superpowers/plans/2026-08-27-hermes-ultra-economic-engine.md` for the implementation record.
+
 ## Graft benchmark and promotion
 
 `PromotionPolicy` compares Graft against Codebase Memory on reproducible Hermes-local metrics. Graft can promote automatically when configured quality and efficiency thresholds pass. `ProviderRegistry.rollback()` restores the previous provider.
@@ -178,10 +270,12 @@ Every orchestration lane uses the same normalized result/evidence concepts:
 
 - explicit failure classes;
 - retry/fallback before blocking;
-- automatic secret redaction;
+- automatic secret redaction, including provider credentials, private/signing keys, seed/recovery phrases, and mnemonics;
 - test and health evidence;
 - `human_approval_required=false` by default;
 - exact-category approval semantics.
+
+Economic orchestration additionally defines explicit `AUTHORITY_REQUIRED`, `INSUFFICIENT_FUNDS`, `DUPLICATE_TRANSACTION`, `TRANSACTION_EXPIRED`, and `ADAPTER_REJECTED` failure classes.
 
 ## Tests
 
@@ -191,4 +285,6 @@ python -m compileall -q src
 pytest -q
 ```
 
-CI also runs focused autonomy-regression tests. A change that adds a blanket approval default or turns hardening into a routine interruption should fail those tests.
+CI also runs focused autonomy-regression tests and a source secret scan. The economic acceptance suite specifically exercises financial-authority bypass attempts, model-text authorization, replay/double-spend behavior, restart safety, ledger redaction, Revenue OS/Trading isolation, and simulated-to-live mode promotion attempts.
+
+A change that adds a blanket approval default, turns hardening into a routine interruption, permits an implicit live-mode transition, or lets a model synthesize financial authority should fail the test suite.
