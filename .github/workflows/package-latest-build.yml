@@ -1,0 +1,49 @@
+name: package-latest-build
+
+on:
+  push:
+    branches:
+      - ai/package-latest-build-2026-08-28
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact verified Hermes source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 23823d29ead2160eee2e30c0916d880e1b687352
+          persist-credentials: false
+
+      - name: Package exact source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          git archive \
+            --format=zip \
+            --prefix=Hermes-Ultra-verified-23823d29/ \
+            HEAD \
+            -o dist/Hermes-Ultra-verified-23823d29.zip
+          cat > dist/BUILD-MANIFEST.txt <<'EOF'
+          Hermes Ultra latest verified build
+          Repository: hermes-max100/Hermes-Ultra
+          Source branch: ai/economic-engine
+          Source commit: 23823d29ead2160eee2e30c0916d880e1b687352
+          Verification run: 33186604321
+          Verification result: success
+          Packaged from the exact verified commit; packaging branch content is not included.
+          EOF
+          sha256sum dist/Hermes-Ultra-verified-23823d29.zip > dist/SHA256SUMS.txt
+
+      - name: Upload verified build package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Hermes-Ultra-verified-23823d29
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
