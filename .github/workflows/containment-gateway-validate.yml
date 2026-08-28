@@ -1,0 +1,43 @@
+name: containment-gateway-validate
+
+on:
+  push:
+    branches:
+      - ai/containment-gateway-hardening
+    paths:
+      - '.github/workflows/containment-gateway-validate.yml'
+      - 'src/system/containment-gateway.py'
+      - 'src/system/containment-gateway.sh'
+      - 'docs/containment-gateway.md'
+      - 'tests/test_containment_gateway.py'
+      - 'tests/test_containment_gateway.sh'
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/containment-gateway-validate.yml'
+      - 'src/system/containment-gateway.py'
+      - 'src/system/containment-gateway.sh'
+      - 'docs/containment-gateway.md'
+      - 'tests/test_containment_gateway.py'
+      - 'tests/test_containment_gateway.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Containment gateway regression suite
+        run: bash tests/test_containment_gateway.sh
