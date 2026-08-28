@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 
-from .authority import AuthorityDecision
+from .authority import AuthorityDecision, FinancialAuthority
 from .contracts import TransactionEnvelope, TreasuryBucket, as_decimal
 from .state import EconomicState, TreasuryReservationState
 
@@ -26,8 +26,9 @@ class Reservation:
 class TreasuryManager:
     """State-backed reservation accounting with retry/restart idempotency."""
 
-    def __init__(self, state: EconomicState) -> None:
+    def __init__(self, state: EconomicState, authority: FinancialAuthority | None = None) -> None:
         self.state = state
+        self.authority = authority
 
     @staticmethod
     def _reservation_from_state(value: TreasuryReservationState) -> Reservation:
@@ -56,6 +57,8 @@ class TreasuryManager:
         envelope: TransactionEnvelope,
         decision: AuthorityDecision,
     ) -> Reservation:
+        if self.authority is None or not self.authority.validate_decision(envelope, decision):
+            raise PermissionError("invalid financial authority attestation")
         if not decision.allowed:
             raise PermissionError(f"financial authority denied: {decision.reason}")
         if envelope.mode is not self.state.mode:
