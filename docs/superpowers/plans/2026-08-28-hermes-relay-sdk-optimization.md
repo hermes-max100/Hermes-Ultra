@@ -6,7 +6,7 @@
 
 **Architecture:** AWS Hermes remains the only agent brain. Android uses the upstream Dashboard/Gateway on `:9119`; the pinned Relay server/plugin adds private WSS extensions on tailnet-only `:8767`; `:8642` stays optional fallback. Hermes-Ultra stages exact upstream Relay source and lockfiles into its deterministic cloud release, performs Hermes-native plugin scanning before activation, maps Relay operations through the existing consequential-action gate, and reconciles remote completion through the existing provider-independent background-task machinery.
 
-**Tech Stack:** Python 3.11/3.12, Bash, JSON/YAML, Hermes Agent 0.20.5 plugin APIs, Hermes-Relay server 1.10.0, Android 1.13.2, Hermes-Relay Desktop CLI, `uv`, `pip --require-hashes`, systemd, Tailscale, durable JSON state, GitHub Actions.
+**Tech Stack:** Python 3.11/3.12, Bash, JSON/YAML, Hermes Agent 0.20.5 plugin APIs, Hermes-Relay server 1.10.0, Android 1.13.2, Hermes-Relay Desktop CLI 0.4.0-beta.5, `uv`, `pip --require-hashes`, systemd, Tailscale, durable JSON state, GitHub Actions.
 
 ---
 
@@ -23,9 +23,9 @@ APK SHA256:        ee301ab1cdcaa9255b1c81899ee0719ed842603f2b6e05ce9dd1a8861df63
 Server tag:        server-v1.10.0
 Server commit:     08545ed32db07609c14730a7fc02cdd758f12434
 Server wheel SHA:  26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663
-Desktop tag:       desktop-v0.3.0-alpha.18
-Desktop commit:    ab1924d44089c06b99afd1d64afc1d7da42fcb28
-Linux x64 SHA256:  efa6e9ce27e03d10f057c9ce992b5fc5185dbf8803e7c605267e4fd2ac04b265
+Desktop tag:       desktop-v0.4.0-beta.5
+Desktop commit:    8acba9b3539a1905fc7361efcab97de8199a0ac9
+Linux x64 SHA256:  2ff381b9a7d501146d77b44cb25d6d4c987c677c3b550cad6f1b766c08631110
 ```
 
 Capture protected routing hashes before implementation:
@@ -67,7 +67,7 @@ class RelayProvenanceTests(unittest.TestCase):
         manifest = load_json("config/hermes-relay-upstream.json")
         self.assertEqual(manifest["android"]["commit"], "a5cc0104bfbda8542667ab50eb70ab02b02a47e5")
         self.assertEqual(manifest["server"]["commit"], "08545ed32db07609c14730a7fc02cdd758f12434")
-        self.assertEqual(manifest["desktop"]["commit"], "ab1924d44089c06b99afd1d64afc1d7da42fcb28")
+        self.assertEqual(manifest["desktop"]["commit"], "8acba9b3539a1905fc7361efcab97de8199a0ac9")
         self.assertNotEqual(manifest["android"]["version"], manifest["server"]["version"])
 ```
 
@@ -107,11 +107,11 @@ Create `config/hermes-relay-upstream.json`:
     "license": "MIT"
   },
   "desktop": {
-    "tag": "desktop-v0.3.0-alpha.18",
-    "version": "0.3.0-alpha.18",
-    "commit": "ab1924d44089c06b99afd1d64afc1d7da42fcb28",
+    "tag": "desktop-v0.4.0-beta.5",
+    "version": "0.4.0-beta.5",
+    "commit": "8acba9b3539a1905fc7361efcab97de8199a0ac9",
     "artifact": "hermes-relay-linux-x64",
-    "artifact_sha256": "efa6e9ce27e03d10f057c9ce992b5fc5185dbf8803e7c605267e4fd2ac04b265",
+    "artifact_sha256": "2ff381b9a7d501146d77b44cb25d6d4c987c677c3b550cad6f1b766c08631110",
     "prerelease": true,
     "source_url": "https://github.com/Codename-11/hermes-relay",
     "license": "MIT"
@@ -457,26 +457,24 @@ git commit -m "feat: preserve Relay state across cloud rollback"
 
 ---
 
-### Task 8: Verify the official Desktop CLI as the dev-companion surface
+### Task 8: Verify Desktop CLI 0.4.0-beta.5 as the dev-companion surface
 
 **Files:**
 - Create: `tests/test_hermes_relay_desktop_pin.py`
-- Modify only if evidence supports a newer release: `config/hermes-relay-upstream.json`
+- Modify only if a newer release is proven before execution: `config/hermes-relay-upstream.json`
 - No Hermes-Ultra desktop fork
 
 **Step 1: Write the pin test**
 
-Require that any desktop entry has an exact tag, peeled commit, artifact digest, and prerelease/stable status. A desktop install is forbidden if any one is absent.
+Require tag `desktop-v0.4.0-beta.5`, commit `8acba9b3539a1905fc7361efcab97de8199a0ac9`, Linux x64 digest `2ff381b9a7d501146d77b44cb25d6d4c987c677c3b550cad6f1b766c08631110`, and `prerelease: true`. A desktop install is forbidden if any immutable field is absent.
 
-**Step 2: Check current upstream releases at execution time**
+**Step 2: Recheck upstream immediately before install**
 
-Query `Codename-11/hermes-relay` releases for `desktop-v*`. If a release newer than `desktop-v0.3.0-alpha.18` exists, verify its tag object/commit, Linux x64 digest, release notes, and compatibility before changing the pin. Never substitute Android's commit/version for Desktop.
-
-If no newer verified desktop release exists, retain the pinned alpha.18 baseline. Do not install an untagged `main` build as production.
+If a newer `desktop-v*` release appears before implementation reaches this task, do not auto-upgrade. Verify its tag target, Linux x64 digest, release notes, and compatibility first, update provenance/tests in a separate RED→GREEN commit, then continue. Never substitute Android's commit/version for Desktop.
 
 **Step 3: Verify the selected Desktop CLI before installing on a dev machine**
 
-For a released binary, verify SHA256 before installation. For a source verification run, check out the exact peeled commit and run from `desktop/`:
+For the beta.5 release binary, verify SHA256 before installation. For source verification, check out exact commit `8acba9b3539a1905fc7361efcab97de8199a0ac9` and run from `desktop/`:
 
 ```bash
 npm ci
@@ -485,7 +483,7 @@ npm run verify
 
 Only then install the verified CLI/daemon on Penguin or another approved dev machine. Default host access is Ask Every Time; unconfigured stays Restricted; Full Access is not automatic.
 
-**Step 4: Run tests and commit only provenance changes**
+**Step 4: Run tests and commit**
 
 ```bash
 python3 -m unittest tests.test_hermes_relay_desktop_pin -v
@@ -493,7 +491,7 @@ git add tests/test_hermes_relay_desktop_pin.py config/hermes-relay-upstream.json
 git commit -m "test: verify Hermes Relay desktop companion pin"
 ```
 
-If the manifest does not change, commit only the test.
+If provenance did not change, add only the test file.
 
 ---
 
@@ -527,7 +525,7 @@ Never print raw tokens, headers, clipboard/screen bodies, or notification conten
 
 **Step 3: Write `docs/deployment/hermes-relay.md`**
 
-Document Dashboard `:9119` primary, Relay `:8767` extension-only/tailnet-only, API `:8642` optional, doctor usage, one-time pairing, Android APK digest, Desktop prerelease status, device revocation, rollback, no Full Access automation, and no public SG rule.
+Document Dashboard `:9119` primary, Relay `:8767` extension-only/tailnet-only, API `:8642` optional, doctor usage, one-time pairing, Android APK digest, Desktop beta status, device revocation, rollback, no Full Access automation, and no public SG rule.
 
 **Step 4: Verify and commit**
 
@@ -749,4 +747,4 @@ Include Hermes-Ultra source commit; cloud release SHA256; Android tag/commit/APK
 
 ## Definition of Done
 
-Do not claim completion until Android is pinned to 1.13.2; Relay server/plugin 1.10.0 is staged from immutable verified inputs; Relay dependencies are hash-locked; the plugin passes Hermes-native security scanning; Dashboard `:9119` remains primary and healthy; Relay `:8767` is tailnet-only; the desktop dev-companion surface is independently verified; authority mapping is exhaustive and fail-closed; remote success is correlated and reconciled through existing Hermes task state; secrets are redacted; rollback preserves Relay durable state; the existing model-router hashes are unchanged; all test/secret/release gates pass; and a harmless AWS round trip is proven or the sole remaining action is the user's one-time mobile pairing approval.
+Do not claim completion until Android is pinned to 1.13.2; Relay server/plugin 1.10.0 is staged from immutable verified inputs; Relay dependencies are hash-locked; the plugin passes Hermes-native security scanning; Dashboard `:9119` remains primary and healthy; Relay `:8767` is tailnet-only; Desktop CLI 0.4.0-beta.5 (or a separately verified newer tagged release) is independently verified as the dev-companion surface; authority mapping is exhaustive and fail-closed; remote success is correlated and reconciled through existing Hermes task state; secrets are redacted; rollback preserves Relay durable state; the existing model-router hashes are unchanged; all test/secret/release gates pass; and a harmless AWS round trip is proven or the sole remaining action is the user's one-time mobile pairing approval.
