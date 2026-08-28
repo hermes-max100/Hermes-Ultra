@@ -301,12 +301,6 @@ class OrcaClient:
             timeout=30,
         )
 
-    def remove(self, worktree_id: str) -> CapabilityResult[object]:
-        return self._run_json(
-            ["worktree", "rm", "--worktree", f"id:{worktree_id}", "--force", "--json"],
-            timeout=60,
-        )
-
     def start_task(
         self,
         task: OrcaTaskSpec,

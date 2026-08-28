@@ -99,3 +99,7 @@ def test_failed_command_redacts_secret_bearing_stderr():
     assert "sk-test-super-secret" not in result.message
     assert "oauth-secret-value" not in result.message
     assert result.message.count("[REDACTED]") == 2
+
+
+def test_public_client_does_not_expose_destructive_worktree_removal():
+    assert not hasattr(OrcaClient, "remove")
