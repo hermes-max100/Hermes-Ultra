@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "name": "hermes-jarvis-policy",
+  "primary_system": "hermes-agent-running-self-evolving-jarvis",
+  "runtime_agent": "hermes-agent",
+  "self_evolving_system": "jarvis",
+  "authority": {
+    "jarvis_controls_skill_evolution": true,
+    "jarvis_controls_runtime_promotion": true,
+    "jarvis_controls_router_policy": true,
+    "external_skills_are_inputs_only": true,
+    "external_skills_may_not_override_jarvis": true
+  },
+  "registries": {
+    "project_skill_registry": ".agents/skills",
+    "hermes_runtime_registry": ".skills/skills.d",
+    "external_source_registry": ".skill-sources",
+    "promotion_requires_adapter": true
+  },
+  "external_skill_policy": {
+    "default_state": "project-active-or-reference",
+    "allowed_states": [
+      "reference",
+      "candidate",
+      "project-active",
+      "runtime-ready",
+      "runtime-gated",
+      "rejected"
+    ],
+    "runtime_default_for_new_external_skills": "runtime-gated",
+    "do_not_execute_installers_by_activation": true,
+    "do_not_start_daemons_by_activation": true,
+    "do_not_sync_sessions_by_activation": true,
+    "do_not_modify_mcp_config_by_activation": true
+  },
+  "evolution_loop": {
+    "sequence": ["observe", "diagnose", "propose", "validate", "promote", "record"],
+    "silent_self_mutation_allowed": false,
+    "unbounded_rewrite_allowed": false,
+    "strict_improvement_required": true,
+    "rejected_edits_path": ".skills/rejected-edits.jsonl"
+  },
+  "approval_boundaries": {
+    "require_approval_for_runtime_promotion": true,
+    "require_approval_for_daemons": true,
+    "require_approval_for_browser_profile_access": true,
+    "require_approval_for_package_installers": true,
+    "require_approval_for_mcp_config_writes": true,
+    "require_approval_for_private_indexing": true,
+    "require_approval_for_send_post_delete_purchase_credentials_security": true
+  },
+  "hard_blocks": [
+    "credential_theft",
+    "stealth",
+    "unauthorized_persistence",
+    "unauthorized_public_target_scanning",
+    "unapproved_exploit_execution",
+    "secret_exfiltration",
+    "silent_account_actions"
+  ]
+}

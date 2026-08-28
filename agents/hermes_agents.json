@@ -1,0 +1,86 @@
+{
+  "agent_pack": "hermes_domain_agents",
+  "version": "1.0.0",
+  "memory_source": {
+    "name": "NirDiamant/Agent_Memory_Techniques",
+    "url": "https://github.com/NirDiamant/Agent_Memory_Techniques",
+    "techniques_used": [
+      "Summary Buffer Memory",
+      "Token Buffer Memory",
+      "Entity Memory",
+      "Knowledge Graph Memory",
+      "Episodic Memory",
+      "Semantic Memory",
+      "Procedural Memory",
+      "Working Memory & Context Window",
+      "Hierarchical Memory Layers",
+      "Memory Consolidation",
+      "Self-Reflection Memory",
+      "Memory Routing",
+      "Temporal Memory",
+      "Forgetting & Decay",
+      "Memory Retrieval Patterns",
+      "Cross-Session Memory",
+      "Multi-Agent Shared Memory",
+      "Memory with Tools",
+      "Graphiti",
+      "Mem0",
+      "Letta",
+      "Zep",
+      "Memory Evaluation",
+      "Production Memory Patterns"
+    ]
+  },
+  "model_provider_gateway": {
+    "file": "gateways/04_model_provider_gateway.md",
+    "manifest": "gateways/model_providers.json",
+    "automation_policy": "Official APIs, approved connectors, local runtimes, or human-in-the-loop handoff only. Browser automation to bypass API keys or provider access controls is disallowed."
+  },
+  "agents": [
+    {
+      "id": "hermes_legal",
+      "name": "Hermes Legal Agent",
+      "file": "agents/01_hermes_legal_agent.md",
+      "council": "Legal Council",
+      "aggregator": "weighted legal synthesis aggregator",
+      "primary_memory": ["Entity Memory", "Knowledge Graph Memory", "Temporal Memory"],
+      "requires_human_review": true
+    },
+    {
+      "id": "hermes_options_trading",
+      "name": "Hermes Options Trading Agent",
+      "file": "agents/02_hermes_options_trading_agent.md",
+      "council": "Options Council",
+      "aggregator": "risk-first expected scenario aggregator",
+      "primary_memory": ["Episodic Memory", "Semantic Memory", "Self-Reflection Memory"],
+      "requires_human_review": true
+    },
+    {
+      "id": "hermes_security_research",
+      "name": "Hermes Security Research Agent",
+      "file": "agents/03_hermes_security_research_agent.md",
+      "council": "Security Council",
+      "aggregator": "safety-gated risk aggregator",
+      "primary_memory": ["Knowledge Graph Memory", "Procedural Memory", "Memory Routing"],
+      "requires_authorization_scope": true
+    },
+    {
+      "id": "hermes_solopreneur",
+      "name": "Hermes Solopreneur Agent",
+      "file": "agents/04_hermes_solopreneur_agent.md",
+      "council": "Solopreneur Council",
+      "aggregator": "leverage-score operating aggregator",
+      "primary_memory": ["Entity Memory", "Semantic Memory", "Hierarchical Memory Layers"],
+      "requires_human_review": false
+    },
+    {
+      "id": "hermes_marketing",
+      "name": "Hermes Marketing Agent",
+      "file": "agents/05_hermes_marketing_agent.md",
+      "council": "Marketing Council",
+      "aggregator": "evidence-weighted campaign aggregator",
+      "primary_memory": ["Vector Store Memory", "Entity Memory", "Memory Consolidation"],
+      "requires_claim_review": true
+    }
+  ]
+}

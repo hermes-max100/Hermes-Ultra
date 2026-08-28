@@ -1,0 +1,75 @@
+{
+  "agent": "hermes",
+  "version": "1.0.0",
+  "gateways": [
+    {
+      "id": "oracle_intake",
+      "name": "Oracle Intake Gateway",
+      "file": "gateways/01_oracle_intake_gateway.md",
+      "role": "intent_capture",
+      "allows_file_writes": false,
+      "primary_handoffs": ["forge_execution", "atlas_memory", "user_clarification"]
+    },
+    {
+      "id": "forge_execution",
+      "name": "Forge Execution Gateway",
+      "file": "gateways/02_forge_execution_gateway.md",
+      "role": "local_implementation",
+      "allows_file_writes": true,
+      "primary_handoffs": ["oracle_intake", "atlas_memory", "user_clarification"]
+    },
+    {
+      "id": "atlas_memory",
+      "name": "Atlas Memory Gateway",
+      "file": "gateways/03_atlas_memory_gateway.md",
+      "role": "context_retrieval",
+      "allows_file_writes": false,
+      "primary_handoffs": ["oracle_intake", "forge_execution", "user_clarification"]
+    },
+    {
+      "id": "model_provider",
+      "name": "Model Provider Gateway",
+      "file": "gateways/04_model_provider_gateway.md",
+      "role": "approved_model_routing",
+      "allows_file_writes": false,
+      "primary_handoffs": ["oracle_intake", "atlas_memory", "forge_execution", "user_clarification"]
+    },
+    {
+      "id": "bridge_api",
+      "name": "Bridge API Gateway",
+      "file": "gateways/05_bridge_api_gateway.md",
+      "role": "documented_http_sse_client_bridge",
+      "allows_file_writes": false,
+      "primary_handoffs": ["oracle_intake", "model_provider", "atlas_memory", "forge_execution"]
+    }
+  ],
+  "default_route": {
+    "first_gateway": "oracle_intake",
+    "fallback_gateway": "atlas_memory",
+    "execution_gateway": "forge_execution",
+    "model_gateway": "model_provider",
+    "bridge_gateway": "bridge_api"
+  },
+  "routing_rules": [
+    {
+      "when": "request_is_ambiguous_or_multi_step",
+      "use": "oracle_intake"
+    },
+    {
+      "when": "request_requires_existing_project_context",
+      "use": "atlas_memory"
+    },
+    {
+      "when": "request_has_clear_local_implementation_target",
+      "use": "forge_execution"
+    },
+    {
+      "when": "request_requires_external_model_provider",
+      "use": "model_provider"
+    },
+    {
+      "when": "request_requires_hermes_server_control_or_native_client_parity",
+      "use": "bridge_api"
+    }
+  ]
+}

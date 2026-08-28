@@ -1,0 +1,11 @@
+{
+  "max_concurrency": 4,
+  "provider_limits": {
+    "official-sensitive": 1
+  },
+  "parallel_value_threshold_ms": 25,
+  "coordination_overhead_ms": 5,
+  "verification_overhead_ms": 5,
+  "max_total_estimated_cost": 5.0,
+  "max_total_estimated_tokens": 250000
+}

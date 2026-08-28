@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "purpose": "Cost controls for Hermes routing and background work.",
+  "conversation_history": {
+    "max_history_messages": 20,
+    "summary_after_messages": 20,
+    "memory_store_for_long_term_context": true
+  },
+  "background_work": {
+    "model_preference": ["local-private", "gemini-flash", "openai-fast"],
+    "eligible_intents": ["background-check", "cron-check", "status-check", "classification"],
+    "heartbeat_interval_minutes": {
+      "default": 10,
+      "legal": 15,
+      "trading": 10,
+      "security_research": 15,
+      "solopreneur": 15,
+      "marketing": 15,
+      "direct": 10
+    }
+  },
+  "tool_schema_budget": {
+    "default_max_enabled_skills": 6,
+    "profile_scoped_skills_only": true,
+    "disable_unused_tools_by_default": true
+  },
+  "provider_policy": {
+    "conversation_tasks": "Use the profile router's selected provider route.",
+    "background_tasks": "Use the cheapest approved route that can classify or poll safely.",
+    "disallowed": [
+      "subscription_cookie_automation",
+      "session_token_reuse",
+      "provider_rate_limit_bypass",
+      "paywall_or_captcha_bypass"
+    ]
+  },
+  "attribution": {
+    "include_cost_controls": true,
+    "include_history_cap": true,
+    "include_heartbeat_interval": true,
+    "include_enabled_skill_count": true
+  }
+}

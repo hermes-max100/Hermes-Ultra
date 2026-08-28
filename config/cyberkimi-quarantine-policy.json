@@ -1,0 +1,49 @@
+{
+  "version": "0.1.0",
+  "name": "cyberkimi-quarantine-policy",
+  "provider": "adverserial",
+  "model": "lordx64/cyberkimi",
+  "router_model": "cyberkimi-quarantine",
+  "profile": "cyberkimi-quarantine",
+  "purpose": "Use CyberKimi only as an opt-in defensive cyber reasoning specialist with no autonomous tool authority.",
+  "allowed_for": [
+    "defensive_security_review",
+    "threat_modeling",
+    "detection_engineering",
+    "incident_response_planning",
+    "patch_diff_analysis",
+    "lab_only_exploitability_assessment_reports",
+    "ctf_or_training_analysis",
+    "hardening_recommendations"
+  ],
+  "requires_human_approval_before": [
+    "shell_execution",
+    "network_access",
+    "scanner_execution",
+    "exploit_module_execution",
+    "public_target_testing",
+    "credential_handling",
+    "app_control",
+    "posting_or_sending",
+    "file_deletion_or_account_changes"
+  ],
+  "blocked": [
+    "credential_theft",
+    "secret_exfiltration",
+    "malware_generation",
+    "phishing_kit_generation",
+    "persistence_or_stealth_tooling",
+    "unauthorized_public_target_scanning",
+    "unapproved_exploit_execution",
+    "autonomous_phone_or_app_control"
+  ],
+  "default_tool_access": "none",
+  "default_network_access": "disabled",
+  "default_shell_access": "disabled",
+  "output_mode": "report_artifacts_only",
+  "notes": [
+    "CyberKimi must not be used as the default Hermes model.",
+    "Use the normal security profile for sensitive/private review unless the user explicitly selects cyberkimi-quarantine.",
+    "Any execution step must be converted into a plan or report and routed through human approval."
+  ]
+}

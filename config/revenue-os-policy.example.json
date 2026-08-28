@@ -1,0 +1,56 @@
+{
+  "version": "0.1.0",
+  "purpose": "Revenue OS operating policy for local attribution, opportunity scoring, and governed economic workflows.",
+  "optimization_target": "verified_risk_adjusted_profit",
+  "budgets": {
+    "monthly_ai_budget_usd": 50,
+    "daily_experiment_budget_usd": 3,
+    "maximum_paid_spend_without_human_approval_usd": 0,
+    "maximum_external_messages_without_human_approval": 0
+  },
+  "approval_required": [
+    "send",
+    "post",
+    "delete",
+    "purchase",
+    "payment",
+    "account_change",
+    "credential_entry",
+    "permission_change",
+    "invite",
+    "security_setting"
+  ],
+  "allowed_without_approval": [
+    "local_report",
+    "local_ledger_entry",
+    "draft_offer",
+    "draft_outreach",
+    "draft_follow_up",
+    "read_public_source",
+    "rank_opportunity"
+  ],
+  "metrics": {
+    "primary": "profit",
+    "secondary": [
+      "net_revenue",
+      "qualified_leads",
+      "conversions",
+      "cac",
+      "roas",
+      "conversion_rate",
+      "profit_per_lead"
+    ],
+    "anti_goals": [
+      "views_without_leads",
+      "activity_without_attribution",
+      "gross_revenue_without_costs",
+      "unapproved_external_actions"
+    ]
+  },
+  "memory_policy": {
+    "persist_revenue_events": true,
+    "persist_opportunities": true,
+    "security_classification": "INTERNAL",
+    "do_not_persist_credentials": true
+  }
+}

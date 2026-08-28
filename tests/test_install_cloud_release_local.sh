@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INSTALLER="$ROOT_DIR/scripts/install-cloud-release-local.sh"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+make_release() {
+  local dir="$1" marker="$2" archive="$3"
+  mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.20.5"
+  printf '{"schema_version":1}\n' > "$dir/hermes-max/skills-lock.json"
+  printf '{"spdxVersion":"SPDX-2.3"}\n' > "$dir/hermes-max/SBOM.spdx.json"
+  printf '{"source_commit":"test-%s"}\n' "$marker" > "$dir/hermes-max/RELEASE_PROVENANCE.json"
+  printf '%s\n' "$marker" > "$dir/hermes-max/release-marker.txt"
+  printf 'v2026.8.19\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_TAG"
+  printf '0123456789abcdef0123456789abcdef01234567\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_COMMIT"
+  printf '{"source_tag":"v2026.8.19","version":"0.20.5"}\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json"
+  printf 'demo==1.0 --hash=sha256:%064d\n' 0 > "$dir/hermes-max/vendor/hermes-agent/0.20.5/requirements-hermes-all.lock.txt"
+  printf 'setuptools==83.0.0 --hash=sha256:%064d\n' 1 > "$dir/hermes-max/vendor/hermes-agent/0.20.5/requirements-hermes-build.lock.txt"
+  printf 'version = 1\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/uv.lock"
+  python3 - "$dir/hermes-max/vendor/hermes-agent/0.20.5" <<'PYDEP'
+import hashlib,json,pathlib,sys
+r=pathlib.Path(sys.argv[1]); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+(r/'DEPENDENCY_LOCK_PROVENANCE.json').write_text(json.dumps({
+ 'mode':'uv-export-locked-no-project', 'uv_version':'uv test',
+ 'uv_lock_sha256':sha(r/'uv.lock'),
+ 'runtime_requirements_sha256':sha(r/'requirements-hermes-all.lock.txt'),
+ 'build_requirements_sha256':sha(r/'requirements-hermes-build.lock.txt')}, sort_keys=True)+'\n')
+PYDEP
+  (cd "$dir/hermes-max/vendor/hermes-agent/0.20.5" && find . -type f ! -name SOURCE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > SOURCE_MANIFEST.sha256)
+  (cd "$dir/hermes-max" && find . -type f ! -name CLOUD_RELEASE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > CLOUD_RELEASE_MANIFEST.sha256)
+  tar -C "$dir" -czf "$archive" hermes-max
+}
+[[ -x "$INSTALLER" ]] || { echo 'local cloud installer missing' >&2; exit 1; }
+INSTALL_ROOT="$TMP/opt/hermes-max"
+VAR_ROOT="$TMP/var/lib/hermes"
+mkdir -p "$VAR_ROOT/state"
+printf 'durable-state\n' > "$VAR_ROOT/state/sentinel"
+R1="$TMP/r1"; A1="$TMP/release1.tar.gz"; make_release "$R1" one "$A1"
+SHA1="$(sha256sum "$A1" | awk '{print $1}')"
+SYSTEMD_DIR="$TMP/systemd"; mkdir -p "$SYSTEMD_DIR"
+HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" HERMES_SYSTEMD_DIR="$SYSTEMD_DIR" \
+  bash "$INSTALLER" "$A1" "$SHA1" | grep -q '^HERMES_LOCAL_INSTALL=PASS release='
+CURRENT1="$(readlink -f "$INSTALL_ROOT/current")"
+[[ -f "$CURRENT1/release-marker.txt" ]] && grep -qx one "$CURRENT1/release-marker.txt"
+grep -qx durable-state "$VAR_ROOT/state/sentinel"
+UNIT="$SYSTEMD_DIR/hermes-runtime.service"
+[[ -f "$UNIT" ]] || { echo 'runtime systemd unit missing' >&2; exit 1; }
+grep -q 'User=hermes' "$UNIT"
+grep -q 'serve --host 127.0.0.1 --port 9119' "$UNIT"
+grep -q 'Restart=on-failure' "$UNIT"
+grep -q '/api/health' "$INSTALLER"
+if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
+  bash "$INSTALLER" "$A1" "$(printf 'f%.0s' {1..64})" >/dev/null 2>&1; then
+  echo 'wrong outer sha accepted' >&2; exit 1
+fi
+[[ "$(readlink -f "$INSTALL_ROOT/current")" == "$CURRENT1" ]]
+R2="$TMP/r2"; A2="$TMP/release2.tar.gz"; make_release "$R2" two "$A2"
+printf 'tampered\n' >> "$R2/hermes-max/release-marker.txt"
+tar -C "$R2" -czf "$A2" hermes-max
+SHA2="$(sha256sum "$A2" | awk '{print $1}')"
+if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
+  bash "$INSTALLER" "$A2" "$SHA2" >/dev/null 2>&1; then
+  echo 'tampered internal manifest accepted' >&2; exit 1
+fi
+[[ "$(readlink -f "$INSTALL_ROOT/current")" == "$CURRENT1" ]]
+grep -qx durable-state "$VAR_ROOT/state/sentinel"
+grep -q -- '--require-hashes' "$INSTALLER"
+grep -q -- '--no-build-isolation' "$INSTALLER"
+! grep -q 'setup-hermes.sh' "$INSTALLER"
+! grep -qE 'pip install.*\|\||Falling back|_try_install' "$INSTALLER"
+echo 'local cloud release installer tests passed'

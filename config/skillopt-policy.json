@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "source": {
+    "paper": "SkillOpt: Executive Strategy for Self-Evolving Agent Skills",
+    "arxiv": "2605.23904v2",
+    "url": "https://arxiv.org/html/2605.23904v2"
+  },
+  "principles": {
+    "skill_is_external_state": true,
+    "target_model_is_frozen": true,
+    "optimizer_is_separate_from_target": true,
+    "deployment_artifact_is_compact": true,
+    "no_inference_time_optimizer_calls": true
+  },
+  "edit_policy": {
+    "allowed_operations": ["append", "insert", "replace", "delete"],
+    "default_textual_learning_rate": 4,
+    "max_edits_per_proposal": 4,
+    "reject_unbounded_rewrite": true,
+    "reject_silent_mutation": true,
+    "require_changelog": true,
+    "require_backup": true
+  },
+  "validation_gate": {
+    "enabled": true,
+    "acceptance_rule": "strict_improvement",
+    "ties_are_rejected": true,
+    "selection_split_required": true,
+    "record_edit_apply_report": true,
+    "export_best_skill": true
+  },
+  "rejected_edit_buffer": {
+    "enabled": true,
+    "path": ".skills/rejected-edits.jsonl",
+    "retain_days": 90,
+    "include_in_future_proposals": true
+  },
+  "slow_meta_update": {
+    "enabled": true,
+    "protected_region": "SLOW_META_UPDATE",
+    "path": ".skills/meta/slow-updates.md",
+    "step_level_edits_may_modify": false
+  },
+  "dashboard": {
+    "track_validation_score": true,
+    "track_rejected_edits": true,
+    "track_best_skill_exports": true,
+    "track_drift": true
+  }
+}

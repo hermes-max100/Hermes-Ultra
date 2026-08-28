@@ -1,0 +1,166 @@
+{
+  "profile_pack": "hermes_profiles",
+  "version": "1.1.0",
+  "source_materials": [
+    "/tmp/codex-web-uploads/f-fodCh1/venice-conversation-What arethe top3 models available for free using venice ai-184e4f2e-3700-4c20-bc4a-afc4a9f2e23b.txt",
+    "/tmp/codex-web-uploads/f-MKq7y7/pasted-text-2026-07-02-04-10-13.txt"
+  ],
+  "provider_policy": "Use official APIs, approved connectors, local runtimes, or manual handoff. Do not use subscription cookies, session tokens, or saved browser profiles for autonomous model access.",
+  "router": {
+    "file": "src/system/dynamic-router.sh",
+    "cost_policy": "config/cost-policy.json",
+    "cost_audit": "src/system/cost-audit.sh",
+    "config_templates": [
+      "config/hermes-cost-controls.example.json",
+      "config/openclaw-cost-controls.example.json"
+    ],
+    "docs": "docs/dynamic-router.md",
+    "tests": [
+      "tests/test_dynamic_router.sh",
+      "tests/test_cost_audit.sh"
+    ],
+    "uses": [
+      "intent_classification",
+      "complexity_scoring",
+      "profile_skill_mapping",
+      "provider_policy_attribution",
+      "cost_control_metadata"
+    ]
+  },
+  "bridge_api": {
+    "manifest": "bridge/hermes_bridge_manifest.json",
+    "gateway": "gateways/05_bridge_api_gateway.md",
+    "client": "src/system/bridge-client.sh",
+    "docs": "docs/hermes-bridge-api.md",
+    "tests": "tests/test_bridge_client.sh",
+    "policy": "Use documented Bridge API endpoints and a client-controlled cookie jar. Do not reuse browser cookies or undocumented internals."
+  },
+  "profiles": [
+    {
+      "id": "legal",
+      "soul": "profiles/legal/SOUL.md",
+      "council": [
+        "profiles/legal/roles/gemini_legal_council.md",
+        "profiles/legal/roles/gpt_legal_council.md",
+        "profiles/legal/roles/glm52_legal_council.md"
+      ],
+      "research_agent": "profiles/legal/roles/perplexity_research_agent.md",
+      "aggregator": "profiles/legal/roles/claude_legal_aggregator.md",
+      "memory": [
+        "Entity Memory",
+        "Knowledge Graph Memory",
+        "Temporal Memory"
+      ],
+      "final_review": "attorney_review_required"
+    },
+    {
+      "id": "trading",
+      "soul": "profiles/trading/SOUL.md",
+      "council": [
+        "profiles/trading/roles/strategy_council.md",
+        "profiles/trading/roles/volatility_council.md",
+        "profiles/trading/roles/risk_council.md"
+      ],
+      "research_agent": "profiles/trading/roles/perplexity_market_research_agent.md",
+      "aggregator": "profiles/trading/roles/trading_risk_aggregator.md",
+      "memory": [
+        "Episodic Memory",
+        "Semantic Memory",
+        "Self-Reflection Memory"
+      ],
+      "final_review": "not_financial_advice"
+    },
+    {
+      "id": "security_research",
+      "soul": "profiles/security/SOUL.md",
+      "council": [
+        "profiles/security/roles/claude_security_council.md",
+        "profiles/security/roles/gemini_security_council.md",
+        "profiles/security/roles/glm52_security_council.md",
+        "profiles/security/roles/deepseek_security_council.md"
+      ],
+      "research_agent": "profiles/security/roles/perplexity_security_research_agent.md",
+      "aggregator": "profiles/security/roles/security_safety_aggregator.md",
+      "memory": [
+        "Knowledge Graph Memory",
+        "Procedural Memory",
+        "Memory Routing"
+      ],
+      "final_review": "authorization_scope_required"
+    },
+    {
+      "id": "cyberkimi_quarantine",
+      "soul": "profiles/security/SOUL.md",
+      "policy": "config/cyberkimi-quarantine-policy.json",
+      "council": [
+        ".agents/skills/cyberkimi-quarantine/SKILL.md"
+      ],
+      "research_agent": "disabled unless explicitly approved for public retrieval",
+      "aggregator": "report-artifact-only security reviewer",
+      "memory": [
+        "Knowledge Graph Memory",
+        "Procedural Memory",
+        "Memory Routing"
+      ],
+      "final_review": "human_approval_required_for_any_execution"
+    },
+    {
+      "id": "direct",
+      "soul": "profiles/direct/SOUL.md",
+      "policy": "config/hermes-direct-mode-policy.json",
+      "council": [],
+      "research_agent": "approved web/API/manual handoff only",
+      "aggregator": "direct-but-bounded execution aggregator",
+      "memory": [
+        "Working Memory & Context Window",
+        "Summary Buffer Memory",
+        "Procedural Memory"
+      ],
+      "final_review": "narrow_safety_boundaries"
+    },
+    {
+      "id": "research",
+      "soul": "profiles/research/SOUL.md",
+      "council": [],
+      "research_agent": "src/system/agent-reach.sh read/collect only",
+      "aggregator": "source-grounded research synthesizer",
+      "memory": [
+        "Memory Fabric"
+      ],
+      "final_review": "untrusted_sources_and_provenance_required"
+    },
+    {
+      "id": "coding",
+      "soul": "profiles/coding/SOUL.md",
+      "council": [],
+      "research_agent": "governed repository/code retrieval only",
+      "aggregator": "test-and-evidence engineering reviewer",
+      "memory": [
+        "Memory Fabric"
+      ],
+      "final_review": "tests_and_evidence_required"
+    },
+    {
+      "id": "revenue",
+      "soul": "profiles/revenue/SOUL.md",
+      "council": [],
+      "research_agent": "public evidence through governed Research handoff",
+      "aggregator": "Revenue OS proposal and handoff reviewer",
+      "memory": [
+        "Memory Fabric"
+      ],
+      "final_review": "externalization_approval_required"
+    },
+    {
+      "id": "creator",
+      "soul": "profiles/creator/SOUL.md",
+      "council": [],
+      "research_agent": "public trend evidence through governed Research handoff",
+      "aggregator": "virtual creator compliance and artifact reviewer",
+      "memory": [
+        "Memory Fabric"
+      ],
+      "final_review": "posting_and_messaging_approval_required"
+    }
+  ]
+}

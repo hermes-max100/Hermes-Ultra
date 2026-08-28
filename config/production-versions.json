@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "hermes_agent": {
+    "tag": "v2026.8.19",
+    "version": "0.20.5",
+    "url": "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.19"
+  },
+  "hermes_relay_android": {
+    "tag": "android-v1.12.0",
+    "version": "1.12.0",
+    "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.12.0"
+  },
+  "frozen_at": "2026-08-22"
+}

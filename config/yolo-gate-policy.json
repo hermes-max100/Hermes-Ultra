@@ -1,0 +1,64 @@
+{
+  "version": "1.0.0",
+  "name": "hermes-yolo-retrieval-gate-policy",
+  "purpose": "Allow high-quality model approval for retrieval and research gates while preserving human approval for irreversible actions.",
+  "mode_env_var": "HERMES_YOLO_MODE",
+  "default_mode": "off",
+  "approver_chain_env_var": "HERMES_YOLO_APPROVER_CHAIN",
+  "default_approver_chain": [
+    "9router:moonshotai/kimi-k3",
+    "9router:kimi/kimi-latest",
+    "omniroute:nvidia/glm-5.2",
+    "nvidia:glm-5.2",
+    "openrouter:moonshotai/kimi-k3",
+    "adverserial:lordx64/cyberkimi",
+    "onith:onith-1.0"
+  ],
+  "custom_model_examples": [
+    "9router:openai/sol-5.6",
+    "9router:fable/fable-5",
+    "openrouter:openai/gpt-5.6",
+    "omniroute:fable/fable-5"
+    ,
+    "adverserial:lordx64/cyberkimi"
+  ],
+  "model_approval_allowed_for": [
+    "public_retrieval_gate",
+    "source_expansion_gate",
+    "research_depth_gate",
+    "candidate_skill_discovery_gate",
+    "local_report_generation_gate",
+    "draft_generation_gate"
+  ],
+  "human_approval_required_for": [
+    "send_message",
+    "post_content",
+    "invite_contact",
+    "delete_data",
+    "purchase",
+    "credential_entry",
+    "one_time_code_entry",
+    "terminate_session",
+    "security_or_privacy_setting_change",
+    "grant_broad_privilege",
+    "install_or_remove_app",
+    "destructive_shell",
+    "private_indexing",
+    "browser_profile_access",
+    "exploit_module_execution",
+    "public_target_scanning"
+  ],
+  "hard_blocks": [
+    "credential_theft",
+    "secret_exfiltration",
+    "stealth",
+    "unauthorized_persistence",
+    "unauthorized_public_target_scanning",
+    "unapproved_exploit_execution"
+  ],
+  "notes": [
+    "YOLO means retrieval gates can continue without waiting for the human when a configured high-quality model is available.",
+    "YOLO does not approve sends, posts, deletes, credentials, payments, security changes, or exploit execution.",
+    "Sol 5.6 and Fable 5 are supported as custom model IDs through HERMES_YOLO_APPROVER_CHAIN when the selected gateway exposes them."
+  ]
+}

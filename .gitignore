@@ -1,0 +1,66 @@
+.env
+.env.*
+!.env.example
+!*.env.example
+secrets/
+
+# Runtime state, reports, caches, generated bundles.
+.hermes/
+dist/
+artifacts/
+
+# External cloned sources are reviewed/imported through Trust Gate, not vendored.
+.skill-sources/
+
+# Nested/large third-party project. Add as a submodule or package separately if needed.
+OBLITERATUS/
+
+# Python and test caches.
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Node/dependency caches.
+node_modules/
+.npm/
+.pnpm-store/
+
+# Local logs and transient outputs.
+*.log
+logs/
+tmp/
+temp/
+
+# Large/mobile/archive artifacts.
+*.apk
+*.aab
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+*.rar
+*.whl
+
+# Common local secret/key material.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ed25519*
+
+OBLITERATUS/.venv/
+OBLITERATUS/.pytest_cache/
+OBLITERATUS/results/
+OBLITERATUS/models/
+OBLITERATUS/checkpoints/
+
+.worktrees/

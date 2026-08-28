@@ -1,0 +1,47 @@
+{
+  "agents": {
+    "defaults": {
+      "maxHistoryMessages": 20,
+      "summaryAfterMessages": 20,
+      "memoryStoreForLongTermContext": true,
+      "model": {
+        "primary": "${HERMES_PRIMARY_MODEL}",
+        "background": "${HERMES_BACKGROUND_MODEL:-local-private}"
+      },
+      "tools": {
+        "profileScopedOnly": true,
+        "maxEnabledSkills": 6,
+        "disableUnusedByDefault": true
+      }
+    }
+  },
+  "gateways": {
+    "defaults": {
+      "heartbeatIntervalMinutes": 10
+    },
+    "legal": {
+      "heartbeatIntervalMinutes": 15
+    },
+    "trading": {
+      "heartbeatIntervalMinutes": 10
+    },
+    "security_research": {
+      "heartbeatIntervalMinutes": 15
+    },
+    "solopreneur": {
+      "heartbeatIntervalMinutes": 15
+    },
+    "marketing": {
+      "heartbeatIntervalMinutes": 15
+    }
+  },
+  "providerPolicy": {
+    "automation": "official_api_approved_connector_local_runtime_or_manual_handoff",
+    "disallow": [
+      "subscription_cookie_automation",
+      "session_token_reuse",
+      "provider_rate_limit_bypass",
+      "paywall_or_captcha_bypass"
+    ]
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "version": "1",
+  "metadata": {
+    "name": "parallel-research-with-governed-fan-in"
+  },
+  "nodes": [
+    {
+      "id": "planner",
+      "handler": "planner",
+      "provider": "local",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 50,
+      "estimated_cost": 0.0,
+      "estimated_tokens": 500,
+      "input_schema": {"type": "object", "additionalProperties": false},
+      "output_schema": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {"query": {"type": "string", "minLength": 1}},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "research_a",
+      "handler": "research_a",
+      "provider": "local",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 800,
+      "estimated_cost": 0.05,
+      "estimated_tokens": 4000,
+      "input_schema": {"type": "object", "additionalProperties": false},
+      "output_schema": {
+        "type": "object",
+        "required": ["finding"],
+        "properties": {"finding": {"type": "string"}},
+        "additionalProperties": false
+      },
+      "require_evidence": true
+    },
+    {
+      "id": "research_b",
+      "handler": "research_b",
+      "provider": "local",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 700,
+      "estimated_cost": 0.05,
+      "estimated_tokens": 4000,
+      "input_schema": {"type": "object", "additionalProperties": false},
+      "output_schema": {
+        "type": "object",
+        "required": ["finding"],
+        "properties": {"finding": {"type": "string"}},
+        "additionalProperties": false
+      },
+      "require_evidence": true
+    },
+    {
+      "id": "merge",
+      "handler": "merge",
+      "provider": "local",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 100,
+      "estimated_cost": 0.0,
+      "estimated_tokens": 1000,
+      "input_schema": {
+        "type": "object",
+        "required": ["finding_a", "finding_b"],
+        "properties": {
+          "finding_a": {"type": "string"},
+          "finding_b": {"type": "string"}
+        },
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["synthesis"],
+        "properties": {"synthesis": {"type": "string"}},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "governance",
+      "handler": "governance",
+      "provider": "official-sensitive",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 75,
+      "estimated_cost": 0.0,
+      "estimated_tokens": 250,
+      "input_schema": {"type": "object", "additionalProperties": false},
+      "output_schema": {
+        "type": "object",
+        "required": ["authorized"],
+        "properties": {"authorized": {"type": "boolean"}},
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "verify",
+      "handler": "verify",
+      "provider": "local",
+      "security_classification": "INTERNAL",
+      "estimated_latency_ms": 100,
+      "estimated_cost": 0.0,
+      "estimated_tokens": 500,
+      "input_schema": {
+        "type": "object",
+        "required": ["synthesis"],
+        "properties": {"synthesis": {"type": "string"}},
+        "additionalProperties": false
+      },
+      "output_schema": {
+        "type": "object",
+        "required": ["accepted"],
+        "properties": {"accepted": {"type": "boolean"}},
+        "additionalProperties": false
+      },
+      "require_evidence": true
+    }
+  ],
+  "edges": [
+    {"id": "planner-a", "source": "planner", "target": "research_a", "kind": "order", "required": true},
+    {"id": "planner-b", "source": "planner", "target": "research_b", "kind": "order", "required": true},
+    {"id": "fake-a-b", "source": "research_a", "target": "research_b", "kind": "data", "bindings": {}, "required": true},
+    {"id": "a-merge", "source": "research_a", "target": "merge", "kind": "data", "bindings": {"finding_a": "$.finding"}, "required": true},
+    {"id": "b-merge", "source": "research_b", "target": "merge", "kind": "data", "bindings": {"finding_b": "$.finding"}, "required": true},
+    {"id": "merge-verify", "source": "merge", "target": "verify", "kind": "data", "bindings": {"synthesis": "$.synthesis"}, "required": true},
+    {"id": "governance-verify", "source": "governance", "target": "verify", "kind": "authority", "required": true}
+  ]
+}

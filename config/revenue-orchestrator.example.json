@@ -1,0 +1,65 @@
+{
+  "schema_version": "revenue-orchestrator-policy-v1",
+  "purpose": "Create bounded, ledger-tracked Revenue OS experiment plans from eligible opportunities.",
+  "eligibility": {
+    "require_ledger_backed_opportunity": true,
+    "exclude_expired": true,
+    "reject_insufficient_evidence": true,
+    "minimum_confidence": 0.4,
+    "maximum_compliance_risk": 0.5,
+    "maximum_execution_risk": 0.6,
+    "maximum_budget_request_usd": 250
+  },
+  "action_classes": {
+    "autonomous": [
+      "public_research",
+      "analysis",
+      "drafting",
+      "local_artifact_generation",
+      "lead_scoring",
+      "reporting",
+      "ledger_entry"
+    ],
+    "approval_required": [
+      "send",
+      "post",
+      "outreach",
+      "purchase",
+      "payment",
+      "credential_use",
+      "account_modification",
+      "permission_change",
+      "external_message",
+      "paid_spend"
+    ],
+    "prohibited": [
+      "credential_theft",
+      "stealth",
+      "persistence",
+      "unapproved_send",
+      "unapproved_post",
+      "unapproved_purchase",
+      "privacy_or_security_change_without_approval",
+      "destructive_action_without_approval"
+    ]
+  },
+  "approval_receipts": {
+    "required_for_approval_required_steps": true,
+    "human_approved_boolean_is_not_authority": true,
+    "required_fields": [
+      "approval_id",
+      "experiment_id",
+      "action",
+      "scope",
+      "approved_at",
+      "expires_at",
+      "approver",
+      "policy_hash"
+    ]
+  },
+  "output": {
+    "experiment_plan_dir": ".hermes/revenue-os/experiments",
+    "approval_receipt_dir": ".hermes/revenue-os/approval-receipts",
+    "immutable_plan_artifacts": true
+  }
+}

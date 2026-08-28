@@ -1,0 +1,14 @@
+project_id                 = "your-gcp-project-id"
+billing_account            = "000000-000000-000000"
+region                     = "us-central1"
+name_prefix                = "hermes-max-support"
+monthly_budget_limit_usd   = 15
+budget_alert_emails        = ["you@example.com"]
+
+# Step 0: leave both false and apply only the budget.
+enable_support_storage     = false
+enable_cloud_run_probe     = false
+
+# Enable only after browser-console credit/pricing/API inspection.
+# enable_support_storage = true
+# enable_cloud_run_probe = true

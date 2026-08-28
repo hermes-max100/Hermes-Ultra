@@ -1,0 +1,135 @@
+{
+  "api_token_env": "JARVIS_API_TOKEN",
+  "require_remote_auth": true,
+  "notes_dir": "./notes",
+  "data_dir": "./data",
+  "default_provider": "ninerouter",
+  "providers": {
+    "mock": {
+      "base_url": "mock://local",
+      "model": "offline",
+      "display_name": "Local Offline",
+      "aliases": ["local", "offline"],
+      "enabled": true
+    },
+    "ninerouter": {
+      "base_url": "http://127.0.0.1:20127/v1",
+      "model": "kimi/kimi-latest",
+      "api_key_env": "NINEROUTER_API_KEY",
+      "display_name": "9Router Local",
+      "aliases": ["9router", "nine", "local", "kimi"],
+      "health_path": "/models",
+      "timeout_seconds": 15,
+      "enabled": true
+    },
+    "ninerouter_coding": {
+      "base_url": "http://127.0.0.1:20127/v1",
+      "model": "moonshotai/kimi-k3",
+      "api_key_env": "NINEROUTER_API_KEY",
+      "display_name": "9Router Kimi 3 Coding",
+      "aliases": ["coding", "kimi-code", "kimi3-code", "k3-code"],
+      "health_path": "/models",
+      "timeout_seconds": 20,
+      "enabled": true
+    },
+    "omniroute": {
+      "base_url": "http://127.0.0.1:20128/v1",
+      "model": "auto",
+      "api_key_env": "OMNIROUTE_API_KEY",
+      "display_name": "OmniRoute Auto",
+      "aliases": ["omni", "omniroute", "fallback"],
+      "health_path": "/models",
+      "timeout_seconds": 15,
+      "enabled": true
+    },
+    "omniroute_glm": {
+      "base_url": "http://127.0.0.1:20128/v1",
+      "model": "nvidia/glm-5.2",
+      "api_key_env": "OMNIROUTE_API_KEY",
+      "display_name": "OmniRoute GLM 5.2",
+      "aliases": ["glm", "glm-5.2", "nvidia-glm"],
+      "health_path": "/models",
+      "timeout_seconds": 20,
+      "enabled": true
+    }
+  },
+  "personality": {
+    "humor": 35,
+    "verbosity": 45,
+    "formality": 70
+  },
+  "allow_origins": [
+    "http://127.0.0.1:4700",
+    "http://localhost:4700"
+  ],
+  "browser_harness": {
+    "tavily_api_key_env": "TAVILY_API_KEY",
+    "tavily_base_url": "https://api.tavily.com",
+    "firecrawl_api_key_env": "FIRECRAWL_API_KEY",
+    "firecrawl_base_url": "https://api.firecrawl.dev/v2",
+    "request_timeout_seconds": 30,
+    "max_search_results": 8,
+    "provider_max_concurrency": 8,
+    "browser_max_concurrency": 2,
+    "browser_headless": true,
+    "browser_channel": null,
+    "browser_executable_path": null,
+    "browser_user_agent": null,
+    "viewport_width": 1440,
+    "viewport_height": 900,
+    "artifact_dir": "./data/browser_artifacts",
+    "allow_private_network": false,
+    "allowed_domains": [],
+    "blocked_domains": []
+  },
+  "oauth_providers": [
+    {
+      "provider_id": "google",
+      "display_name": "Google Workspace",
+      "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token_url": "https://oauth2.googleapis.com/token",
+      "revoke_url": "https://oauth2.googleapis.com/revoke",
+      "client_id_env": "GOOGLE_OAUTH_CLIENT_ID",
+      "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/gmail.compose",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send"
+      ],
+      "authorization_params": {
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent"
+      },
+      "token_params": {}
+    }
+  ],
+  "mcp_servers": [
+    {
+      "server_id": "mcp_docs",
+      "transport": "http",
+      "enabled": false,
+      "url": "https://modelcontextprotocol.io/mcp",
+      "bearer_token_env": null,
+      "timeout_seconds": 20
+    },
+    {
+      "server_id": "filesystem_notes",
+      "transport": "stdio",
+      "enabled": false,
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "./notes"
+      ],
+      "env": {},
+      "secret_env": {},
+      "timeout_seconds": 20
+    }
+  ],
+  "github_token_env": "GITHUB_TOKEN"
+}

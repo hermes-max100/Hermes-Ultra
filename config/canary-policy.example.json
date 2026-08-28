@@ -1,0 +1,44 @@
+{
+  "promotion_id": "example-promotion-20260815T000000Z",
+  "candidate_version": "candidate-0.2.0",
+  "previous_version": "previous-0.1.0",
+  "promotion_evidence_id": "trajenv_anchor_evaluator_example",
+  "anchor_report_hash": "sha256:anchor-report-example",
+  "rollback_target": "previous-0.1.0",
+  "rollback_conditions": [
+    "critical security failure",
+    "mandatory-anchor regression",
+    "classification violation",
+    "evidence persistence failure",
+    "error-rate threshold exceeded",
+    "latency/cost ceiling exceeded",
+    "explicit governance rejection"
+  ],
+  "canary_policy": {
+    "percentage": 5,
+    "explicit_task_set": [
+      "example low-risk task"
+    ],
+    "max_executions": 20,
+    "window_seconds": 86400,
+    "permitted_profiles": [
+      "direct"
+    ],
+    "permitted_projects": [],
+    "cost_ceiling": 1.0,
+    "latency_ceiling_ms": 30000,
+    "error_rate_threshold": 0.05,
+    "security_classification_ceiling": "INTERNAL",
+    "permitted_security_classifications": [
+      "PUBLIC",
+      "INTERNAL"
+    ]
+  },
+  "rollback_targets": [
+    {
+      "path": "/absolute/path/to/live/file",
+      "backup_path": "/absolute/path/to/previous/file",
+      "sha256": "optional sha256 of restored file"
+    }
+  ]
+}

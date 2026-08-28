@@ -1,0 +1,120 @@
+{
+  "gateway": "model_provider",
+  "version": "1.0.0",
+  "policy": {
+    "browser_automation_for_api_bypass": "disallowed",
+    "cookie_or_session_reuse_as_credentials": "disallowed",
+    "official_api_or_approved_connector": "required_for_automation",
+    "manual_browser_handoff": "allowed_with_user_control"
+  },
+  "providers": [
+    {
+      "id": "openai",
+      "display_name": "OpenAI / ChatGPT",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["OPENAI_API_KEY"],
+      "best_for": ["general_reasoning", "coding", "structured_outputs", "agentic_workflows"],
+      "notes": "Use official API credentials for autonomous Hermes execution."
+    },
+    {
+      "id": "gemini",
+      "display_name": "Google Gemini",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+      "best_for": ["long_context", "multimodal_reasoning", "planning", "analysis"],
+      "notes": "Use Google AI Studio or Vertex AI credentials for automation."
+    },
+    {
+      "id": "perplexity",
+      "display_name": "Perplexity",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["PERPLEXITY_API_KEY"],
+      "best_for": ["cited_research", "web_answering", "source_discovery"],
+      "notes": "Use for source-grounded research where provider API access is available. Per the uploaded transcript, Perplexity Pro Computer Use is not assumed available; do not rely on Computer Use or autonomous subscription-browser control."
+    },
+    {
+      "id": "venice",
+      "display_name": "Venice AI",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["VENICE_API_KEY"],
+      "best_for": ["privacy_oriented_generation", "creative_variants", "alternative_model_outputs"],
+      "notes": "Use documented Venice AI API or provider-approved integration only."
+    },
+    {
+      "id": "zenmux",
+      "display_name": "ZenMux",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["ZENMUX_API_KEY"],
+      "base_url": "https://zenmux.ai/api/v1/",
+      "protocols": ["openai_compatible", "anthropic_compatible", "vertex_compatible"],
+      "best_for": ["multi_model_routing", "cloud_model_access", "openai_compatible_clients"],
+      "notes": "Use the ZenMux API key through the documented provider endpoint. Do not store keys in exported bundles."
+    },
+    {
+      "id": "nvidia",
+      "display_name": "NVIDIA NIM",
+      "approved_access_methods": ["official_api", "approved_connector", "manual_handoff"],
+      "credential_env_vars": ["NVIDIA_API_KEY"],
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "protocols": ["openai_compatible"],
+      "best_for": ["nvidia_hosted_models", "nim_inference", "openai_compatible_clients"],
+      "notes": "Use NVIDIA-hosted NIM APIs through the documented OpenAI-compatible endpoint. Do not store keys in exported bundles."
+    },
+    {
+      "id": "adverserial",
+      "display_name": "Adverserial CyberKimi",
+      "approved_access_methods": ["official_api", "manual_handoff"],
+      "credential_env_vars": ["ADVERSERIAL_API_KEY"],
+      "base_url": "https://api.adverserial.ai/v1",
+      "protocols": ["openai_compatible"],
+      "best_for": ["defensive_security_review", "detection_engineering", "incident_response", "threat_modeling", "lab_only_exploitability_assessment"],
+      "notes": "Use only through the CyberKimi quarantine profile. No autonomous shell, network, app-control, exploit execution, credential, persistence, stealth, phishing, or public target scanning authority."
+    },
+    {
+      "id": "local",
+      "display_name": "Local Model Runtime",
+      "approved_access_methods": ["local_runtime"],
+      "credential_env_vars": [],
+      "best_for": ["private_data", "offline_work", "cost_control", "security_review"],
+      "notes": "Recommended for sensitive code, private documents, and offline fallback."
+    }
+  ],
+  "default_routes": [
+    {
+      "agent_id": "hermes_legal",
+      "primary": ["openai", "gemini"],
+      "fallback": ["local"],
+      "requirements": ["attorney_review", "citation_check_for_research"]
+    },
+    {
+      "agent_id": "hermes_options_trading",
+      "primary": ["gemini", "openai"],
+      "fallback": ["local"],
+      "requirements": ["not_financial_advice", "current_market_data_for_live_analysis"]
+    },
+    {
+      "agent_id": "hermes_security_research",
+      "primary": ["local", "openai", "gemini"],
+      "fallback": ["none"],
+      "requirements": ["authorization_scope", "redaction_for_sensitive_inputs"]
+    },
+    {
+      "agent_id": "hermes_cyberkimi_quarantine",
+      "primary": ["adverserial"],
+      "fallback": ["local"],
+      "requirements": ["explicit_profile_selection", "defensive_scope", "no_autonomous_tools", "report_artifacts_only", "human_approval_for_any_execution"]
+    },
+    {
+      "agent_id": "hermes_solopreneur",
+      "primary": ["nvidia", "zenmux", "openai", "gemini"],
+      "fallback": ["venice", "local"],
+      "requirements": ["separate_facts_from_assumptions"]
+    },
+    {
+      "agent_id": "hermes_marketing",
+      "primary": ["nvidia", "zenmux", "openai", "gemini"],
+      "fallback": ["perplexity", "venice", "local"],
+      "requirements": ["claim_substantiation", "brand_voice_check"]
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec > >(tee -a /var/log/hermes-bootstrap.log | logger -t hermes-bootstrap -s 2>/dev/console) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+AWS_REGION='${aws_region}'
+ARTIFACT_BUCKET='${artifact_bucket}'
+RELEASE_OBJECT_KEY='${release_object_key}'
+RELEASE_SHA256='${release_sha256}'
+INSTALL_ROOT='/opt/hermes-max'
+RELEASES_DIR="$INSTALL_ROOT/releases"
+CURRENT_LINK="$INSTALL_ROOT/current"
+STATE_ROOT='/var/lib/hermes/state'
+HERMES_RUNTIME_ROOT='/var/lib/hermes/.hermes/hermes-agent'
+RUNTIME_SECRET_PREFIX='${runtime_ssm_parameter_prefix}'
+STAGING='/var/tmp/hermes-release.tar.gz'
+
+apt-get update
+apt-get install -y --no-install-recommends \
+  awscli bash ca-certificates coreutils curl findutils git gzip jq python3 python3-pip \
+  python3-venv ripgrep tar tmux unzip
+
+if ! id hermes >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/hermes --shell /bin/bash hermes
+fi
+
+install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" /var/lib/hermes/.config/hermes "$STATE_ROOT"
+
+aws s3 cp --region "$AWS_REGION" "s3://$ARTIFACT_BUCKET/$RELEASE_OBJECT_KEY" "$STAGING"
+echo "$RELEASE_SHA256  $STAGING" | sha256sum -c -
+
+RELEASE_ID="$${RELEASE_SHA256:0:16}"
+TARGET="$RELEASES_DIR/$RELEASE_ID"
+rm -rf "$TARGET.tmp"
+mkdir -p "$TARGET.tmp"
+tar -xzf "$STAGING" -C "$TARGET.tmp"
+ROOT_COUNT="$(find "$TARGET.tmp" -mindepth 1 -maxdepth 1 | wc -l)"
+if [[ "$ROOT_COUNT" == "1" ]] && [[ -d "$(find "$TARGET.tmp" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]]; then
+  INNER="$(find "$TARGET.tmp" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+  shopt -s dotglob
+  mv "$INNER"/* "$TARGET.tmp"/
+  rmdir "$INNER"
+fi
+[[ -f "$TARGET.tmp/skills-lock.json" ]] || { echo 'skills-lock.json missing from release' >&2; exit 1; }
+[[ -f "$TARGET.tmp/CLOUD_RELEASE_MANIFEST.sha256" ]] || { echo 'internal release manifest missing' >&2; exit 1; }
+( cd "$TARGET.tmp" && sha256sum -c CLOUD_RELEASE_MANIFEST.sha256 )
+[[ -x "$TARGET.tmp/scripts/restore-vps-transfer.sh" ]] || chmod +x "$TARGET.tmp"/scripts/*.sh "$TARGET.tmp"/src/system/*.sh "$TARGET.tmp"/tests/*.sh
+mv "$TARGET.tmp" "$TARGET"
+chown -R hermes:hermes "$TARGET"
+
+VENDORED_HERMES="$TARGET/vendor/hermes-agent/0.20.4"
+if [[ -d "$VENDORED_HERMES" ]]; then
+  install -d -o hermes -g hermes -m 0750 /var/lib/hermes/.hermes
+  RUNTIME_TMP="$HERMES_RUNTIME_ROOT.tmp.$RELEASE_ID"
+  RUNTIME_PREVIOUS="$HERMES_RUNTIME_ROOT.previous"
+  rm -rf "$RUNTIME_TMP" "$RUNTIME_PREVIOUS"
+  cp -a "$VENDORED_HERMES" "$RUNTIME_TMP"
+  chown -R hermes:hermes "$RUNTIME_TMP"
+  if [[ -d "$HERMES_RUNTIME_ROOT" ]]; then mv "$HERMES_RUNTIME_ROOT" "$RUNTIME_PREVIOUS"; fi
+  mv "$RUNTIME_TMP" "$HERMES_RUNTIME_ROOT"
+  if ! printf 'n\n' | runuser -u hermes -- env HOME=/var/lib/hermes bash "$HERMES_RUNTIME_ROOT/setup-hermes.sh"; then
+    rm -rf "$HERMES_RUNTIME_ROOT"
+    if [[ -d "$RUNTIME_PREVIOUS" ]]; then mv "$RUNTIME_PREVIOUS" "$HERMES_RUNTIME_ROOT"; fi
+    exit 1
+  fi
+fi
+
+if [[ -x "$TARGET/src/system/load-aws-runtime-secrets.sh" ]]; then
+  runuser -u hermes -- env \
+    AWS_REGION="$AWS_REGION" \
+    HERMES_RUNTIME_SECRET_PREFIX="$RUNTIME_SECRET_PREFIX" \
+    HERMES_RUNTIME_ENV_PATH=/var/lib/hermes/.config/hermes/runtime.env \
+    "$TARGET/src/system/load-aws-runtime-secrets.sh"
+fi
+
+# Verify and prepare the candidate before changing the active symlink. Durable state
+# lives outside the release tree and is never deleted during activation or rollback.
+runuser -u hermes -- "$TARGET/scripts/restore-vps-transfer.sh" --skip-agent-reach --skip-python-deps
+runuser -u hermes -- "$TARGET/scripts/verify-cloud-foundation.sh"
+ln -sfn "$TARGET" "$CURRENT_LINK.tmp"
+mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+
+cat >/etc/systemd/system/hermes-foundation-verify.service <<'UNIT'
+[Unit]
+Description=Hermes Max foundation verification
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+WorkingDirectory=/opt/hermes-max/current
+ExecStart=/opt/hermes-max/current/scripts/verify-cloud-foundation.sh
+RemainAfterExit=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hermes-max /var/lib/hermes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now hermes-foundation-verify.service
+rm -f "$STAGING"
+
+echo "HERMES_BOOTSTRAP=PASS release=$RELEASE_ID"

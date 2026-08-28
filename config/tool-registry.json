@@ -1,0 +1,71 @@
+{
+  "schema_version": "hermes-tool-registry-v1",
+  "tools": [
+    {
+      "name": "memory.search",
+      "namespace": "memory",
+      "description": "Search Hermes Memory Fabric facts decisions failures provenance and prior trajectories.",
+      "keywords": ["memory", "recall", "fact", "history", "trajectory", "provenance"],
+      "mutating": false,
+      "data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "LEGAL_PRIVILEGED", "FINANCIAL", "SECURITY_SENSITIVE"],
+      "required_capabilities": [],
+      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+      "source": "src/system/memory-fabric.py"
+    },
+    {
+      "name": "skills.find",
+      "namespace": "skills",
+      "description": "Find and rank relevant Hermes skills for a task using the existing dynamic skill engine.",
+      "keywords": ["skill", "skills", "routing", "capability", "workflow"],
+      "mutating": false,
+      "data_classes": ["PUBLIC", "INTERNAL"],
+      "required_capabilities": [],
+      "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 20}}, "required": ["query"]},
+      "source": "src/system/skill-router-v3.sh"
+    },
+    {
+      "name": "jarvis.status",
+      "namespace": "jarvis",
+      "description": "Read JARVIS Tool Armory local health and runtime status.",
+      "keywords": ["jarvis", "status", "health", "tools", "armory"],
+      "mutating": false,
+      "data_classes": ["PUBLIC", "INTERNAL"],
+      "required_capabilities": [],
+      "input_schema": {"type": "object", "properties": {}},
+      "source": "src/system/jarvis-armory.sh"
+    },
+    {
+      "name": "jarvis.browser",
+      "namespace": "jarvis",
+      "description": "Execute governed browser automation through the JARVIS browser boundary.",
+      "keywords": ["browser", "website", "playwright", "web", "form"],
+      "mutating": true,
+      "data_classes": ["PUBLIC", "INTERNAL"],
+      "required_capabilities": ["network.public.browser"],
+      "input_schema": {"type": "object", "properties": {"url": {"type": "string", "format": "uri"}, "workflow_id": {"type": "string"}}, "required": ["url"]},
+      "source": "src/system/browser-workflow-cache.py"
+    },
+    {
+      "name": "revenue.report",
+      "namespace": "revenue",
+      "description": "Read Revenue OS ledger metrics and attribution reports without sending or spending.",
+      "keywords": ["revenue", "ledger", "profit", "campaign", "metrics", "attribution"],
+      "mutating": false,
+      "data_classes": ["INTERNAL", "FINANCIAL"],
+      "required_capabilities": [],
+      "input_schema": {"type": "object", "properties": {"experiment_id": {"type": "string"}}},
+      "source": "src/system/revenue-ledger.py"
+    },
+    {
+      "name": "mcp.gateway",
+      "namespace": "mcp",
+      "description": "Validate and route MCP 2026-07-28 stateless requests into Hermes containment.",
+      "keywords": ["mcp", "tool", "remote", "gateway", "stateless"],
+      "mutating": false,
+      "data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "LEGAL_PRIVILEGED", "FINANCIAL", "SECURITY_SENSITIVE"],
+      "required_capabilities": [],
+      "input_schema": {"type": "object", "properties": {"headers": {"type": "object"}, "body": {"type": "object"}}, "required": ["headers", "body"]},
+      "source": "src/system/mcp-stateless-gateway.py"
+    }
+  ]
+}

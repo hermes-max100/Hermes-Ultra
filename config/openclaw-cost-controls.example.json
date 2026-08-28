@@ -1,0 +1,28 @@
+{
+  "agents": {
+    "defaults": {
+      "maxHistoryMessages": 20,
+      "model": {
+        "primary": "${OPENCLAW_PRIMARY_MODEL}",
+        "list": [
+          {
+            "id": "background",
+            "model": "${OPENCLAW_BACKGROUND_MODEL:-local-private}"
+          }
+        ]
+      },
+      "tools": {
+        "profileScopedOnly": true,
+        "maxEnabledSkills": 6
+      }
+    }
+  },
+  "gateway": {
+    "heartbeatIntervalMinutes": 10
+  },
+  "notes": [
+    "Treat this as a template, not a provider-verified OpenClaw schema.",
+    "Map these keys to the exact OpenClaw version you run before applying.",
+    "Do not store API keys in this file."
+  ]
+}

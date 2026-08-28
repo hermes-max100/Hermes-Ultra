@@ -1,0 +1,7 @@
+{
+  "schema_version": "agent-reach-source-policy-v1",
+  "repository": "https://github.com/Panniantong/Agent-Reach.git",
+  "commit": "93ae1d18c37b707dec053c7c4f9d91cd8ef8943d",
+  "version": "1.5.0",
+  "runtime_policy": "read-collect-only"
+}

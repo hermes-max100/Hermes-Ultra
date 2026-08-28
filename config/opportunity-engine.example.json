@@ -1,0 +1,39 @@
+{
+  "schema_version": "opportunity-engine-policy-v1",
+  "purpose": "Local-only opportunity normalization, evidence validation, expiry, and expected-value ranking for Hermes Revenue OS.",
+  "default_ttl_days": 14,
+  "ranking": {
+    "primary_metric": "expected_value_score",
+    "formula": "expected_profit * probability_of_conversion * automation_fit * confidence * strategic_fit / (time_to_revenue_days * execution_cost_factor * risk_penalty)",
+    "execution_cost_factor": "max(1, execution_cost / 100)",
+    "risk_penalty": "1 + compliance_risk + execution_risk",
+    "exclude_expired_by_default": true
+  },
+  "evidence": {
+    "required_for_high_confidence": true,
+    "confidence_cap_without_evidence": 0.35,
+    "allowed_ref_types": [
+      "source",
+      "url",
+      "report",
+      "file",
+      "manual"
+    ]
+  },
+  "approval_boundary": {
+    "external_communications": "human_required",
+    "paid_spend": "human_required_unless_budget_policy_allows",
+    "purchases": "human_required",
+    "account_changes": "human_required",
+    "credential_entry": "human_required",
+    "permission_changes": "human_required"
+  },
+  "local_only": {
+    "sends_messages": false,
+    "posts_content": false,
+    "makes_purchases": false,
+    "changes_accounts": false,
+    "enters_credentials": false,
+    "performs_platform_actions": false
+  }
+}

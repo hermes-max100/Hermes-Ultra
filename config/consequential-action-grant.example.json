@@ -1,0 +1,29 @@
+{
+  "actor": "revenue-os",
+  "allowed_actions": [
+    "send"
+  ],
+  "allowed_counterparties": [
+    "prospect_example"
+  ],
+  "allowed_destinations": [
+    "smtp://approved-recipient@example.com"
+  ],
+  "allowed_tools": [
+    "outbound:smtp"
+  ],
+  "approval_required_actions": [
+    "send"
+  ],
+  "cumulative_budget": 0,
+  "expires_at": "2099-01-01T00:00:00Z",
+  "grant_id": "grant_revenue_outreach_example",
+  "identity_ttl_seconds": 900,
+  "max_single_amount": 0,
+  "principal": "owner",
+  "required_evidence_types": [
+    "approved_message",
+    "prospect_record"
+  ],
+  "schema_version": "hermes-authority-grant-v1"
+}

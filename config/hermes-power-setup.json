@@ -1,0 +1,99 @@
+{
+  "version": "1.0.0",
+  "name": "hermes-max-power-setup",
+  "purpose": "Consolidated strongest Hermes Max setup assembled from the local Hermes Max, Hermes Legal, and SimpleLLMs workspaces.",
+  "primary_front_doors": {
+    "quick_model_picker": "src/system/model.sh",
+    "dispatch": "src/system/hermes-dispatch.sh",
+    "live_runner": "src/system/hermes-run.sh",
+    "continue_config": "src/system/continue-config.sh",
+    "external_source_sweep": "src/system/external-source-sweep.sh",
+    "gateway_watchdog": "src/system/gateway-watchdog.sh",
+    "jarvis_tool_armory": "src/system/jarvis-armory.sh",
+    "promptfoo_evals": "src/system/promptfoo-evals.sh",
+    "daily_summary": "src/system/daily-summary.sh",
+    "omniroute_gateway": "src/system/omniroute.sh",
+    "ninerouter_gateway": "src/system/ninerouter.sh",
+    "power_up": "src/system/hermes-power-up.sh",
+    "daily_refresh": "src/system/daily-refresh.sh"
+  },
+  "enabled_layers": [
+    "gateway_pack",
+    "profile_councils",
+    "dynamic_skill_engine",
+    "skillopt_policy",
+    "cloud_and_local_model_picker",
+    "continue_vscode_model_picker",
+    "live_provider_model_sync",
+    "external_source_review_sweep",
+    "gateway_health_watchdog",
+    "daily_summary_dashboard",
+    "omniroute_local_gateway",
+    "omniroute_mcp_a2a_bridge",
+    "ninerouter_local_gateway",
+    "jarvis_tool_armory",
+    "approval_gated_tool_execution",
+    "promptfoo_dynamic_prompt_evals",
+    "cost_controls",
+    "direct_mode_policy",
+    "bridge_api",
+    "obliteratus_local_runner",
+    "termux_restore_bootstrap",
+    "legal_templates_pack",
+    "workspace_inventory",
+    "portable_export"
+  ],
+  "provider_policy": "official APIs, approved connectors, local runtimes, or manual handoff only",
+  "model_strategy": {
+    "manual": "src/system/model.sh <shortcut> or src/system/cloud-model-picker.sh select <provider> <model>",
+    "auto": "src/system/hermes-run.sh --auto <query>",
+    "receipt": "src/system/model.sh receipt",
+    "sync": "src/system/model.sh sync all",
+    "omniroute": "src/system/omniroute.sh status",
+    "9router": "src/system/ninerouter.sh status",
+    "local_default": {
+      "provider": "onith",
+      "model": "onith-1.0"
+    },
+    "high_reasoning_default": {
+      "provider": "nvidia",
+      "model": "glm-5.2"
+    }
+  },
+  "simplellms_patterns_adopted": [
+    "research-first planning",
+    "integration controller",
+    "parallel batch mindset",
+    "compliance/safety review gate",
+    "backup/export ergonomics"
+  ],
+  "legal_pack": {
+    "source_workspace": "Hermes legal",
+    "templates": "packs/legal/templates",
+    "workflows": "packs/legal/workflows"
+  },
+  "verification": {
+    "core": [
+      "tests/test_cloud_model_picker.sh",
+      "tests/test_model_quick_picker.sh",
+      "tests/test_continue_config.sh",
+      "tests/test_gateway_watchdog.sh",
+      "tests/test_external_source_sweep.sh",
+      "tests/test_skill_evolver_validation.sh",
+      "tests/test_dynamic_skill_engine.sh",
+      "tests/test_skill_router_v3.sh",
+      "tests/test_dynamic_router.sh",
+      "tests/test_hermes_dispatch.sh",
+      "tests/test_direct_mode_policy.sh",
+      "tests/test_cost_audit.sh",
+      "tests/test_bridge_client.sh",
+      "tests/test_omniroute_integration.sh",
+      "tests/test_ninerouter_integration.sh",
+      "tests/test_jarvis_armory_integration.sh",
+      "tests/test_promptfoo_evals.sh",
+      "tests/test_obliteratus_runner.sh",
+      "tests/test_restore_installer.sh"
+    ],
+    "command": "src/system/hermes-power-up.sh verify"
+  }
+}

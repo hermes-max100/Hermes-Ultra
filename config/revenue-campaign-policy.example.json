@@ -1,0 +1,62 @@
+{
+  "schema_version": "hermes-campaign-policy-v1",
+  "campaign_id": "camp_exp_local_service_001",
+  "experiment_id": "exp_local_service_001",
+  "offer": "AI-assisted lead capture and follow-up automation",
+  "geography": "Inland Empire, CA",
+  "max_sends": 10,
+  "max_messages_per_business": 1,
+  "allowed_industries": [
+    "plumbing",
+    "plumbing_hvac",
+    "hvac",
+    "hvac_plumbing",
+    "roofing",
+    "garage_door",
+    "garage_door_gate",
+    "garage_door_commercial_door",
+    "electrical",
+    "pest_control"
+  ],
+  "allowed_autonomous_channels": [
+    "email",
+    "business_email"
+  ],
+  "handoff_only_channels": [
+    "contact_form"
+  ],
+  "allowed_channels": [
+    "email",
+    "business_email"
+  ],
+  "prohibited_channels": [
+    "personal_email",
+    "personal_phone",
+    "phone",
+    "sms",
+    "social_dm"
+  ],
+  "paid_spend_usd": 0,
+  "evidence_requirement": {
+    "minimum_public_sources": 1,
+    "require_audit_source": true,
+    "forbid_unsupported_claims": true
+  },
+  "follow_up_policy": {
+    "allowed": true,
+    "maximum_follow_ups": 1,
+    "minimum_wait_business_days": 3
+  },
+  "stop_conditions": [
+    "campaign_send_limit_reached",
+    "duplicate_prospect_send_attempt",
+    "complaint_threshold_reached",
+    "bounce_threshold_reached",
+    "factual_validation_failure",
+    "approval_expired_or_missing",
+    "policy_expired"
+  ],
+  "created_at": "2026-08-15T00:00:00Z",
+  "expires_at": "2026-09-14T00:00:00Z",
+  "campaign_policy_hash": "example-run-create-campaign-policy-to-generate"
+}

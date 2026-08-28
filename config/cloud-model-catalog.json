@@ -1,0 +1,358 @@
+{
+  "version": "1.0.0",
+  "default_selection_file": ".hermes/cloud-model-selection.env",
+  "providers": {
+    "openai": {
+      "display_name": "OpenAI",
+      "router_model": "openai-reasoning",
+      "credential_env_var": "OPENAI_API_KEY",
+      "base_url_env_var": "OPENAI_BASE_URL",
+      "default_base_url": "https://api.openai.com/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "gpt-4o-mini",
+          "label": "GPT-4o Mini",
+          "tier": "small",
+          "best_for": ["fast", "coding", "structured_outputs", "general"]
+        },
+        {
+          "id": "gpt-4.1",
+          "label": "GPT-4.1",
+          "tier": "large",
+          "best_for": ["reasoning", "coding", "analysis", "agentic_work"]
+        },
+        {
+          "id": "o4-mini",
+          "label": "o4 Mini",
+          "tier": "small",
+          "best_for": ["reasoning", "coding", "fast"]
+        }
+      ]
+    },
+    "onith": {
+      "display_name": "Onith Local",
+      "router_model": "local-private",
+      "credential_env_var": "",
+      "base_url_env_var": "ONITH_BASE_URL",
+      "default_base_url": "http://127.0.0.1:11434/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "onith-1.0",
+          "label": "Onith 1.0 Local",
+          "tier": "local",
+          "best_for": ["local", "private", "offline", "general", "coding"]
+        }
+      ]
+    },
+    "gemini": {
+      "display_name": "Google Gemini",
+      "router_model": "gemini-pro",
+      "credential_env_var": "GEMINI_API_KEY",
+      "base_url_env_var": "GEMINI_BASE_URL",
+      "default_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "gemini-3.5-flash",
+          "label": "Gemini 3.5 Flash",
+          "tier": "small",
+          "best_for": ["fast", "long_context", "general", "summarize"]
+        },
+        {
+          "id": "gemini-3.5-pro",
+          "label": "Gemini 3.5 Pro",
+          "tier": "large",
+          "best_for": ["reasoning", "analysis", "long_context", "planning"]
+        }
+      ]
+    },
+    "perplexity": {
+      "display_name": "Perplexity",
+      "router_model": "perplexity-research",
+      "credential_env_var": "PERPLEXITY_API_KEY",
+      "base_url_env_var": "PERPLEXITY_BASE_URL",
+      "default_base_url": "https://api.perplexity.ai",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "sonar",
+          "label": "Sonar",
+          "tier": "small",
+          "best_for": ["web_research", "citations", "fast", "current_information"]
+        },
+        {
+          "id": "sonar-pro",
+          "label": "Sonar Pro",
+          "tier": "large",
+          "best_for": ["web_research", "citations", "analysis", "current_information"]
+        },
+        {
+          "id": "sonar-reasoning-pro",
+          "label": "Sonar Reasoning Pro",
+          "tier": "large",
+          "best_for": ["web_research", "citations", "reasoning", "analysis"]
+        }
+      ]
+    },
+    "openrouter": {
+      "display_name": "OpenRouter",
+      "router_model": "openai-reasoning",
+      "credential_env_var": "OPENROUTER_API_KEY",
+      "base_url_env_var": "OPENROUTER_BASE_URL",
+      "default_base_url": "https://openrouter.ai/api/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "openrouter/auto",
+          "label": "OpenRouter Auto",
+          "tier": "router",
+          "best_for": ["provider_selection", "fallbacks", "general", "cost_control"]
+        },
+        {
+          "id": "anthropic/claude-sonnet-4",
+          "label": "Claude Sonnet 4 via OpenRouter",
+          "tier": "large",
+          "best_for": ["reasoning", "writing", "analysis", "coding"]
+        },
+        {
+          "id": "google/gemini-2.5-pro",
+          "label": "Gemini 2.5 Pro via OpenRouter",
+          "tier": "large",
+          "best_for": ["reasoning", "long_context", "analysis"]
+        },
+        {
+          "id": "moonshotai/kimi-k3",
+          "label": "Kimi K3 via OpenRouter",
+          "tier": "frontier",
+          "best_for": ["reasoning", "coding", "agentic_work", "long_context", "multimodal", "large_repo", "kimi", "manual_selection"]
+        }
+      ]
+    },
+    "venice": {
+      "display_name": "Venice",
+      "router_model": "venice-creative",
+      "credential_env_var": "VENICE_API_KEY",
+      "base_url_env_var": "VENICE_BASE_URL",
+      "default_base_url": "https://api.venice.ai/api/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "venice/auto",
+          "label": "Venice Auto",
+          "tier": "router",
+          "best_for": ["creative", "privacy", "general", "provider_selection"]
+        },
+        {
+          "id": "llama-3.3-70b",
+          "label": "Llama 3.3 70B via Venice",
+          "tier": "large",
+          "best_for": ["writing", "analysis", "creative", "general"]
+        }
+      ]
+    },
+    "nvidia": {
+      "display_name": "NVIDIA NIM",
+      "router_model": "nvidia-nim",
+      "credential_env_var": "NVIDIA_API_KEY",
+      "base_url_env_var": "NVIDIA_BASE_URL",
+      "default_base_url": "https://integrate.api.nvidia.com/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "meta/llama-3.1-8b-instruct",
+          "label": "Llama 3.1 8B Instruct",
+          "tier": "small",
+          "best_for": ["general", "fast", "android_testing"]
+        },
+        {
+          "id": "meta/llama-3.3-70b-instruct",
+          "label": "Llama 3.3 70B Instruct",
+          "tier": "large",
+          "best_for": ["general_reasoning", "writing", "analysis"]
+        },
+        {
+          "id": "nvidia/llama-3.1-nemotron-70b-instruct",
+          "label": "Nemotron 70B Instruct",
+          "tier": "large",
+          "best_for": ["reasoning", "agentic_work", "instruction_following"]
+        },
+        {
+          "id": "glm-5.2",
+          "label": "GLM 5.2",
+          "tier": "large",
+          "best_for": ["reasoning", "analysis", "coding", "edge_case_review", "agentic_work"]
+        },
+        {
+          "id": "mistralai/mixtral-8x7b-instruct-v0.1",
+          "label": "Mixtral 8x7B Instruct",
+          "tier": "large",
+          "best_for": ["mixture_of_experts", "coding", "analysis"]
+        }
+      ]
+    },
+    "adverserial": {
+      "display_name": "Adverserial CyberKimi",
+      "router_model": "cyberkimi-quarantine",
+      "credential_env_var": "ADVERSERIAL_API_KEY",
+      "base_url_env_var": "ADVERSERIAL_BASE_URL",
+      "default_base_url": "https://api.adverserial.ai/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "lordx64/cyberkimi",
+          "label": "CyberKimi Quarantine",
+          "tier": "specialist",
+          "best_for": [
+            "defensive_security_review",
+            "detection_engineering",
+            "incident_response",
+            "threat_modeling",
+            "lab_only_exploitability_assessment",
+            "manual_selection",
+            "quarantine"
+          ]
+        }
+      ]
+    },
+    "zenmux": {
+      "display_name": "ZenMux",
+      "router_model": "zenmux-router",
+      "credential_env_var": "ZENMUX_API_KEY",
+      "base_url_env_var": "ZENMUX_BASE_URL",
+      "default_base_url": "https://zenmux.ai/api/v1/",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "auto",
+          "label": "ZenMux Auto Router",
+          "tier": "router",
+          "best_for": ["provider_selection", "fallbacks", "general"]
+        },
+        {
+          "id": "openai/gpt-4o-mini",
+          "label": "GPT-4o Mini via ZenMux",
+          "tier": "small",
+          "best_for": ["fast", "coding", "structured_outputs"]
+        },
+        {
+          "id": "anthropic/claude-3.5-sonnet",
+          "label": "Claude Sonnet via ZenMux",
+          "tier": "large",
+          "best_for": ["analysis", "writing", "reasoning"]
+        },
+        {
+          "id": "google/gemini-1.5-pro",
+          "label": "Gemini Pro via ZenMux",
+          "tier": "large",
+          "best_for": ["long_context", "planning", "analysis"]
+        }
+      ]
+    },
+    "omniroute": {
+      "display_name": "OmniRoute",
+      "router_model": "omniroute-gateway",
+      "credential_env_var": "OMNIROUTE_API_KEY",
+      "base_url_env_var": "OMNIROUTE_BASE_URL",
+      "default_base_url": "http://127.0.0.1:20128/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "auto",
+          "label": "OmniRoute Auto",
+          "tier": "router",
+          "best_for": ["provider_selection", "fallbacks", "general", "cost_control"]
+        },
+        {
+          "id": "auto/coding",
+          "label": "OmniRoute Auto Coding",
+          "tier": "router",
+          "best_for": ["coding", "agentic_work", "automation"]
+        },
+        {
+          "id": "auto/fast",
+          "label": "OmniRoute Auto Fast",
+          "tier": "router",
+          "best_for": ["fast", "low_latency", "quick"]
+        },
+        {
+          "id": "auto/cheap",
+          "label": "OmniRoute Auto Cheap",
+          "tier": "router",
+          "best_for": ["cost_control", "cheap", "batch"]
+        },
+        {
+          "id": "auto/reasoning:pro",
+          "label": "OmniRoute Reasoning Pro",
+          "tier": "router",
+          "best_for": ["reasoning", "analysis", "deep"]
+        },
+        {
+          "id": "nvidia/glm-5.2",
+          "label": "GLM 5.2 via OmniRoute",
+          "tier": "large",
+          "best_for": ["reasoning", "analysis", "coding", "agentic_work", "nvidia", "manual_selection"]
+        }
+      ]
+    },
+    "9router": {
+      "display_name": "9Router",
+      "router_model": "ninerouter-gateway",
+      "credential_env_var": "NINEROUTER_API_KEY",
+      "base_url_env_var": "NINEROUTER_BASE_URL",
+      "default_base_url": "http://127.0.0.1:20127/v1",
+      "protocol": "openai_compatible",
+      "models": [
+        {
+          "id": "auto",
+          "label": "9Router Auto",
+          "tier": "router",
+          "best_for": ["provider_selection", "fallbacks", "general", "cost_control", "coding"]
+        },
+        {
+          "id": "auto/coding",
+          "label": "9Router Auto Coding",
+          "tier": "router",
+          "best_for": ["coding", "agentic_work", "automation", "token_saving"]
+        },
+        {
+          "id": "auto/cheap",
+          "label": "9Router Auto Cheap",
+          "tier": "router",
+          "best_for": ["cost_control", "cheap", "fallbacks", "batch"]
+        },
+        {
+          "id": "moonshotai/kimi-k3",
+          "label": "Kimi K3 via 9Router",
+          "tier": "frontier",
+          "best_for": ["reasoning", "coding", "agentic_work", "long_context", "multimodal", "large_repo", "kimi", "manual_selection"]
+        },
+        {
+          "id": "kimi/kimi-latest",
+          "label": "Kimi Latest via 9Router",
+          "tier": "frontier",
+          "best_for": ["reasoning", "coding", "agentic_work", "long_context", "large_repo", "kimi", "available_now"]
+        },
+        {
+          "id": "clinepass/cline-pass/kimi-k2.7-code",
+          "label": "Kimi K2.7 Code via 9Router",
+          "tier": "frontier",
+          "best_for": ["coding", "agentic_work", "large_repo", "automation", "kimi", "available_now"]
+        },
+        {
+          "id": "glm/glm-5",
+          "label": "GLM 5 via 9Router",
+          "tier": "large",
+          "best_for": ["reasoning", "analysis", "coding", "agentic_work", "glm", "manual_selection"]
+        },
+        {
+          "id": "nvidia/glm-5.2",
+          "label": "GLM 5.2 via 9Router",
+          "tier": "large",
+          "best_for": ["reasoning", "analysis", "coding", "agentic_work", "nvidia", "manual_selection"]
+        }
+      ]
+    }
+  }
+}

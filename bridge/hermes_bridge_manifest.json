@@ -1,0 +1,202 @@
+{
+  "name": "Hermes Bridge API",
+  "version": "1.0.0",
+  "source_files": [
+    "/tmp/codex-web-uploads/f-BXyYbL/Hermes Bridge API.mht",
+    "/tmp/codex-web-uploads/f-QNpGrm/All endpoints - Hermes Bridge API.mht"
+  ],
+  "source_url": "https://get-hermes.ai/api-docs/reference/all-endpoints/",
+  "base_url_env": "HERMES_BRIDGE_BASE_URL",
+  "auth": {
+    "type": "cookie",
+    "cookie_name": "hermes_session",
+    "cookie_jar_env": "HERMES_BRIDGE_COOKIE_JAR",
+    "public_endpoints": ["GET /api/auth/status"],
+    "notes": "Use the server login endpoint or an approved client login flow. Do not reuse browser cookies or scrape web sessions."
+  },
+  "policy": {
+    "client_surface_only": true,
+    "internal_endpoints_omitted": true,
+    "credential_storage": "Use a local cookie jar path controlled by the client; do not commit secrets.",
+    "disallowed": [
+      "browser_cookie_reuse",
+      "session_token_exfiltration",
+      "rate_limit_bypass",
+      "undocumented_internal_endpoint_dependency"
+    ]
+  },
+  "categories": [
+    {
+      "id": "auth_session",
+      "name": "Auth and session",
+      "endpoints": [
+        {"method": "GET", "path": "/api/auth/status", "purpose": "Is a password required / am I authenticated? Public."},
+        {"method": "POST", "path": "/api/auth/login", "purpose": "Log in with the server password and set the session cookie."},
+        {"method": "POST", "path": "/api/auth/logout", "purpose": "Clear the session."}
+      ]
+    },
+    {
+      "id": "sessions_projects",
+      "name": "Sessions and projects",
+      "endpoints": [
+        {"method": "GET", "path": "/api/sessions", "purpose": "List conversations."},
+        {"method": "GET", "path": "/api/sessions/search", "purpose": "Search sessions by title or content."},
+        {"method": "GET", "path": "/api/session", "purpose": "Get one conversation detail and messages."},
+        {"method": "GET", "path": "/api/session/status", "purpose": "Live status of a session."},
+        {"method": "POST", "path": "/api/session/new", "purpose": "Create a conversation."},
+        {"method": "POST", "path": "/api/session/rename", "purpose": "Rename a conversation."},
+        {"method": "POST", "path": "/api/session/delete", "purpose": "Delete a conversation."},
+        {"method": "POST", "path": "/api/session/pin", "purpose": "Pin or unpin a conversation."},
+        {"method": "POST", "path": "/api/session/archive", "purpose": "Archive or unarchive a conversation."},
+        {"method": "POST", "path": "/api/session/branch", "purpose": "Fork a conversation at a point."},
+        {"method": "POST", "path": "/api/session/compress", "purpose": "Compress context."},
+        {"method": "POST", "path": "/api/session/undo", "purpose": "Undo the last turn."},
+        {"method": "POST", "path": "/api/session/retry", "purpose": "Retry the last turn."},
+        {"method": "POST", "path": "/api/session/truncate", "purpose": "Truncate to a message."},
+        {"method": "POST", "path": "/api/session/update", "purpose": "Update session fields."},
+        {"method": "POST", "path": "/api/session/move", "purpose": "Move into or out of a project."},
+        {"method": "POST", "path": "/api/session/yolo", "purpose": "Toggle auto-approve mode."},
+        {"method": "GET", "path": "/api/session/export", "purpose": "Export a conversation."},
+        {"method": "POST", "path": "/api/session/import", "purpose": "Import a conversation."},
+        {"method": "GET", "path": "/api/projects", "purpose": "List projects."},
+        {"method": "POST", "path": "/api/projects/create", "purpose": "Create a project."},
+        {"method": "POST", "path": "/api/projects/rename", "purpose": "Rename a project."},
+        {"method": "POST", "path": "/api/projects/delete", "purpose": "Delete a project."}
+      ]
+    },
+    {
+      "id": "chat_streaming",
+      "name": "Chat and streaming",
+      "endpoints": [
+        {"method": "POST", "path": "/api/chat/start", "purpose": "Start a turn and return a stream_id."},
+        {"method": "GET", "path": "/api/chat/stream", "purpose": "SSE stream for live tokens, tool calls, and completion.", "streaming": true},
+        {"method": "GET", "path": "/api/chat/stream/status", "purpose": "Check whether a stream is still live."},
+        {"method": "POST", "path": "/api/chat/cancel", "purpose": "Cancel the running turn."},
+        {"method": "POST", "path": "/api/chat/steer", "purpose": "Inject a mid-turn nudge."},
+        {"method": "POST", "path": "/api/goal", "purpose": "Submit a goal."},
+        {"method": "POST", "path": "/api/btw", "purpose": "Submit a side-channel by-the-way message."},
+        {"method": "POST", "path": "/api/background", "purpose": "Kick off a background task."},
+        {"method": "GET", "path": "/api/background/status", "purpose": "Read background task status."}
+      ]
+    },
+    {
+      "id": "approvals_clarify",
+      "name": "Approvals and clarify",
+      "endpoints": [
+        {"method": "GET", "path": "/api/approval/pending", "purpose": "Read pending tool-approval prompt for a session."},
+        {"method": "GET", "path": "/api/approval/stream", "purpose": "SSE stream for approval prompts.", "streaming": true},
+        {"method": "POST", "path": "/api/approval/respond", "purpose": "Approve or deny a tool call."},
+        {"method": "GET", "path": "/api/clarify/pending", "purpose": "Read pending clarifying question."},
+        {"method": "GET", "path": "/api/clarify/stream", "purpose": "SSE stream for clarifications.", "streaming": true},
+        {"method": "POST", "path": "/api/clarify/respond", "purpose": "Answer the agent's question."}
+      ]
+    },
+    {
+      "id": "models_providers_personas",
+      "name": "Models, providers, and personas",
+      "endpoints": [
+        {"method": "GET", "path": "/api/models", "purpose": "List static available models."},
+        {"method": "GET", "path": "/api/models/live", "purpose": "List live-probed available models."},
+        {"method": "GET", "path": "/api/default-model", "purpose": "Read the default model."},
+        {"method": "POST", "path": "/api/model/set", "purpose": "Set the active model."},
+        {"method": "POST", "path": "/api/reasoning", "purpose": "Set reasoning effort."},
+        {"method": "GET", "path": "/api/providers", "purpose": "List configured providers."},
+        {"method": "GET", "path": "/api/personalities", "purpose": "List personas."},
+        {"method": "POST", "path": "/api/personality/set", "purpose": "Set persona."}
+      ]
+    },
+    {
+      "id": "profiles_settings",
+      "name": "Profiles and settings",
+      "endpoints": [
+        {"method": "GET", "path": "/api/profiles", "purpose": "List profiles."},
+        {"method": "GET", "path": "/api/profile/active", "purpose": "Read active profile."},
+        {"method": "POST", "path": "/api/profile/switch", "purpose": "Switch profile."},
+        {"method": "GET", "path": "/api/settings", "purpose": "Read instance settings."},
+        {"method": "POST", "path": "/api/settings", "purpose": "Write instance settings."}
+      ]
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "endpoints": [
+        {"method": "GET", "path": "/api/memory", "purpose": "Read memory entries."},
+        {"method": "POST", "path": "/api/memory/write", "purpose": "Add, edit, or remove a memory."}
+      ]
+    },
+    {
+      "id": "skills",
+      "name": "Skills",
+      "endpoints": [
+        {"method": "GET", "path": "/api/skills", "purpose": "List skills."},
+        {"method": "GET", "path": "/api/skills/content", "purpose": "Read one skill's content and linked files."}
+      ]
+    },
+    {
+      "id": "commands",
+      "name": "Commands",
+      "endpoints": [
+        {"method": "GET", "path": "/api/commands", "purpose": "Read slash-command catalog."}
+      ]
+    },
+    {
+      "id": "workspace_files_git",
+      "name": "Workspace, files, and git",
+      "endpoints": [
+        {"method": "GET", "path": "/api/workspaces", "purpose": "List workspaces."},
+        {"method": "GET", "path": "/api/workspaces/suggest", "purpose": "Path autocomplete."},
+        {"method": "GET", "path": "/api/list", "purpose": "Directory listing."},
+        {"method": "GET", "path": "/api/file", "purpose": "Read a file as JSON."},
+        {"method": "GET", "path": "/api/file/raw", "purpose": "Read raw file bytes."},
+        {"method": "GET", "path": "/api/media", "purpose": "Read media."},
+        {"method": "POST", "path": "/api/upload", "purpose": "Upload a file as multipart."},
+        {"method": "GET", "path": "/api/git-info", "purpose": "Read repo summary."},
+        {"method": "GET", "path": "/api/git/status", "purpose": "Read git status."},
+        {"method": "GET", "path": "/api/git/branches", "purpose": "Read git branches."},
+        {"method": "GET", "path": "/api/git/diff", "purpose": "Read git diff."},
+        {"method": "POST", "path": "/api/git/stage", "purpose": "Stage changes."},
+        {"method": "POST", "path": "/api/git/unstage", "purpose": "Unstage changes."},
+        {"method": "POST", "path": "/api/git/discard", "purpose": "Discard changes."},
+        {"method": "POST", "path": "/api/git/commit", "purpose": "Commit changes."},
+        {"method": "POST", "path": "/api/git/push", "purpose": "Push changes."},
+        {"method": "POST", "path": "/api/git/pull", "purpose": "Pull changes."},
+        {"method": "POST", "path": "/api/git/fetch", "purpose": "Fetch changes."},
+        {"method": "POST", "path": "/api/git/checkout", "purpose": "Checkout a branch or ref."},
+        {"method": "POST", "path": "/api/git/stash-checkout", "purpose": "Stash and checkout."},
+        {"method": "GET", "path": "/api/git/commit-message", "purpose": "Generate a commit message."}
+      ]
+    },
+    {
+      "id": "cron",
+      "name": "Cron and scheduled jobs",
+      "endpoints": [
+        {"method": "GET", "path": "/api/crons", "purpose": "List jobs."},
+        {"method": "GET", "path": "/api/crons/status", "purpose": "Read job status."},
+        {"method": "GET", "path": "/api/crons/output", "purpose": "Read run output."},
+        {"method": "POST", "path": "/api/crons/create", "purpose": "Create a scheduled job."},
+        {"method": "POST", "path": "/api/crons/update", "purpose": "Update a scheduled job."},
+        {"method": "POST", "path": "/api/crons/delete", "purpose": "Delete a scheduled job."},
+        {"method": "POST", "path": "/api/crons/run", "purpose": "Run a scheduled job now."},
+        {"method": "POST", "path": "/api/crons/pause", "purpose": "Pause a scheduled job."},
+        {"method": "POST", "path": "/api/crons/resume", "purpose": "Resume a scheduled job."}
+      ]
+    },
+    {
+      "id": "voice",
+      "name": "Voice",
+      "endpoints": [
+        {"method": "POST", "path": "/api/transcribe", "purpose": "Transcribe multipart audio to text."},
+        {"method": "POST", "path": "/api/tts", "purpose": "Convert text to speech."}
+      ]
+    },
+    {
+      "id": "insights_updates",
+      "name": "Insights and updates",
+      "endpoints": [
+        {"method": "GET", "path": "/api/insights", "purpose": "Read usage, token, and cost stats."},
+        {"method": "POST", "path": "/api/updates/check", "purpose": "Check for a server update."},
+        {"method": "POST", "path": "/api/updates/apply", "purpose": "Apply a server update."}
+      ]
+    }
+  ]
+}

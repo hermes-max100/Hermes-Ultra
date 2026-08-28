@@ -1,0 +1,24 @@
+aws_region               = "us-east-1"
+name_prefix              = "hermes-max"
+monthly_budget_limit_usd = 75
+budget_alert_emails      = ["you@example.com"]
+
+# Stage 1: budget only.
+enable_storage     = false
+enable_ec2_compute = false
+
+# Stage 2: enable private storage, apply, then upload the release bundle.
+# enable_storage = true
+
+# Stage 3: after release upload, set both values and enable compute.
+# release_object_key = "releases/hermes-max-cloud-YYYYMMDDTHHMMSSZ.tar.gz"
+# release_sha256     = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+# enable_ec2_compute = true
+
+# Optional hardening/customization:
+# ec2_instance_type   = "m7i-flex.large"
+# ec2_root_volume_gib = 30
+# https_ingress_cidrs = ["203.0.113.10/32"]
+# enable_http_redirect = false
+# vpc_id    = "vpc-..."
+# subnet_id = "subnet-..."

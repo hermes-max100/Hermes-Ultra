@@ -1,0 +1,97 @@
+{
+  "version": "1.0.0",
+  "sources": [
+    {
+      "id": "finding-unknowns-skills",
+      "type": "github_repo",
+      "url": "https://github.com/Neeeophytee/finding-unknowns-skills.git",
+      "homepage": "https://github.com/Neeeophytee/finding-unknowns-skills",
+      "license": "MIT",
+      "format": "agentskills.io/SKILL.md",
+      "import_policy": "review_before_install",
+      "recommended_use": ["planning", "unknowns_discovery", "implementation_review"],
+      "skills": [
+        "blindspot-pass",
+        "brainstorm-prototypes",
+        "interview-me",
+        "reference-hunt",
+        "implementation-plan",
+        "implementation-notes",
+        "pitch-packager",
+        "change-quiz"
+      ]
+    },
+    {
+      "id": "colibri-glm52-runtime",
+      "type": "github_repo",
+      "url": "https://github.com/JustVugg/colibri.git",
+      "homepage": "https://github.com/JustVugg/colibri",
+      "license": "unknown",
+      "format": "repository",
+      "import_policy": "review_before_install",
+      "recommended_use": ["glm52_runtime_research", "local_model_fallback", "performance_review"],
+      "risk_level": "medium",
+      "notes": "Evaluate as a possible GLM-5.2 local/runtime fallback. Do not make it default until build, memory, model-source, and license checks pass."
+    },
+    {
+      "id": "openwiki-agent-docs",
+      "type": "github_repo",
+      "url": "https://github.com/langchain-ai/openwiki.git",
+      "homepage": "https://github.com/langchain-ai/openwiki",
+      "license": "unknown",
+      "format": "cli_repository",
+      "import_policy": "review_before_install",
+      "recommended_use": ["repo_documentation", "agent_docs", "workspace_map", "daily_refresh_docs"],
+      "risk_level": "low",
+      "notes": "Candidate for self-documenting Hermes workspaces and maintaining agent-readable repository docs."
+    },
+    {
+      "id": "open-connector-saas-gateway",
+      "type": "github_repo",
+      "url": "https://github.com/oomol-lab/open-connector.git",
+      "homepage": "https://github.com/oomol-lab/open-connector",
+      "license": "unknown",
+      "format": "connector_gateway_repository",
+      "import_policy": "review_before_install",
+      "recommended_use": ["mcp_connectors", "saas_connectors", "api_gateway", "oauth_review"],
+      "risk_level": "medium",
+      "notes": "Evaluate for connector expansion through SDK, CLI, MCP, HTTP, and OpenAPI patterns. Review OAuth/security model before enabling."
+    },
+    {
+      "id": "aos-agent-os",
+      "type": "github_repo",
+      "url": "https://github.com/unicity-aos/aos-ce.git",
+      "homepage": "https://github.com/unicity-aos/aos-ce",
+      "license": "unknown",
+      "format": "agent_os_repository",
+      "import_policy": "review_before_install",
+      "recommended_use": ["agent_os_architecture", "orchestration_patterns", "runtime_comparison"],
+      "risk_level": "medium",
+      "notes": "Compare architecture patterns against Hermes routers, skills, ledgers, gateway management, and profile councils."
+    },
+    {
+      "id": "scroll-world-skill",
+      "type": "github_repo",
+      "url": "https://github.com/oso95/scroll-world.git",
+      "homepage": "https://github.com/oso95/scroll-world",
+      "license": "unknown",
+      "format": "skill_repository",
+      "import_policy": "review_before_install",
+      "recommended_use": ["creative_skill_discovery", "brand_experience", "frontend_skill_patterns"],
+      "risk_level": "low",
+      "notes": "Candidate for testing creative/visual skill import and frontend experience generation patterns."
+    },
+    {
+      "id": "tempest-red-team-harness",
+      "type": "github_repo",
+      "url": "https://github.com/elder-plinius/T3MP3ST.git",
+      "homepage": "https://github.com/elder-plinius/T3MP3ST",
+      "license": "unknown",
+      "format": "security_repository",
+      "import_policy": "review_only_authorized_scope_required",
+      "recommended_use": ["authorized_security_review", "red_team_planning", "defensive_lab_validation", "security_agent_reference"],
+      "risk_level": "high",
+      "notes": "T3MP3ST/Tempest is an autonomous red-team platform. Keep review-only by default. Do not enable exploit execution, target scanning, persistence, stealth, credential collection, or public-target workflows without explicit written scope and human approval."
+    }
+  ]
+}
