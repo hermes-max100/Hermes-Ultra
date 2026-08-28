@@ -9,12 +9,17 @@ cat > "$FAKE" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "${1:-}" == "--appimage-extract" ]] || exit 2
-mkdir -p squashfs-root
+mkdir -p squashfs-root/resources/app.asar.unpacked/out/cli
 cat > squashfs-root/AppRun <<'APP'
 #!/usr/bin/env bash
 echo fake-orca "$@"
 APP
-chmod +x squashfs-root/AppRun
+cat > squashfs-root/orca-ide <<'BIN'
+#!/usr/bin/env bash
+echo fake-electron "$@"
+BIN
+printf '%s\n' 'module.exports={main:async()=>{}}' > squashfs-root/resources/app.asar.unpacked/out/cli/index.js
+chmod +x squashfs-root/AppRun squashfs-root/orca-ide
 SH
 chmod +x "$FAKE"
 SHA="$(sha256sum "$FAKE" | awk '{print $1}')"
