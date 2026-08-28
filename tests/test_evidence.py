@@ -29,6 +29,20 @@ def test_redaction_handles_nested_sequences():
     assert redacted["events"][0]["detail"] == "ok"
 
 
+def test_redaction_removes_embedded_assignment_secrets():
+    raw = (
+        "orca failed: OPENAI_API_KEY=sk-test-super-secret "
+        "client_secret='oauth-secret-value' private_key=deadbeefcafebabe"
+    )
+
+    redacted = redact_secrets(raw)
+
+    assert "sk-test-super-secret" not in redacted
+    assert "oauth-secret-value" not in redacted
+    assert "deadbeefcafebabe" not in redacted
+    assert redacted.count("[REDACTED]") == 3
+
+
 def test_approval_defaults_false():
     envelope = EvidenceEnvelope.new("task-1", "agent-reach")
 
