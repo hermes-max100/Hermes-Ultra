@@ -2,10 +2,12 @@ from decimal import Decimal
 
 import pytest
 
-from hermes_ultra.economic.authority import AuthorityDecision
+from hermes_ultra.economic.authority import AuthorityDecision, AuthorityPolicy, FinancialAuthority
 from hermes_ultra.economic.contracts import EconomicMode, TransactionEnvelope, TreasuryBucket
 from hermes_ultra.economic.state import EconomicState
 from hermes_ultra.economic.treasury import ReservationStatus, TreasuryManager
+
+AUTHORITY_SECRET = b"test-treasury-authority-key-32-bytes"
 
 
 def tx(amount="40.00", *, mode=EconomicMode.SIMULATED):
@@ -25,13 +27,17 @@ def tx(amount="40.00", *, mode=EconomicMode.SIMULATED):
     )
 
 
-def allowed():
-    return AuthorityDecision(
-        allowed=True,
-        authorization_required=False,
-        category="external_spend",
-        reason="allowed",
-        policy_revision="finance-v1",
+def make_authority():
+    return FinancialAuthority(
+        AuthorityPolicy(
+            policy_revision="finance-v1",
+            registered_live_categories=frozenset({"external_spend"}),
+            max_transaction_amount=Decimal("1000"),
+            bucket_limits={TreasuryBucket.EXPERIMENTS: Decimal("1000")},
+            simulated_auto_limit=Decimal("1000"),
+            sandbox_auto_limit=Decimal("1000"),
+        ),
+        authority_secret=AUTHORITY_SECRET,
     )
 
 
@@ -40,11 +46,13 @@ def test_reserve_commit_and_replay_debit_exactly_once():
         mode=EconomicMode.SIMULATED,
         balances={TreasuryBucket.EXPERIMENTS: Decimal("100.00")},
     )
-    treasury = TreasuryManager(state)
+    authority = make_authority()
+    treasury = TreasuryManager(state, authority)
     envelope = tx()
+    decision = authority.evaluate(envelope)
 
-    first = treasury.reserve(envelope, allowed())
-    replay = treasury.reserve(envelope, allowed())
+    first = treasury.reserve(envelope, decision)
+    replay = treasury.reserve(envelope, decision)
 
     assert replay == first
     assert treasury.available(TreasuryBucket.EXPERIMENTS) == Decimal("60.00")
@@ -64,10 +72,11 @@ def test_release_restores_available_capital_without_debit():
         mode=EconomicMode.SIMULATED,
         balances={TreasuryBucket.EXPERIMENTS: Decimal("100.00")},
     )
-    treasury = TreasuryManager(state)
+    authority = make_authority()
+    treasury = TreasuryManager(state, authority)
     envelope = tx("25.00")
 
-    treasury.reserve(envelope, allowed())
+    treasury.reserve(envelope, authority.evaluate(envelope))
     assert treasury.available(TreasuryBucket.EXPERIMENTS) == Decimal("75.00")
 
     released = treasury.release(envelope.transaction_id)
@@ -79,20 +88,33 @@ def test_release_restores_available_capital_without_debit():
     assert state.balances[TreasuryBucket.EXPERIMENTS] == Decimal("100.00")
 
 
-def test_treasury_rejects_denied_authority_insufficient_funds_and_mode_mismatch():
+def test_treasury_rejects_fabricated_authority_insufficient_funds_and_mode_mismatch():
     state = EconomicState(
         mode=EconomicMode.SIMULATED,
         balances={TreasuryBucket.EXPERIMENTS: Decimal("30.00")},
     )
-    treasury = TreasuryManager(state)
-    denied = AuthorityDecision(False, True, "external_spend", "grant_required", "finance-v1")
+    authority = make_authority()
+    treasury = TreasuryManager(state, authority)
+    envelope = tx("10.00")
+    forged = AuthorityDecision(True, False, "external_spend", "allowed", "finance-v1")
 
-    with pytest.raises(PermissionError):
-        treasury.reserve(tx("10.00"), denied)
+    with pytest.raises(PermissionError, match="attestation"):
+        treasury.reserve(envelope, forged)
+
+    over = tx("40.00")
     with pytest.raises(ValueError, match="insufficient"):
-        treasury.reserve(tx("40.00"), allowed())
-    with pytest.raises(PermissionError, match="mode"):
-        treasury.reserve(tx("10.00", mode=EconomicMode.LIVE), allowed())
+        treasury.reserve(over, authority.evaluate(over))
+
+    live = tx("10.00", mode=EconomicMode.LIVE)
+    live_decision = AuthorityDecision(
+        allowed=True,
+        authorization_required=False,
+        category=live.authority_category,
+        reason="allowed",
+        policy_revision="finance-v1",
+    )
+    with pytest.raises(PermissionError):
+        treasury.reserve(live, live_decision)
 
 
 def test_revenue_credit_is_idempotent():
