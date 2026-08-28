@@ -55,6 +55,7 @@ jobs:
           bash tests/test_load_hermes_runtime_env.sh
           bash tests/test_production_versions.sh
           bash tests/test_release_supply_chain.sh
+          bash tests/test_cloud_release_determinism.sh
           bash tests/test_cloud_release_rollback.sh
           bash tests/test_aws_production_preflight.sh
           bash tests/test_stage_hermes_agent_source.sh
