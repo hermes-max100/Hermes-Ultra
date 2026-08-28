@@ -36,11 +36,11 @@ run_cli() {
 
 status_ready() {
   run_cli status --environment "$ENVIRONMENT_NAME" --json 2>/dev/null \
-    | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or {}; rt=r.get("runtime") or {}; g=r.get("graph") or {}; raise SystemExit(0 if d.get("ok") is True and rt.get("state")=="ready" and rt.get("reachable") is True and g.get("state")=="ready" else 1)'
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") if isinstance(d.get("result"),dict) else d; rt=r.get("runtime") or {}; g=r.get("graph") or {}; raise SystemExit(0 if d.get("ok") is True and rt.get("state")=="ready" and rt.get("reachable") is True and g.get("state")=="ready" else 1)'
 }
 
 LIST="$(run_cli environment list --json 2>/dev/null)" || { echo 'Unable to read Hermes Orca environment store' >&2; exit 1; }
-HAS_ENV="$(printf '%s' "$LIST" | python3 -c 'import json,sys; n=sys.argv[1]; d=json.load(sys.stdin); e=((d.get("result") or {}).get("environments") or []); print("1" if any(x.get("name")==n for x in e if isinstance(x,dict)) else "0")' "$ENVIRONMENT_NAME")"
+HAS_ENV="$(printf '%s' "$LIST" | python3 -c 'import json,sys; n=sys.argv[1]; d=json.load(sys.stdin); r=d.get("result") if isinstance(d.get("result"),dict) else d; e=r.get("environments") or []; print("1" if any(x.get("name")==n for x in e if isinstance(x,dict)) else "0")' "$ENVIRONMENT_NAME")"
 if [[ "$HAS_ENV" == 1 ]]; then
   status_ready || { echo 'Existing Hermes Orca environment is not reachable; refusing automatic credential replacement' >&2; exit 1; }
   echo "HERMES_ORCA_CLIENT=PASS environment=$ENVIRONMENT_NAME state=existing"
