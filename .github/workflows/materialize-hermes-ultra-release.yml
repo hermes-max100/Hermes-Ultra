@@ -1,0 +1,31 @@
+name: materialize-hermes-ultra-release
+
+on:
+  push:
+    branches:
+      - ai/hermes-ultra-transfer
+    paths:
+      - 'transfer/**'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct and verify release history
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat transfer/part-* > /tmp/hermes-ultra-release.bundle
+          echo '76325194a5dc477c5695c61aeb6cfeea87fde8698accad8fb5432fcd5f2bf669  /tmp/hermes-ultra-release.bundle' | sha256sum -c -
+          git bundle verify /tmp/hermes-ultra-release.bundle
+          git fetch /tmp/hermes-ultra-release.bundle refs/heads/ai/hermes-ultra-release
+          test "$(git rev-parse FETCH_HEAD)" = '22ad98e53b1e0ddc4543842955083e19bc9d68ce'
+          git push origin FETCH_HEAD:refs/heads/ai/hermes-ultra-release
+          git push origin FETCH_HEAD:refs/tags/hermes-ultra-release-v1
