@@ -1,0 +1,28 @@
+name: tag-hermes-ultra-release
+
+on:
+  push:
+    branches:
+      - ai/hermes-ultra-transfer
+    paths:
+      - '.github/workflows/tag-hermes-ultra-release.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and tag release snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin refs/heads/ai/hermes-ultra-release
+          test "$(git rev-parse FETCH_HEAD)" = '541e27ec683de3847a112997a7ef601a1cf34c7e'
+          test "$(git rev-parse FETCH_HEAD^{tree})" = 'd179120fc6d21cfdb4c0301a53261b9c0faf2da5'
+          git push origin FETCH_HEAD:refs/tags/hermes-ultra-release-v1
