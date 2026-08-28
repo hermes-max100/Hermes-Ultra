@@ -1,0 +1,50 @@
+name: sandbox-candidate-validate
+
+on:
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/sandbox-candidate-validate.yml'
+      - 'src/system/sandbox-candidate-executor.py'
+      - 'src/system/sandbox-candidate-executor.sh'
+      - 'src/system/sandbox-candidate-core.py'
+      - 'src/system/sandbox-isolation.py'
+      - 'tests/test_sandbox_candidate_executor.sh'
+      - 'tests/test_sandbox_isolation.sh'
+      - 'src/system/trust-gate.py'
+      - 'src/system/trust-gate.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Verify OS sandbox prerequisites
+        run: |
+          test -r /lib/x86_64-linux-gnu/libseccomp.so.2 || test -r /usr/lib/x86_64-linux-gnu/libseccomp.so.2
+          python3 - <<'PY'
+          import ctypes
+          libc = ctypes.CDLL(None, use_errno=True)
+          abi = libc.syscall(444, 0, 0, 1)
+          if abi < 1:
+              raise SystemExit(f"Landlock unavailable: abi={abi}, errno={ctypes.get_errno()}")
+          print(f"LANDLOCK_ABI={abi}")
+          PY
+
+      - name: Candidate sandbox regression suite
+        run: |
+          bash tests/test_sandbox_candidate_executor.sh
+          bash tests/test_sandbox_isolation.sh
