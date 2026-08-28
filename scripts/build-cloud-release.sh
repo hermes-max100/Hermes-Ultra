@@ -100,7 +100,10 @@ PY
   sha256sum -c CLOUD_RELEASE_MANIFEST.sha256 >/dev/null
 )
 
+# Normalize permission metadata as well as order/time/ownership so the release
+# archive is byte-for-byte reproducible across builders with different umasks.
 tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
+  --mode='u+rwX,go+rX,go-w,a-s' \
   -C "$TMP" -czf "$OUT" hermes-max
 sha256sum "$OUT" > "$SHA"
 printf 'release=%s\nsha256_file=%s\n' "$OUT" "$SHA"
