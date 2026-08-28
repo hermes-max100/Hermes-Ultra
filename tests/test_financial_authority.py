@@ -5,6 +5,8 @@ from decimal import Decimal
 from hermes_ultra.economic.authority import AuthorityPolicy, AuthorizationGrant, FinancialAuthority
 from hermes_ultra.economic.contracts import EconomicMode, TransactionEnvelope, TreasuryBucket
 
+AUTHORITY_SECRET = b"test-financial-authority-key-32-bytes"
+
 
 def transaction(*, amount="50.00", mode=EconomicMode.SIMULATED, category="external_spend"):
     return TransactionEnvelope.new(
@@ -34,30 +36,37 @@ def policy():
     )
 
 
-def test_simulated_and_sandbox_actions_are_autonomous_inside_configured_limits():
-    authority = FinancialAuthority(policy())
+def authority():
+    return FinancialAuthority(policy(), authority_secret=AUTHORITY_SECRET)
 
-    simulated = authority.evaluate(transaction(mode=EconomicMode.SIMULATED))
-    sandbox = authority.evaluate(transaction(mode=EconomicMode.SANDBOX))
+
+def test_simulated_and_sandbox_actions_are_autonomous_inside_configured_limits():
+    gate = authority()
+
+    simulated = gate.evaluate(transaction(mode=EconomicMode.SIMULATED))
+    sandbox = gate.evaluate(transaction(mode=EconomicMode.SANDBOX))
 
     assert simulated.allowed is True
     assert simulated.authorization_required is False
     assert sandbox.allowed is True
     assert sandbox.authorization_required is False
+    assert gate.validate_decision(transaction(mode=EconomicMode.SIMULATED), simulated) is False
 
 
 def test_live_money_movement_requires_typed_exact_transaction_grant():
-    authority = FinancialAuthority(policy())
+    gate = authority()
     tx = transaction(mode=EconomicMode.LIVE)
 
-    missing = authority.evaluate(tx)
-    model_text = authority.evaluate(tx, grant="APPROVED external_spend")
+    missing = gate.evaluate(tx)
+    model_text = gate.evaluate(tx, grant="APPROVED external_spend")
     wrong_tx = AuthorizationGrant.issue(
-        transaction(mode=EconomicMode.LIVE), policy_revision="finance-v1"
+        transaction(mode=EconomicMode.LIVE), policy_revision="finance-v1", signing_secret=AUTHORITY_SECRET
     )
-    mismatch = authority.evaluate(tx, grant=wrong_tx)
-    valid_grant = AuthorizationGrant.issue(tx, policy_revision="finance-v1")
-    allowed = authority.evaluate(tx, grant=valid_grant)
+    mismatch = gate.evaluate(tx, grant=wrong_tx)
+    valid_grant = AuthorizationGrant.issue(
+        tx, policy_revision="finance-v1", signing_secret=AUTHORITY_SECRET
+    )
+    allowed = gate.evaluate(tx, grant=valid_grant)
 
     assert missing.allowed is False and missing.authorization_required is True
     assert model_text.allowed is False and model_text.authorization_required is True
@@ -65,14 +74,17 @@ def test_live_money_movement_requires_typed_exact_transaction_grant():
     assert allowed.allowed is True
     assert allowed.authorization_required is False
     assert allowed.category == "external_spend"
+    assert gate.validate_decision(tx, allowed) is True
 
 
 def test_live_unregistered_category_cannot_be_self_granted():
-    authority = FinancialAuthority(policy())
+    gate = authority()
     tx = transaction(mode=EconomicMode.LIVE, category="trade_securities")
-    forged = AuthorizationGrant.issue(tx, policy_revision="finance-v1")
+    forged = AuthorizationGrant.issue(
+        tx, policy_revision="finance-v1", signing_secret=AUTHORITY_SECRET
+    )
 
-    decision = authority.evaluate(tx, grant=forged)
+    decision = gate.evaluate(tx, grant=forged)
 
     assert decision.allowed is False
     assert decision.authorization_required is False
@@ -80,12 +92,12 @@ def test_live_unregistered_category_cannot_be_self_granted():
 
 
 def test_expired_transactions_and_policy_limits_fail_closed():
-    authority = FinancialAuthority(policy())
+    gate = authority()
     expired = transaction()
     expired = replace(expired, expires_at=expired.created_at - timedelta(seconds=1))
     over_bucket = transaction(amount="80.00")
     over_global = transaction(amount="101.00")
 
-    assert authority.evaluate(expired).reason == "transaction_expired"
-    assert authority.evaluate(over_bucket).reason == "bucket_limit_exceeded"
-    assert authority.evaluate(over_global).reason == "transaction_limit_exceeded"
+    assert gate.evaluate(expired).reason == "transaction_expired"
+    assert gate.evaluate(over_bucket).reason == "bucket_limit_exceeded"
+    assert gate.evaluate(over_global).reason == "transaction_limit_exceeded"
