@@ -1,0 +1,51 @@
+name: revenue-execution-security-validate
+
+on:
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/revenue-execution-security-validate.yml'
+      - 'src/system/outbound-executor.py'
+      - 'src/system/outbound-executor-core.py'
+      - 'src/system/contact-form-executor.py'
+      - 'src/system/contact-form-executor-core.py'
+      - 'src/system/revenue-orchestrator.sh'
+      - 'src/system/approval-security.py'
+      - 'src/system/externalization-claim.py'
+      - 'src/system/containment-gateway.py'
+      - 'tests/test_revenue_execution_security.py'
+      - 'tests/test_outbound_executor.sh'
+      - 'tests/test_contact_form_executor.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Revenue execution security regression suite
+        run: |
+          python3 tests/test_revenue_execution_security.py
+          bash tests/test_outbound_executor.sh
+          bash tests/test_contact_form_executor.sh
+          python3 -m py_compile \
+            src/system/outbound-executor.py \
+            src/system/outbound-executor-core.py \
+            src/system/contact-form-executor.py \
+            src/system/contact-form-executor-core.py \
+            src/system/approval-security.py \
+            src/system/externalization-claim.py \
+            src/system/containment-gateway.py
+          bash -n src/system/revenue-orchestrator.sh
