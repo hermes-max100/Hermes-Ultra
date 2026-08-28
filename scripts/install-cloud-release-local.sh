@@ -135,7 +135,9 @@ WorkingDirectory=$RUNTIME_ROOT
 Environment=HOME=$VAR_ROOT
 Environment=HERMES_HOME=$VAR_ROOT/.hermes
 Environment=PATH=$VAR_ROOT/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=ORCA_CLI_COMMAND=/opt/orca/current/AppRun
+Environment=ORCA_CLI_COMMAND=/opt/orca/bin/orca-ide
+Environment=ORCA_USER_DATA_PATH=/var/lib/hermes/.config/hermes/orca-client/orca
+Environment=ORCA_ENVIRONMENT=hermes-runtime
 Environment=DO_NOT_TRACK=1
 Environment=ORCA_TELEMETRY_DISABLED=1
 ExecStart=$VAR_ROOT/.local/bin/hermes serve --host 127.0.0.1 --port 9119
@@ -170,6 +172,15 @@ ReadWritePaths=$INSTALL_ROOT $VAR_ROOT
 [Install]
 WantedBy=multi-user.target
 UNIT
+  ORCA_BOOTSTRAP="$TARGET/scripts/bootstrap-hermes-orca-client.sh"
+  [[ -f "$ORCA_BOOTSTRAP" ]] || { echo 'Hermes Orca client bootstrap is missing from release' >&2; exit 1; }
+  [[ -x /opt/orca/bin/orca-ide ]] || { echo 'Orca headless CLI is not installed' >&2; exit 1; }
+  systemctl is-active --quiet orca-serve.service || { echo 'Orca runtime service is not active' >&2; exit 1; }
+  ORCA_CLI_COMMAND=/opt/orca/bin/orca-ide \
+  ORCA_CLIENT_HOME="$VAR_ROOT" \
+  ORCA_USER_DATA_PATH="$VAR_ROOT/.config/hermes/orca-client/orca" \
+  ORCA_ENVIRONMENT_NAME=hermes-runtime \
+    bash "$ORCA_BOOTSTRAP"
   systemctl daemon-reload
   systemctl enable --now hermes-foundation-verify.service
   systemctl enable --now hermes-runtime.service
