@@ -1,0 +1,63 @@
+name: agent-runtime-upgrades-validate
+
+on:
+  pull_request:
+    branches:
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/agent-runtime-upgrades-validate.yml'
+      - 'src/system/otel-bridge.py'
+      - 'src/system/browser-workflow-cache.py'
+      - 'src/system/hermes-dispatch.sh'
+      - 'tests/test_otel_bridge.py'
+      - 'tests/test_browser_workflow_cache.py'
+      - 'tests/test_hermes_dispatch_otel.sh'
+      - 'docs/superpowers/specs/2026-08-19-otel-browser-workflow-upgrades-design.md'
+      - 'docs/superpowers/plans/2026-08-19-otel-browser-workflow-upgrades.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: OTel bridge tests
+        run: python3 tests/test_otel_bridge.py
+
+      - name: Browser workflow cache tests
+        run: python3 tests/test_browser_workflow_cache.py
+
+      - name: Dispatch trace integration
+        run: bash tests/test_hermes_dispatch_otel.sh
+
+      - name: Existing dispatch and evidence regressions
+        run: |
+          bash tests/test_hermes_dispatch.sh
+          bash tests/test_memory_fabric.sh
+          bash tests/test_trajectory_fabric.sh
+
+      - name: Existing containment regressions
+        run: |
+          python3 tests/test_containment_gateway.py
+          bash tests/test_containment_gateway.sh
+
+      - name: Existing browser and revenue security regressions
+        run: |
+          bash tests/test_contact_form_executor.sh
+          python3 tests/test_revenue_execution_security.py
+
+      - name: Syntax checks
+        run: |
+          bash -n src/system/hermes-dispatch.sh
+          python3 -m py_compile src/system/otel-bridge.py src/system/browser-workflow-cache.py
