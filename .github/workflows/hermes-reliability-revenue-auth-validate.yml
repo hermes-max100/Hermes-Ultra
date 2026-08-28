@@ -1,0 +1,58 @@
+name: hermes-reliability-revenue-auth-validate
+
+on:
+  push:
+    branches:
+      - ai/hermes-reliability-revenue-auth
+  pull_request:
+    branches:
+      - hermes-max-setup
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HERMES_APPROVAL_HMAC_SECRET: ci-test-only-approval-secret-2026-at-least-32-bytes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: New reliability, outcome, authorization, and skill tests
+        run: |
+          python3 tests/test_reliability_supervisor.py
+          python3 tests/test_revenue_outcomes.py
+          python3 tests/test_consequential_action_gate.py
+          python3 tests/test_skill_security_intake.py
+
+      - name: Existing Revenue OS and security regressions
+        run: |
+          bash tests/test_revenue_orchestrator.sh
+          bash tests/test_revenue_ledger.sh
+          bash tests/test_local_service_funnel.sh
+          bash tests/test_outbound_executor.sh
+          bash tests/test_contact_form_executor.sh
+          python3 tests/test_revenue_execution_security.py
+          python3 tests/test_plugin_intake.py
+          python3 tests/test_execution_state.py
+          python3 tests/test_governed_graph_runtime.py
+
+      - name: Static validation
+        run: |
+          python3 -m py_compile \
+            src/system/reliability-supervisor.py \
+            src/system/consequential-action-gate.py \
+            src/system/revenue-ledger.py \
+            src/system/revenue-orchestrator.py \
+            src/system/plugin-intake.py
+          bash -n src/system/revenue-orchestrator.sh
+          python3 -m json.tool config/consequential-action-grant.example.json >/dev/null
