@@ -19,7 +19,7 @@ from .contracts import (
 )
 from .engine import EconomicEngine
 from .ledger import DuplicateTransactionError, EconomicLedger, LedgerEntry
-from .metrics import EconomicMetrics
+from .metrics import EconomicMetrics, ResourceAllocationSignal
 from .state import EconomicState, ExperimentState, TreasuryReservationState
 from .strategies.base import RevenueExperiment, RevenueOpportunity
 from .strategies.service_sales import ServiceSalesStrategy
@@ -46,6 +46,7 @@ __all__ = [
     "EconomicLedger",
     "LedgerEntry",
     "EconomicMetrics",
+    "ResourceAllocationSignal",
     "EconomicState",
     "ExperimentState",
     "TreasuryReservationState",
