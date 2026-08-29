@@ -12,6 +12,11 @@ from ..evidence import redact_secrets
 from .contracts import TransactionEnvelope, TreasuryBucket, as_decimal, utc_now
 
 
+BUSINESS_OUTCOME_TYPES = frozenset(
+    {"qualified_lead", "appointment_booked", "completed_outcome"}
+)
+
+
 class DuplicateTransactionError(ValueError):
     pass
 
@@ -177,6 +182,36 @@ class EconomicLedger:
             currency=currency,
             status=status,
             metadata=metadata,
+        )
+
+    def record_business_outcome(
+        self,
+        *,
+        run_id: str,
+        strategy_id: str,
+        outcome_type: str,
+        currency: str,
+        metadata: Mapping[str, object] | None = None,
+        idempotency_key: str | None = None,
+    ) -> LedgerEntry:
+        if outcome_type not in BUSINESS_OUTCOME_TYPES:
+            raise ValueError(f"unsupported business outcome: {outcome_type}")
+        event_key = (
+            None
+            if idempotency_key is None
+            else f"business_outcome:{outcome_type}:{idempotency_key}"
+        )
+        return self._insert_event(
+            kind="business_outcome",
+            transaction_id=None,
+            run_id=run_id,
+            strategy_id=strategy_id,
+            bucket=None,
+            amount=Decimal("0"),
+            currency=currency,
+            status=outcome_type,
+            metadata=metadata,
+            event_key=event_key,
         )
 
     def record_revenue(
