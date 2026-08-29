@@ -7,6 +7,12 @@ from .ledger import EconomicLedger
 
 
 @dataclass(frozen=True)
+class ResourceAllocationSignal:
+    action: str
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class EconomicMetrics:
     revenue: Decimal
     cost: Decimal
@@ -75,4 +81,40 @@ class EconomicMetrics:
             attributed_revenue=revenue,
             gross_margin=gross_margin,
             cost_per_completed_outcome=cost_per_completed_outcome,
+        )
+
+    def resource_allocation_signal(
+        self,
+        *,
+        max_cost_per_completed_outcome: Decimal,
+        min_gross_margin: Decimal,
+        min_conversion_rate: Decimal = Decimal("0"),
+        min_completed_outcomes: int = 1,
+    ) -> ResourceAllocationSignal:
+        if max_cost_per_completed_outcome < 0:
+            raise ValueError("max_cost_per_completed_outcome cannot be negative")
+        if min_conversion_rate < 0 or min_conversion_rate > 1:
+            raise ValueError("min_conversion_rate must be between 0 and 1")
+        if min_completed_outcomes < 1:
+            raise ValueError("min_completed_outcomes must be at least 1")
+
+        reasons: list[str] = []
+        if self.completed_outcomes < min_completed_outcomes:
+            reasons.append("insufficient_completed_outcomes")
+        if self.cost_per_completed_outcome is None:
+            reasons.append("cost_per_completed_outcome_unavailable")
+        elif self.cost_per_completed_outcome > max_cost_per_completed_outcome:
+            reasons.append("cost_per_completed_outcome_above_limit")
+        if self.gross_margin is None:
+            reasons.append("gross_margin_unavailable")
+        elif self.gross_margin < min_gross_margin:
+            reasons.append("gross_margin_below_minimum")
+        if self.conversion_rate is None:
+            reasons.append("conversion_rate_unavailable")
+        elif self.conversion_rate < min_conversion_rate:
+            reasons.append("conversion_rate_below_minimum")
+
+        return ResourceAllocationSignal(
+            action="increase" if not reasons else "hold",
+            reasons=tuple(reasons),
         )
