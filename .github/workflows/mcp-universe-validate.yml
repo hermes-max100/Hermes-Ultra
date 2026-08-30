@@ -8,6 +8,8 @@ on:
       - 'config/mcp-provider-registry.json'
       - 'config/tool-registry.json'
       - 'src/system/mcp-provider-registry.py'
+      - 'src/system/mcp-provider-router.py'
+      - 'src/system/mcp-provider-sync.py'
       - 'src/system/mcp-stateless-gateway.py'
       - 'scripts/sync-mcp-provider-registry.sh'
       - 'tests/test_mcp_provider_registry.py'
@@ -33,7 +35,6 @@ jobs:
       - name: MCP provider registry tests
         run: python3 tests/test_mcp_provider_registry.py
       - name: MCP provider sync tests
-        if: ${{ hashFiles('tests/test_mcp_provider_sync.sh') != '' }}
         run: bash tests/test_mcp_provider_sync.sh
       - name: Existing MCP and plugin regressions
         run: |
@@ -43,7 +44,7 @@ jobs:
         run: |
           python3 -m json.tool config/mcp-provider-registry.json >/dev/null
           python3 -m json.tool config/tool-registry.json >/dev/null
-          python3 -m py_compile src/system/mcp-provider-registry.py src/system/mcp-stateless-gateway.py
-          if [ -f scripts/sync-mcp-provider-registry.sh ]; then bash -n scripts/sync-mcp-provider-registry.sh; fi
+          python3 -m py_compile src/system/mcp-provider-registry.py src/system/mcp-provider-router.py src/system/mcp-provider-sync.py src/system/mcp-stateless-gateway.py
+          bash -n scripts/sync-mcp-provider-registry.sh
       - name: Workflow supply-chain regression
         run: python3 tests/test_github_actions_pinning.py
