@@ -1,3 +1,12 @@
+from .agent_plugins import (
+    MCP_SCHEMA_1_0,
+    PLUGIN_SCHEMA_1_0,
+    AgentPluginError,
+    AgentPluginLoader,
+    AgentPluginMcpServer,
+    AgentPluginPackage,
+    AgentPluginSkill,
+)
 from .agent_reach import (
     SUPPORTED_CHANNELS,
     AgentReachAdapter,
@@ -40,6 +49,7 @@ from .code_intelligence import (
     NativeRepoSearchAdapter,
 )
 from .contracts import CapabilityResult, FailureClass
+from .delegated_identity import CredentialReference, DelegatedIdentity
 from .economic import (
     AdapterResult,
     AuthorityDecision,
@@ -73,6 +83,15 @@ from .economic import (
     TreasuryReservationState,
 )
 from .evidence import EvidenceEnvelope, EvidenceRecorder, redact_secrets
+from .mcp_gateway import (
+    MCP_PROTOCOL_VERSION,
+    McpGateway,
+    McpGatewayError,
+    McpProvider,
+    McpServerDiscovery,
+    McpToolDescriptor,
+    McpTransport,
+)
 from .openmontage import MediaJob, MediaPipelineResult, OpenMontageAdapter
 from .orchestrator import CodingTaskResult, HermesUltraOrchestrator, ResearchTaskResult
 from .skill_lifecycle import (
@@ -108,6 +127,13 @@ from .swarm import (
 )
 
 __all__ = [
+    "MCP_SCHEMA_1_0",
+    "PLUGIN_SCHEMA_1_0",
+    "AgentPluginError",
+    "AgentPluginLoader",
+    "AgentPluginMcpServer",
+    "AgentPluginPackage",
+    "AgentPluginSkill",
     "SUPPORTED_CHANNELS",
     "AgentReachAdapter",
     "AgentReachError",
@@ -142,6 +168,8 @@ __all__ = [
     "NativeRepoSearchAdapter",
     "CapabilityResult",
     "FailureClass",
+    "CredentialReference",
+    "DelegatedIdentity",
     "AdapterResult",
     "AuthorityDecision",
     "AuthorityPolicy",
@@ -175,6 +203,13 @@ __all__ = [
     "EvidenceEnvelope",
     "EvidenceRecorder",
     "redact_secrets",
+    "MCP_PROTOCOL_VERSION",
+    "McpGateway",
+    "McpGatewayError",
+    "McpProvider",
+    "McpServerDiscovery",
+    "McpToolDescriptor",
+    "McpTransport",
     "MediaJob",
     "MediaPipelineResult",
     "OpenMontageAdapter",
