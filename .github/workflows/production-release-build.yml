@@ -1,0 +1,95 @@
+name: production-release-build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-release-build.yml'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'config/**'
+      - 'src/**'
+      - 'infra/**'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-production-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout canonical Hermes Ultra
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pinned Hermes Agent 0.20.5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: NousResearch/hermes-agent
+          ref: fcbd1076a93841fa88855acce810e342a5b78101
+          path: vendor-src/hermes-agent
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify pinned Hermes Agent source
+        run: |
+          test "$(git -C vendor-src/hermes-agent rev-parse HEAD)" = 'fcbd1076a93841fa88855acce810e342a5b78101'
+          git -C vendor-src/hermes-agent tag --points-at HEAD | grep -Fxq 'v2026.8.19'
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned uv exporter
+        run: |
+          python -m pip install --disable-pip-version-check 'uv==0.12.7'
+          test "$(uv --version)" = 'uv 0.12.7'
+
+      - name: Build canonical production release
+        env:
+          HERMES_PRODUCTION_BUILD: '1'
+          HERMES_AGENT_SOURCE_DIR: ${{ github.workspace }}/vendor-src/hermes-agent
+          HERMES_DIST_DIR: ${{ github.workspace }}/dist-production
+          SOURCE_DATE_EPOCH: 20260830T210000Z
+        run: bash scripts/build-cloud-release.sh
+
+      - name: Verify production release evidence
+        run: |
+          sha256sum -c dist-production/*.sha256
+          archive="$(find dist-production -maxdepth 1 -name 'hermes-max-cloud-*.tar.gz' -print -quit)"
+          test -n "$archive"
+          tmp="$(mktemp -d)"
+          tar -xzf "$archive" -C "$tmp"
+          cd "$tmp/hermes-max"
+          sha256sum -c CLOUD_RELEASE_MANIFEST.sha256 >/dev/null
+          test -f vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json
+          test -f vendor/hermes-agent/0.20.5/requirements-hermes-all.lock.txt
+          test -x scripts/ensure-node-runtime.sh
+          test -x scripts/sync-mcp-provider-registry.sh
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('.')
+          release = json.loads((root / 'RELEASE_PROVENANCE.json').read_text())
+          source = json.loads((root / 'vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json').read_text())
+          assert release['source_commit'] == '${{ github.sha }}'
+          assert source['source_commit'] == 'fcbd1076a93841fa88855acce810e342a5b78101'
+          assert source['source_tag'] == 'v2026.8.19'
+          assert source['version'] == '0.20.5'
+          PY
+
+      - name: Upload one production artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hermes-ultra-production-${{ github.sha }}
+          path: |
+            dist-production/*.tar.gz
+            dist-production/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
