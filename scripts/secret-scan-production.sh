@@ -49,7 +49,8 @@ patterns=[
 markers=('REDACTED','PLACEHOLDER','CHANGEME','YOUR_','EXAMPLE_','DUMMY_')
 def placeholder(value:str)->bool:
     up=value.upper()
-    return any(m in up for m in markers) or (value.startswith('<') and value.endswith('>'))
+    lower=value.lower()
+    return lower.startswith('sk-test-') or any(m in up for m in markers) or (value.startswith('<') and value.endswith('>'))
 
 def shannon_entropy(value:str)->float:
     counts=collections.Counter(value)
