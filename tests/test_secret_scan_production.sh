@@ -23,6 +23,11 @@ printf '%s\n' \
   "$REFRESH_NAME=request.$REFRESH_NAME," \
   "$REFRESH_NAME = stored_$REFRESH_NAME or \"\"" > "$TMP/source-code.py"
 bash "$SCANNER" "$TMP/source-code.py" | grep -q '^SECRET_SCAN=PASS'
+printf '%s\n' \
+  'OPENAI_API_KEY=sk-test-super-secret' \
+  'stderr="OPENAI_API_KEY=sk-test-super-secret client_secret=oauth-secret-value"' \
+  > "$TMP/synthetic-redaction-fixture.py"
+bash "$SCANNER" "$TMP/synthetic-redaction-fixture.py" | grep -q '^SECRET_SCAN=PASS'
 GENERIC="A1b2C3d4E5f6G7h8J9k0LmNoPqRsTuVw"
 printf 'service_api_key=%s\n' "$GENERIC" > "$TMP/generic.env"
 if bash "$SCANNER" "$TMP/generic.env" >/dev/null 2>&1; then echo 'high-entropy generic API key accepted' >&2; exit 1; fi
