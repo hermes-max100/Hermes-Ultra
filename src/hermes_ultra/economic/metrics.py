@@ -33,17 +33,39 @@ class EconomicMetrics:
         *,
         run_id: str | None = None,
         strategy_id: str | None = None,
+        currency: str | None = None,
     ) -> "EconomicMetrics":
-        revenue = Decimal("0")
-        cost = Decimal("0")
-        qualified_leads = 0
-        appointments_booked = 0
-        completed_outcomes = 0
+        selected_entries = []
         for entry in ledger.entries():
             if run_id is not None and entry.run_id != run_id:
                 continue
             if strategy_id is not None and entry.strategy_id != strategy_id:
                 continue
+            selected_entries.append(entry)
+
+        normalized_currency = None
+        if currency is not None:
+            if not isinstance(currency, str) or not currency.strip():
+                raise ValueError("currency scope cannot be empty")
+            normalized_currency = currency.strip().upper()
+            selected_entries = [
+                entry for entry in selected_entries if entry.currency == normalized_currency
+            ]
+        else:
+            currencies = {
+                entry.currency
+                for entry in selected_entries
+                if entry.kind in {"revenue", "outcome", "business_outcome"}
+            }
+            if len(currencies) > 1:
+                raise ValueError("mixed currencies require an explicit currency scope")
+
+        revenue = Decimal("0")
+        cost = Decimal("0")
+        qualified_leads = 0
+        appointments_booked = 0
+        completed_outcomes = 0
+        for entry in selected_entries:
             if entry.kind == "revenue" and entry.status == "received":
                 revenue += entry.amount
             elif entry.kind == "outcome" and entry.status in {"success", "executed"}:
@@ -63,7 +85,7 @@ class EconomicMetrics:
             if qualified_leads == 0
             else Decimal(completed_outcomes) / Decimal(qualified_leads)
         )
-        gross_margin = None if revenue == 0 else gross_profit / revenue
+        gross_margin = None if revenue <= 0 else gross_profit / revenue
         cost_per_completed_outcome = (
             None
             if completed_outcomes == 0
@@ -99,6 +121,10 @@ class EconomicMetrics:
             raise ValueError("min_completed_outcomes must be at least 1")
 
         reasons: list[str] = []
+        if self.attributed_revenue <= 0:
+            reasons.append("non_positive_attributed_revenue")
+        if self.completed_outcomes > self.qualified_leads:
+            reasons.append("invalid_funnel_counts")
         if self.completed_outcomes < min_completed_outcomes:
             reasons.append("insufficient_completed_outcomes")
         if self.cost_per_completed_outcome is None:
@@ -111,6 +137,8 @@ class EconomicMetrics:
             reasons.append("gross_margin_below_minimum")
         if self.conversion_rate is None:
             reasons.append("conversion_rate_unavailable")
+        elif self.conversion_rate < 0 or self.conversion_rate > 1:
+            reasons.append("invalid_conversion_rate")
         elif self.conversion_rate < min_conversion_rate:
             reasons.append("conversion_rate_below_minimum")
 
