@@ -108,5 +108,8 @@ PY
 tar --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
   --mode='u+rwX,go+rX,go-w,a-s' \
   -C "$TMP" -czf "$OUT" hermes-max
-sha256sum "$OUT" > "$SHA"
+(
+  cd "$DIST_DIR"
+  sha256sum "$NAME" > "$(basename "$SHA")"
+)
 printf 'release=%s\nsha256_file=%s\n' "$OUT" "$SHA"
