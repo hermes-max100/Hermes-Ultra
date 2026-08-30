@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/production-release-build.yml'
+      - '.github/workflows/cloud-foundation-validate.yml'
       - 'scripts/**'
       - 'tests/**'
       - 'config/**'
