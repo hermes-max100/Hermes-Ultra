@@ -48,7 +48,7 @@ jobs:
       - name: Install pinned uv exporter
         run: |
           python -m pip install --disable-pip-version-check 'uv==0.12.7'
-          test "$(uv --version)" = 'uv 0.12.7'
+          uv --version | grep -Eq '^uv 0\.12\.7([[:space:]]|$)'
 
       - name: Build canonical production release
         env:
