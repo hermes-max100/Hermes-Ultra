@@ -8,6 +8,10 @@ mkdir -p "$DIST"
 HERMES_DIST_DIR="$DIST" SOURCE_DATE_EPOCH=20260821T000000Z bash "$ROOT_DIR/scripts/build-cloud-release.sh" >/dev/null
 ARCHIVE="$(find "$DIST" -maxdepth 1 -name 'hermes-max-cloud-*.tar.gz' -print -quit)"
 [[ -n "$ARCHIVE" ]] || { echo 'missing release archive' >&2; exit 1; }
+SHA_FILE="$ARCHIVE.sha256"
+[[ -f "$SHA_FILE" ]] || { echo 'missing outer release checksum' >&2; exit 1; }
+[[ "$(awk '{print $2}' "$SHA_FILE")" == "$(basename "$ARCHIVE")" ]] || { echo 'outer release checksum is not portable' >&2; exit 1; }
+( cd "$DIST" && sha256sum -c "$(basename "$SHA_FILE")" >/dev/null )
 tar -xzf "$ARCHIVE" -C "$TMP"
 STAGE="$TMP/hermes-max"
 for f in SBOM.spdx.json RELEASE_PROVENANCE.json CLOUD_RELEASE_MANIFEST.sha256; do
