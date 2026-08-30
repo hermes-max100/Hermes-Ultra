@@ -96,6 +96,7 @@ fi
 if [[ "$TEST_MODE" != 1 ]]; then chown -R hermes:hermes "$TARGET"; fi
 
 if [[ "$TEST_MODE" != 1 ]]; then
+  bash "$TARGET/scripts/ensure-node-runtime.sh"
   VENDORED="$TARGET/vendor/hermes-agent/0.20.5"
   rm -rf "$RUNTIME_TMP"; cp -a "$VENDORED" "$RUNTIME_TMP"; chown -R hermes:hermes "$RUNTIME_TMP"
   runuser -u hermes -- env HOME="$VAR_ROOT" python3 -m venv "$RUNTIME_TMP/venv" || { echo 'python venv creation failed; install python3-venv first' >&2; exit 1; }
@@ -116,6 +117,9 @@ if [[ "$TEST_MODE" != 1 ]]; then
   ln -sfn "$RUNTIME_ROOT/venv/bin/hermes" "$VAR_ROOT/.local/bin/hermes"
   chown -h hermes:hermes "$VAR_ROOT/.local/bin/hermes"
   runuser -u hermes -- "$TARGET/scripts/restore-vps-transfer.sh" --skip-agent-reach --skip-python-deps
+  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" \
+    HERMES_RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python" \
+    bash "$TARGET/scripts/sync-mcp-provider-registry.sh" apply
   runuser -u hermes -- "$TARGET/scripts/verify-cloud-foundation.sh"
 fi
 
@@ -183,7 +187,8 @@ UNIT
     bash "$ORCA_BOOTSTRAP"
   systemctl daemon-reload
   systemctl enable --now hermes-foundation-verify.service
-  systemctl enable --now hermes-runtime.service
+  systemctl enable hermes-runtime.service
+  systemctl restart hermes-runtime.service
   RUNTIME_SERVICE_STARTED=1
   ready=0
   for _ in $(seq 1 30); do
