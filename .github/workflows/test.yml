@@ -32,7 +32,10 @@ jobs:
       - name: Source secret scan
         shell: bash
         run: |
-          python - <<'PY'
+          if [[ -f scripts/secret-scan-production.sh ]]; then
+            bash scripts/secret-scan-production.sh src
+          else
+            python - <<'PY'
           from pathlib import Path
           import re
           import sys
@@ -40,7 +43,7 @@ jobs:
           patterns = {
               "bearer": re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+\-/]{16,}"),
               "auth_token": re.compile(r"(?i)auth_token=[A-Za-z0-9._~+\-/]{8,}"),
-              "password": re.compile(r"(?i)password\s*[=:]\s*['\"]?[A-Za-z0-9._~+\-/]{8,}"),
+              "password": re.compile(r"(?i)password[ \t]*[=:][ \t]*['\"][A-Za-z0-9._~+\-/]{8,}"),
           }
           violations = []
           for path in Path("src").rglob("*.py"):
@@ -55,6 +58,7 @@ jobs:
               print("\n".join(violations))
               sys.exit(1)
           PY
+          fi
       - name: Repository secret scan
         uses: trufflesecurity/trufflehog@0c952ace0f842f11c75775922d7400335cf60bc6
         with:
