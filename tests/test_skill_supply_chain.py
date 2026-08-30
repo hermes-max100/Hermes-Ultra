@@ -146,14 +146,16 @@ def test_pinned_archive_fetcher_uses_only_commit_pinned_url() -> None:
 
     def fetch(url: str, max_bytes: int) -> bytes:
         calls.append((url, max_bytes))
+        if "/git/commits/" in url:
+            return json.dumps({"tree": {"sha": "b" * 40}}).encode("utf-8")
         return b"archive"
 
     source = _source()
     data = PinnedArchiveFetcher(fetcher=fetch, max_archive_bytes=1024).fetch(source)
 
     assert data == b"archive"
-    assert calls == [(source.codeload_url(), 1024)]
-    assert "HEAD" not in calls[0][0]
+    assert calls == [(source.commit_api_url(), 1024 * 1024), (source.codeload_url(), 1024)]
+    assert all("HEAD" not in url for url, _ in calls)
 
 
 def test_archive_inspector_extracts_only_selected_skill_and_records_hashes() -> None:
@@ -245,7 +247,7 @@ def test_managed_installer_requires_trusted_state_review_and_exact_managed_root(
 
     with pytest.raises(SkillSupplyChainError, match="managed root"):
         installer.install(
-            _candidate(),
+            _candidate(provenance=Provenance(repository=artifact.source.repository_url, commit_sha=artifact.source.commit_sha, license=artifact.source.license, discovered_from=artifact.source.discovered_from, skill_path=artifact.manifest.skill_path, artifact_sha256=artifact.manifest.identity_hash())),
             artifact,
             profile="coding",
             target_root=tmp_path / "other",
@@ -286,8 +288,8 @@ def test_managed_installer_is_atomic_create_only_and_writes_attested_receipt(tmp
         receipt_dir=receipts,
         clock=lambda: "2026-08-30T19:00:00Z",
     )
-    candidate = _candidate()
     artifact = _artifact()
+    candidate = _candidate(provenance=Provenance(repository=artifact.source.repository_url, commit_sha=artifact.source.commit_sha, license=artifact.source.license, discovered_from=artifact.source.discovered_from, skill_path=artifact.manifest.skill_path, artifact_sha256=artifact.manifest.identity_hash()))
 
     installed = installer.install(
         candidate,
