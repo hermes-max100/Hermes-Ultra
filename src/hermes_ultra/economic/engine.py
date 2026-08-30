@@ -164,6 +164,8 @@ class EconomicEngine:
         if self.payment_adapter is None:
             raise RuntimeError("payment adapter is not configured")
         value = as_decimal(amount)
+        if value < 0:
+            raise ValueError("negative revenue is not allowed")
         result = self.payment_adapter.record_revenue(
             run_id=experiment.run_id,
             strategy_id=experiment.strategy_id,
