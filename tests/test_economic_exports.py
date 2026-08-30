@@ -2,10 +2,12 @@ def test_top_level_package_exports_economic_engine_surface():
     from hermes_ultra import (
         AuthorityPolicy,
         EconomicEngine,
+        EconomicMetrics,
         EconomicMode,
         EconomicOperation,
         EconomicTask,
         FinancialAuthority,
+        ResourceAllocationSignal,
         SafeAdapter,
         ServiceSalesStrategy,
         StripeAdapter,
@@ -15,6 +17,8 @@ def test_top_level_package_exports_economic_engine_surface():
     )
 
     assert EconomicEngine
+    assert EconomicMetrics
+    assert ResourceAllocationSignal
     assert EconomicMode.SIMULATED.value == "SIMULATED"
     assert EconomicOperation.START_SERVICE_SALES.value == "START_SERVICE_SALES"
     assert EconomicTask
