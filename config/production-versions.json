@@ -17,5 +17,10 @@
     "url": "https://github.com/stablyai/orca/releases/download/v1.4.190/orca-linux.AppImage",
     "sha256": "f5b321576d9c909f9e6987aa3bd20e8ff9f214d881b43c7109281cbc87878cde"
   },
-  "frozen_at": "2026-08-28"
+  "node_runtime": {
+    "minimum_major": 18,
+    "packages": ["nodejs", "npm"],
+    "purpose": "MCP stdio providers including Playwright"
+  },
+  "frozen_at": "2026-08-30"
 }
