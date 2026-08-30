@@ -504,9 +504,7 @@ class McpGateway:
     @staticmethod
     def _grant_matches_tool(grant: str, tool_capabilities: frozenset[str]) -> bool:
         return any(
-            capability == grant
-            or capability.startswith(grant + ".")
-            or grant.startswith(capability + ".")
+            capability == grant or capability.startswith(grant + ".")
             for capability in tool_capabilities
         )
 
