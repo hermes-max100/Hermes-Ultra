@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import importlib.util
-import json
-import os
-import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "src/system/mcp-provider-registry.py"
-GATEWAY = ROOT / "src/system/mcp-stateless-gateway.py"
+ROUTER = ROOT / "src/system/mcp-provider-router.py"
 REGISTRY = ROOT / "config/mcp-provider-registry.json"
 
 EXPECTED_MCP = {
@@ -124,9 +121,9 @@ class MCPProviderRegistryTests(unittest.TestCase):
         security_all = self.mod.select_candidates(self.data, profile="security_research", capability="security.scan", effect="authorized_security_execution", include_inactive=True)
         self.assertTrue({"pentest_tools", "pentest_mcp"}.intersection({row["id"] for row in security_all}))
 
-    def test_gateway_uses_same_progressive_registry_selection(self):
-        gateway = load_module(GATEWAY, "hermes_mcp_gateway_registry_test")
-        rows = gateway.select_registry_providers(profile="coding", capability="browser.automate", effect="external_write", registry_path=REGISTRY)
+    def test_router_uses_same_progressive_registry_selection(self):
+        router = load_module(ROUTER, "hermes_mcp_provider_router_test")
+        rows = router.select_registry_providers(profile="coding", capability="browser.automate", effect="external_write", registry_path=REGISTRY)
         self.assertEqual([row["id"] for row in rows], ["playwright"])
 
 
