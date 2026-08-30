@@ -15,6 +15,7 @@ from .contracts import CapabilityResult, FailureClass
 
 Runner = Callable[..., object]
 _COMMIT_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 class LifecycleState(str, Enum):
@@ -56,6 +57,8 @@ class Provenance:
     commit_sha: str
     license: str
     discovered_from: str
+    skill_path: str | None = None
+    artifact_sha256: str | None = None
 
     def __post_init__(self) -> None:
         if not self.repository.strip():
@@ -66,6 +69,16 @@ class Provenance:
             raise ValueError("license is required")
         if not self.discovered_from.strip():
             raise ValueError("discovered_from is required")
+        bound = self.skill_path is not None or self.artifact_sha256 is not None
+        if bound and (self.skill_path is None or self.artifact_sha256 is None):
+            raise ValueError("skill_path and artifact_sha256 must be provided together")
+        if self.skill_path is not None:
+            parts = self.skill_path.split('/')
+            if (not self.skill_path or self.skill_path.startswith('/') or self.skill_path.endswith('/') or '\\' in self.skill_path or any(part in {'', '.', '..'} or ':' in part for part in parts)):
+                raise ValueError("skill_path must be a canonical relative POSIX path")
+            if not _SHA256_RE.fullmatch(self.artifact_sha256 or ''):
+                raise ValueError("artifact_sha256 must be a SHA-256 hex digest")
+            object.__setattr__(self, 'artifact_sha256', (self.artifact_sha256 or '').lower())
 
 
 @dataclass(frozen=True)

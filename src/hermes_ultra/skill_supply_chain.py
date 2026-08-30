@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import io
 import json
 import os
 import re
 import shutil
+import stat
 import tarfile
 import tempfile
 import urllib.request
@@ -163,6 +166,12 @@ class PinnedSkillSource:
             f"{self.commit_sha}"
         )
 
+    def commit_api_url(self) -> str:
+        return (
+            f"https://api.github.com/repos/{self.owner}/{self.repo}/git/commits/"
+            f"{self.commit_sha}"
+        )
+
     def to_dict(self) -> dict[str, str]:
         return {
             "repository": self.repository_url,
@@ -200,6 +209,19 @@ class PinnedArchiveFetcher:
         return data
 
     def fetch(self, source: PinnedSkillSource) -> bytes:
+        metadata_cap = 1024 * 1024
+        metadata = self._fetcher(source.commit_api_url(), metadata_cap)
+        if len(metadata) > metadata_cap:
+            raise SkillSupplyChainError("commit metadata byte cap exceeded")
+        try:
+            payload = json.loads(bytes(metadata).decode("utf-8"))
+            actual_tree = payload["tree"]["sha"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            raise SkillSupplyChainError("invalid GitHub commit tree metadata") from exc
+        if not isinstance(actual_tree, str) or not _SHA40_RE.fullmatch(actual_tree):
+            raise SkillSupplyChainError("invalid GitHub commit tree SHA")
+        if actual_tree.lower() != source.tree_sha:
+            raise SkillSupplyChainError("commit tree SHA does not match pinned tree SHA")
         data = self._fetcher(source.codeload_url(), self.max_archive_bytes)
         if len(data) > self.max_archive_bytes:
             raise SkillSupplyChainError("archive byte cap exceeded")
@@ -256,6 +278,11 @@ class SkillArtifactManifest:
     def to_dict(self) -> dict[str, str]:
         return asdict(self)
 
+    def identity_hash(self) -> str:
+        payload = self.to_dict()
+        payload.pop("staged_at", None)
+        return _canonical_hash(payload)
+
 
 @dataclass(frozen=True)
 class QuarantinedSkillArtifact:
@@ -298,7 +325,7 @@ class SkillArchiveInspector:
             raise SkillSupplyChainError("archive byte cap exceeded")
 
         files: list[SkillFile] = []
-        regular_count = 0
+        entry_count = 0
         declared_bytes = 0
         prefix = source.skill_path + "/"
         try:
@@ -308,6 +335,9 @@ class SkillArchiveInspector:
             ) as archive:
                 for member in archive:
                     parts = _safe_archive_path(member.name)
+                    entry_count += 1
+                    if entry_count > self.max_files:
+                        raise SkillSupplyChainError("file count cap exceeded; archive entry count cap exceeded")
                     if member.isdir():
                         continue
                     if not member.isreg():
@@ -315,9 +345,6 @@ class SkillArchiveInspector:
                             "archive contains unsupported non-regular entry: "
                             f"{member.name}"
                         )
-                    regular_count += 1
-                    if regular_count > self.max_files:
-                        raise SkillSupplyChainError("file count cap exceeded")
                     if member.size < 0 or member.size > self.max_file_bytes:
                         raise SkillSupplyChainError(
                             f"file byte cap exceeded: {member.name}"
@@ -409,6 +436,47 @@ def _normalized_root(path: str | Path) -> Path:
     return Path(path).expanduser().resolve(strict=False)
 
 
+def _open_pinned_directory(path: Path) -> tuple[int, Path]:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise SkillSupplyChainError("managed root must be a real pinned directory") from exc
+    try:
+        opened = os.fstat(fd)
+        current = os.lstat(path)
+        if (not stat.S_ISDIR(opened.st_mode) or stat.S_ISLNK(current.st_mode) or opened.st_dev != current.st_dev or opened.st_ino != current.st_ino):
+            raise SkillSupplyChainError("managed root identity changed during pinning")
+        for base in (Path("/proc/self/fd"), Path("/dev/fd")):
+            anchor = base / str(fd)
+            if anchor.exists():
+                return fd, anchor
+        raise SkillSupplyChainError("managed root file-descriptor path is unavailable")
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def _rename_noreplace(source: Path, target: Path) -> None:
+    if os.name != "posix":
+        raise SkillSupplyChainError("atomic no-replace rename is unavailable")
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise SkillSupplyChainError("atomic no-replace rename is unavailable")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    result = renameat2(-100, os.fsencode(source), -100, os.fsencode(target), 1)
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error in {errno.EEXIST, errno.ENOTEMPTY}:
+        raise SkillSupplyChainError(f"skill target already exists: {target}")
+    if error in {errno.ENOSYS, errno.EINVAL, errno.ENOTSUP}:
+        raise SkillSupplyChainError("atomic no-replace rename is unavailable")
+    raise OSError(error, os.strerror(error), str(target))
+
+
 def _files_from_directory(
     base: Path,
     expected: Sequence[SkillFile] | None = None,
@@ -486,25 +554,14 @@ class InstalledSkill:
 
 
 class ManagedSkillInstaller:
-    def __init__(
-        self,
-        managed_roots: Mapping[str, Sequence[str | Path]],
-        *,
-        receipt_dir: str | Path,
-        clock: Callable[[], str] | None = None,
-    ) -> None:
+    def __init__(self, managed_roots: Mapping[str, Sequence[str | Path]], *, receipt_dir: str | Path, clock: Callable[[], str] | None = None) -> None:
         roots: dict[str, tuple[Path, ...]] = {}
         for profile, values in managed_roots.items():
             if not profile.strip():
                 raise ValueError("profile names must be non-empty")
-            normalized = tuple(
-                _normalized_root(value)
-                for value in values
-            )
+            normalized = tuple(_normalized_root(value) for value in values)
             if not normalized:
-                raise ValueError(
-                    f"profile {profile!r} must declare at least one managed root"
-                )
+                raise ValueError(f"profile {profile!r} must declare at least one managed root")
             roots[profile] = normalized
         if not roots:
             raise ValueError("at least one managed profile is required")
@@ -513,194 +570,110 @@ class ManagedSkillInstaller:
         self._clock = clock or _utc_now
 
     @staticmethod
-    def _provenance_matches(
-        candidate: SkillCandidate,
-        source: PinnedSkillSource,
-    ) -> bool:
+    def _provenance_matches(candidate: SkillCandidate, source: PinnedSkillSource) -> bool:
         try:
-            _, _, candidate_repo = _canonical_repository(
-                candidate.provenance.repository
-            )
+            _, _, candidate_repo = _canonical_repository(candidate.provenance.repository)
         except ValueError:
             return False
-        return (
-            candidate_repo == source.repository_url
-            and candidate.provenance.commit_sha.lower() == source.commit_sha
-            and candidate.provenance.license.strip() == source.license
-            and candidate.provenance.discovered_from.strip()
-            == source.discovered_from
-        )
+        return (candidate_repo == source.repository_url and candidate.provenance.commit_sha.lower() == source.commit_sha and candidate.provenance.license.strip() == source.license and candidate.provenance.discovered_from.strip() == source.discovered_from)
 
-    def _managed_root(
-        self,
-        profile: str,
-        target_root: str | Path,
-    ) -> Path:
+    @staticmethod
+    def _artifact_binding_matches(candidate: SkillCandidate, artifact: QuarantinedSkillArtifact) -> bool:
+        return candidate.provenance.skill_path == artifact.manifest.skill_path and candidate.provenance.artifact_sha256 == artifact.manifest.identity_hash()
+
+    def _managed_root(self, profile: str, target_root: str | Path) -> Path:
         if profile not in self.managed_roots:
-            raise SkillSupplyChainError(
-                f"unknown install profile: {profile}"
-            )
+            raise SkillSupplyChainError(f"unknown install profile: {profile}")
         normalized = _normalized_root(target_root)
         if normalized not in self.managed_roots[profile]:
-            raise SkillSupplyChainError(
-                "target is not an exact managed root for this profile"
-            )
-        if Path(target_root).exists() and Path(target_root).is_symlink():
-            raise SkillSupplyChainError(
-                "managed root may not be a symlink"
-            )
+            raise SkillSupplyChainError("target is not an exact managed root for this profile")
+        if Path(target_root).expanduser().is_symlink():
+            raise SkillSupplyChainError("managed root may not be a symlink")
         return normalized
 
-    def install(
-        self,
-        candidate: SkillCandidate,
-        artifact: QuarantinedSkillArtifact,
-        *,
-        profile: str,
-        target_root: str | Path,
-        review_approved: bool,
-        authorized_by: str,
-    ) -> InstalledSkill:
+    def install(self, candidate: SkillCandidate, artifact: QuarantinedSkillArtifact, *, profile: str, target_root: str | Path, review_approved: bool, authorized_by: str) -> InstalledSkill:
         if candidate.state is not LifecycleState.TRUSTED:
-            raise PermissionError(
-                "candidate must be trusted before installation"
-            )
+            raise PermissionError("candidate must be trusted before installation")
         if not review_approved:
-            raise PermissionError(
-                "review approval is required before installation"
-            )
+            raise PermissionError("review approval is required before installation")
         if not authorized_by.strip():
             raise PermissionError("authorized_by is required")
         if not self._provenance_matches(candidate, artifact.source):
-            raise SkillSupplyChainError(
-                "candidate provenance does not match staged artifact provenance"
-            )
-
+            raise SkillSupplyChainError("candidate provenance does not match staged artifact provenance")
+        if not self._artifact_binding_matches(candidate, artifact):
+            raise SkillSupplyChainError("trusted candidate artifact binding does not match staged artifact")
         if hash_skill_files(artifact.files) != artifact.manifest.skill_dir_sha256:
-            raise SkillSupplyChainError(
-                "staged skill directory hash verification failed"
-            )
-        manifest_file = next(
-            (
-                item
-                for item in artifact.files
-                if item.relative_path == "SKILL.md"
-            ),
-            None,
-        )
-        if (
-            manifest_file is None
-            or hashlib.sha256(manifest_file.bytes).hexdigest()
-            != artifact.manifest.manifest_sha256
-        ):
-            raise SkillSupplyChainError(
-                "staged SKILL.md hash verification failed"
-            )
+            raise SkillSupplyChainError("staged skill directory hash verification failed")
+        manifest_file = next((item for item in artifact.files if item.relative_path == "SKILL.md"), None)
+        if manifest_file is None or hashlib.sha256(manifest_file.bytes).hexdigest() != artifact.manifest.manifest_sha256:
+            raise SkillSupplyChainError("staged SKILL.md hash verification failed")
 
         root = self._managed_root(profile, target_root)
         name = _validate_skill_name(candidate.name)
-        root.mkdir(parents=True, exist_ok=True)
+        try:
+            root.mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            pass
+        if root.is_symlink() or not root.is_dir():
+            raise SkillSupplyChainError("managed root must be a real directory")
+        root_fd, root_anchor = _open_pinned_directory(root)
         target = root / name
-        if target.exists() or target.is_symlink():
-            raise SkillSupplyChainError(
-                f"skill target already exists: {target}"
-            )
-
-        tmp = Path(
-            tempfile.mkdtemp(
-                prefix=f".{name}.tmp-",
-                dir=root,
-            )
-        )
+        target_anchor = root_anchor / name
+        tmp: Path | None = None
         renamed = False
         receipt_path: Path | None = None
+        receipt_created = False
         try:
+            if target_anchor.exists() or target_anchor.is_symlink():
+                raise SkillSupplyChainError(f"skill target already exists: {target}")
+            tmp = Path(tempfile.mkdtemp(prefix=f".{name}.tmp-", dir=root_anchor))
             for item in artifact.files:
                 dest = tmp / item.relative_path
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with dest.open("xb") as handle:
                     handle.write(item.bytes)
                 os.chmod(dest, item.mode)
-
             written = _files_from_directory(tmp, artifact.files)
-            if (
-                hash_skill_files(written)
-                != artifact.manifest.skill_dir_sha256
-            ):
-                raise SkillSupplyChainError(
-                    "written skill content failed deterministic hash verification"
-                )
-
+            if hash_skill_files(written) != artifact.manifest.skill_dir_sha256:
+                raise SkillSupplyChainError("written skill content failed deterministic hash verification")
             installed_at = self._clock()
-            provenance_payload = {
-                **artifact.manifest.to_dict(),
-                "candidate_id": candidate.candidate_id,
-                "name": candidate.name,
-                "profile": profile,
-                "authorized_by": authorized_by.strip(),
-                "installed_at": installed_at,
-            }
+            provenance_payload = {**artifact.manifest.to_dict(), "artifact_identity_sha256": artifact.manifest.identity_hash(), "candidate_id": candidate.candidate_id, "name": candidate.name, "profile": profile, "authorized_by": authorized_by.strip(), "installed_at": installed_at}
             provenance_path = tmp / ".hermes-skill-provenance.json"
             with provenance_path.open("x", encoding="utf-8") as handle:
-                json.dump(
-                    provenance_payload,
-                    handle,
-                    sort_keys=True,
-                    indent=2,
-                )
-                handle.write("\n")
-
-            os.replace(tmp, target)
-            renamed = True
-            unsigned = {
-                "candidate_id": candidate.candidate_id,
-                "name": candidate.name,
-                "profile": profile,
-                "target_root": str(root),
-                "target_path": str(target),
-                "authorized_by": authorized_by.strip(),
-                "installed_at": installed_at,
-                "artifact": artifact.manifest.to_dict(),
-            }
-            receipt = SkillInstallReceipt(
-                candidate_id=candidate.candidate_id,
-                name=candidate.name,
-                profile=profile,
-                target_root=str(root),
-                target_path=str(target),
-                authorized_by=authorized_by.strip(),
-                installed_at=installed_at,
-                artifact=artifact.manifest,
-                receipt_hash=_canonical_hash(unsigned),
-            )
-            if not receipt.verify():
-                raise SkillSupplyChainError(
-                    "install receipt hash verification failed"
-                )
-            self.receipt_dir.mkdir(parents=True, exist_ok=True)
-            receipt_path = (
-                self.receipt_dir
-                / f"{receipt.receipt_hash}.json"
-            )
-            with receipt_path.open("x", encoding="utf-8") as handle:
-                json.dump(
-                    receipt.to_dict(),
-                    handle,
-                    sort_keys=True,
-                    indent=2,
-                )
+                json.dump(provenance_payload, handle, sort_keys=True, indent=2)
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
+            _rename_noreplace(tmp, target_anchor)
+            renamed = True
+            tmp = None
+            unsigned = {"candidate_id": candidate.candidate_id, "name": candidate.name, "profile": profile, "target_root": str(root), "target_path": str(target), "authorized_by": authorized_by.strip(), "installed_at": installed_at, "artifact": artifact.manifest.to_dict()}
+            receipt = SkillInstallReceipt(candidate_id=candidate.candidate_id, name=candidate.name, profile=profile, target_root=str(root), target_path=str(target), authorized_by=authorized_by.strip(), installed_at=installed_at, artifact=artifact.manifest, receipt_hash=_canonical_hash(unsigned))
+            if not receipt.verify():
+                raise SkillSupplyChainError("install receipt hash verification failed")
+            self.receipt_dir.mkdir(parents=True, exist_ok=True)
+            receipt_path = self.receipt_dir / f"{receipt.receipt_hash}.json"
+            with receipt_path.open("x", encoding="utf-8") as handle:
+                receipt_created = True
+                json.dump(receipt.to_dict(), handle, sort_keys=True, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            current = os.lstat(root)
+            pinned = os.fstat(root_fd)
+            if stat.S_ISLNK(current.st_mode) or current.st_dev != pinned.st_dev or current.st_ino != pinned.st_ino:
+                raise SkillSupplyChainError("managed root identity changed during installation")
             return InstalledSkill(path=target, receipt=receipt)
         except Exception:
-            if tmp.exists():
+            if tmp is not None and tmp.exists():
                 shutil.rmtree(tmp, ignore_errors=True)
-            if receipt_path is not None and receipt_path.exists():
+            if receipt_created and receipt_path is not None:
                 receipt_path.unlink(missing_ok=True)
-            if renamed and target.exists():
-                shutil.rmtree(target, ignore_errors=True)
+            if renamed and target_anchor.exists():
+                shutil.rmtree(target_anchor, ignore_errors=True)
             raise
+        finally:
+            os.close(root_fd)
 
 
 @dataclass(frozen=True)
@@ -903,31 +876,40 @@ class SkillManifestEditor:
             raise ValueError(
                 "expected_sha256 must be a SHA-256 hex digest"
             )
-        current = self.read(path)
-        if current.sha256.lower() != expected_sha256.lower():
-            raise ManifestConflictError(
-                "SKILL.md changed since it was opened"
-            )
-        target = current.path
-        data = content.encode("utf-8")
-        mode = target.stat().st_mode & 0o777
-        fd, tmp_name = tempfile.mkstemp(
-            prefix=f".{target.name}.tmp-",
-            dir=target.parent,
-        )
-        tmp = Path(tmp_name)
+        target = self._validate(path)
         try:
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.chmod(tmp, mode)
-            os.replace(tmp, target)
-        except Exception:
+            import fcntl
+        except ImportError as exc:
+            raise SkillSupplyChainError("cooperative manifest locking is unavailable") from exc
+        lock_path = target.parent / f".{target.name}.hermes.lock"
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        lock_fd = os.open(lock_path, flags, 0o600)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            current = self.read(target)
+            if current.sha256.lower() != expected_sha256.lower():
+                raise ManifestConflictError("SKILL.md changed since it was opened")
+            data = content.encode("utf-8")
+            mode = target.stat().st_mode & 0o777
+            fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.tmp-", dir=target.parent)
+            tmp = Path(tmp_name)
             try:
-                os.close(fd)
-            except OSError:
-                pass
-            tmp.unlink(missing_ok=True)
-            raise
-        return self.read(target)
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(data)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.chmod(tmp, mode)
+                os.replace(tmp, target)
+            except Exception:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                tmp.unlink(missing_ok=True)
+                raise
+            return self.read(target)
+        finally:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            finally:
+                os.close(lock_fd)
