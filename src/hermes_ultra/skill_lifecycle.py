@@ -45,6 +45,8 @@ DEFAULT_DISCOVERY_SOURCES = (
     DiscoverySource("coder-eval", "https://github.com/UiPath/coder_eval"),
     DiscoverySource("horizon", "https://github.com/Thysrael/Horizon"),
     DiscoverySource("notebooklm-py", "https://github.com/teng-lin/notebooklm-py"),
+    DiscoverySource("skill-manager", "https://github.com/abubakarsiddik31/skill-manager"),
+    DiscoverySource("all-mcp-servers", "https://www.allmcpservers.com/"),
 )
 
 
