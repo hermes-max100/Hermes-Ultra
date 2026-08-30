@@ -88,6 +88,26 @@
       "required_capabilities": [],
       "input_schema": {"type": "object", "properties": {"headers": {"type": "object"}, "body": {"type": "object"}}, "required": ["headers", "body"]},
       "source": "src/system/mcp-stateless-gateway.py"
+    },
+    {
+      "name": "mcp.providers",
+      "namespace": "mcp",
+      "description": "Select MCP provider candidates by active Hermes profile, required capability, effect class, and lifecycle state without executing them.",
+      "keywords": ["mcp", "provider", "capability", "router", "profile", "tools"],
+      "mutating": false,
+      "data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "FINANCIAL", "SECURITY_SENSITIVE"],
+      "required_capabilities": [],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "profile": {"type": "string"},
+          "capability": {"type": "string"},
+          "effect": {"type": "string"},
+          "include_inactive": {"type": "boolean"}
+        },
+        "required": ["profile", "capability", "effect"]
+      },
+      "source": "src/system/mcp-provider-router.py"
     }
   ]
 }
