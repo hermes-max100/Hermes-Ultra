@@ -77,7 +77,7 @@ jobs:
 
       - name: Verify release integrity and exclusions
         run: |
-          sha256sum -c dist/*.sha256
+          ( cd dist && sha256sum -c *.sha256 )
           tmp="$(mktemp -d)"
           tar -xzf dist/hermes-max-cloud-20260815T010000Z.tar.gz -C "$tmp"
           cd "$tmp/hermes-max"
