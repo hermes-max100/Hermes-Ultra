@@ -20,6 +20,9 @@ grep -q 'default     = \[\]' "$VARS"
 grep -q 'sha256sum -c' "$BOOT"
 grep -q 'restore-vps-transfer.sh' "$BOOT"
 grep -q 'vendor/hermes-agent/0.20.5' "$BOOT" || { echo 'bootstrap does not use pinned Hermes Agent 0.20.5' >&2; exit 1; }
+grep -Eq 'nodejs.*npm|npm.*nodejs' "$BOOT" || { echo 'bootstrap does not provision Node/npm' >&2; exit 1; }
+grep -q 'ensure-node-runtime.sh' "$INSTALLER" || { echo 'local installer does not own Node runtime' >&2; exit 1; }
+grep -q 'sync-mcp-provider-registry.sh' "$INSTALLER" || { echo 'local installer does not apply MCP registry' >&2; exit 1; }
 grep -q 'configure-tailscale-hermes.sh' "$INSTALLER" || { echo 'local installer does not activate private Hermes/Orca runtime' >&2; exit 1; }
 grep -q -- "--exclude='./.codex-project'" "$BUILD"
 grep -q -- "--exclude='./.hermes'" "$BUILD"
@@ -47,6 +50,7 @@ for gate in \
   test_stage_hermes_agent_source.sh \
   test_export_hermes_dependency_locks.sh \
   test_install_cloud_release_local.sh \
+  test_node_runtime_prerequisite.sh \
   test_install_orca_runtime.sh \
   test_aws_runtime_secrets.sh \
   test_secret_scan_production.sh
@@ -62,6 +66,7 @@ for watched in \
 do
   grep -Fq -- "- '$watched'" "$WORKFLOW" || { echo "cloud CI missing path trigger: $watched" >&2; exit 1; }
 done
-grep -Fq -- "- ai/hermes-ultra-release" "$WORKFLOW" || { echo 'cloud CI does not run on release branch' >&2; exit 1; }
+grep -Fq -- "- main" "$WORKFLOW" || { echo 'cloud CI does not run on canonical main' >&2; exit 1; }
+! grep -Fq -- "- ai/hermes-ultra-release" "$WORKFLOW" || { echo 'cloud CI still treats legacy release branch as canonical' >&2; exit 1; }
 
 echo 'cloud foundation tests passed'
