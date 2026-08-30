@@ -60,7 +60,7 @@ jobs:
 
       - name: Verify production release evidence
         run: |
-          sha256sum -c dist-production/*.sha256
+          ( cd dist-production && sha256sum -c *.sha256 )
           archive="$(find dist-production -maxdepth 1 -name 'hermes-max-cloud-*.tar.gz' -print -quit)"
           test -n "$archive"
           tmp="$(mktemp -d)"
