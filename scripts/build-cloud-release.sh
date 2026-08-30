@@ -15,8 +15,9 @@ STAGE="$TMP/hermes-max"
 mkdir -p "$STAGE"
 
 # Cloud releases intentionally exclude local runtime state, credentials, Terraform state,
-# prospect/customer data, generated dist artifacts, caches, Codex conversation history,
-# and editor/VCS metadata.
+# prospect/customer data, generated dist artifacts, build-input source checkouts, caches,
+# Codex conversation history, and editor/VCS metadata. Pinned external source needed at
+# runtime is staged explicitly below into its canonical vendor/ location.
 tar -C "$ROOT_DIR" -cf - \
   --exclude='./.git' \
   --exclude='./.codex-project' \
@@ -25,6 +26,8 @@ tar -C "$ROOT_DIR" -cf - \
   --exclude='./.env*' \
   --exclude='./**/__pycache__' \
   --exclude='./dist' \
+  --exclude='./dist-production' \
+  --exclude='./vendor-src' \
   --exclude='./prospects.jsonl' \
   --exclude='./exp_local_service_001-opportunity.json' \
   --exclude='./infra/**/.terraform' \
