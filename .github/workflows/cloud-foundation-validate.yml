@@ -1,10 +1,10 @@
 name: cloud-foundation-validate
 
-# Provider-aware validation for the staged Hermes Max cloud foundation.
+# Provider-aware validation for the canonical Hermes Ultra cloud foundation.
 on:
   push:
     branches:
-      - ai/hermes-ultra-release
+      - main
     paths:
       - '.github/workflows/cloud-foundation-validate.yml'
       - 'infra/**'
@@ -17,7 +17,7 @@ on:
       - 'src/system/orca_execution_backend.py'
   pull_request:
     branches:
-      - ai/hermes-ultra-release
+      - main
     paths:
       - '.github/workflows/cloud-foundation-validate.yml'
       - 'infra/**'
