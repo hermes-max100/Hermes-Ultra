@@ -196,11 +196,10 @@ class EconomicLedger:
     ) -> LedgerEntry:
         if outcome_type not in BUSINESS_OUTCOME_TYPES:
             raise ValueError(f"unsupported business outcome: {outcome_type}")
-        event_key = (
-            None
-            if idempotency_key is None
-            else f"business_outcome:{outcome_type}:{idempotency_key}"
-        )
+        if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+            raise ValueError("business outcome idempotency_key is required")
+        normalized_key = idempotency_key.strip()
+        event_key = f"business_outcome:{outcome_type}:{normalized_key}"
         return self._insert_event(
             kind="business_outcome",
             transaction_id=None,
