@@ -61,6 +61,7 @@ jobs:
           bash tests/test_stage_hermes_agent_source.sh
           bash tests/test_export_hermes_dependency_locks.sh
           bash tests/test_install_cloud_release_local.sh
+          bash tests/test_node_runtime_prerequisite.sh
           bash tests/test_install_orca_runtime.sh
           bash tests/test_orca_cli_wrapper.sh
           bash tests/test_bootstrap_hermes_orca_client.sh
