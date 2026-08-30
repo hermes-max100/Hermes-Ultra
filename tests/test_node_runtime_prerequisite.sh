@@ -5,7 +5,8 @@ SCRIPT="$ROOT_DIR/scripts/ensure-node-runtime.sh"
 INSTALLER="$ROOT_DIR/scripts/install-cloud-release-local.sh"
 BOOT="$ROOT_DIR/infra/aws-primary/templates/bootstrap-hermes.sh.tftpl"
 
-[[ -x "$SCRIPT" ]] || { echo 'ensure-node-runtime.sh missing or not executable' >&2; exit 1; }
+[[ -f "$SCRIPT" ]] || { echo 'ensure-node-runtime.sh missing' >&2; exit 1; }
+bash -n "$SCRIPT"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin"
 cat >"$TMP/bin/node" <<'EOF'
@@ -14,13 +15,13 @@ echo v20.19.0
 EOF
 for cmd in npm npx; do printf '#!/usr/bin/env bash\nexit 0\n' >"$TMP/bin/$cmd"; done
 chmod +x "$TMP/bin/node" "$TMP/bin/npm" "$TMP/bin/npx"
-PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 "$SCRIPT" | grep -q 'NODE_RUNTIME=PASS'
+PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 bash "$SCRIPT" | grep -q 'NODE_RUNTIME=PASS'
 cat >"$TMP/bin/node" <<'EOF'
 #!/usr/bin/env bash
 echo v16.20.2
 EOF
 chmod +x "$TMP/bin/node"
-if PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 "$SCRIPT" >/dev/null 2>&1; then
+if PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 bash "$SCRIPT" >/dev/null 2>&1; then
   echo 'old Node runtime was incorrectly accepted' >&2; exit 1
 fi
 grep -q 'ensure-node-runtime.sh' "$INSTALLER" || { echo 'installer does not own Node runtime prerequisite' >&2; exit 1; }
