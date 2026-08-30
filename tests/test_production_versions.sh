@@ -18,5 +18,7 @@ assert p['orca_runtime']['asset']=='orca-linux.AppImage'
 assert p['orca_runtime']['url']=='https://github.com/stablyai/orca/releases/download/v1.4.190/orca-linux.AppImage'
 assert p['orca_runtime']['sha256']=='f5b321576d9c909f9e6987aa3bd20e8ff9f214d881b43c7109281cbc87878cde'
 assert re.fullmatch(r'[0-9a-f]{64}', p['orca_runtime']['sha256'])
+assert p['node_runtime']['minimum_major']==18
+assert p['node_runtime']['packages']==['nodejs','npm']
 PY
 echo 'production version pins passed'
