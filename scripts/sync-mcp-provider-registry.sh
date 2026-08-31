@@ -21,9 +21,11 @@ case "$ACTION" in
     ;;
 esac
 
-PYTHON="${HERMES_AGENT_PYTHON:-}"
+PYTHON="${HERMES_RUNTIME_PYTHON:-${HERMES_AGENT_PYTHON:-}}"
 if [[ -z "$PYTHON" ]]; then
-  if [[ -x /var/lib/hermes/.hermes/hermes-agent-0.20.5/venv/bin/python ]]; then
+  if [[ -x /var/lib/hermes/.hermes/hermes-agent/venv/bin/python ]]; then
+    PYTHON=/var/lib/hermes/.hermes/hermes-agent/venv/bin/python
+  elif [[ -x /var/lib/hermes/.hermes/hermes-agent-0.20.5/venv/bin/python ]]; then
     PYTHON=/var/lib/hermes/.hermes/hermes-agent-0.20.5/venv/bin/python
   else
     PYTHON=python3
