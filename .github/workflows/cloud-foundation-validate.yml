@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - ai/hermes-ultra-release
+      - ai/hermes-relay-sdk-optimization
     paths:
       - '.github/workflows/cloud-foundation-validate.yml'
       - 'infra/**'
@@ -12,6 +13,8 @@ on:
       - 'scripts/**'
       - 'tests/**'
       - 'config/production-versions.json'
+      - 'config/hermes-relay-upstream.json'
+      - 'config/hermes-relay-policy.json'
       - 'src/system/load-hermes-runtime-env.sh'
       - 'src/system/load-aws-runtime-secrets.sh'
       - 'src/system/orca_execution_backend.py'
@@ -68,6 +71,12 @@ jobs:
           bash tests/test_aws_runtime_secrets.sh
           bash tests/test_secret_scan_production.sh
           python3 -m unittest tests.test_orca_execution_backend tests.test_orca_release_integration
+          python3 -m unittest tests.test_hermes_relay_provenance tests.test_hermes_relay_desktop_pin -v
+          python3 -m unittest tests.test_hermes_relay_policy tests.test_hermes_relay_adapter tests.test_hermes_relay_reconciler -v
+          bash tests/test_export_hermes_relay_dependency_lock.sh
+          bash tests/test_stage_hermes_relay_source.sh
+          bash tests/test_install_hermes_relay.sh
+          bash tests/test_hermes_relay_doctor.sh
 
       - name: Build deterministic cloud release
         env:
