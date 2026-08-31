@@ -32,13 +32,14 @@ Usage:
   src/system/agent-reach.sh github <query>
   src/system/agent-reach.sh read <public-http(s)-url>
   src/system/agent-reach.sh mcp-sources
+  src/system/agent-reach.sh mcp-candidate --source <source-id> --name <name> [--homepage <https-url>] [--repository <https-url>]
   src/system/agent-reach.sh mcp-interface <available-interface>...
 
 Security boundary:
   - Runtime never installs, updates, configures cookies, or accepts raw Agent
     Reach commands.
-  - MCP discovery commands expose source policy and interface decisions only;
-    they cannot promote, install, or activate providers.
+  - MCP discovery commands expose source policy, normalize DISCOVERED candidates,
+    and select interfaces only; they cannot promote, install, or activate providers.
   - Provisioning is separate: scripts/provision-agent-reach.sh install
   - Internet/search results are emitted in an explicit untrusted JSON envelope.
 EOF
@@ -268,6 +269,11 @@ cmd_mcp_sources() {
   "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" sources
 }
 
+cmd_mcp_candidate() {
+  [[ $# -gt 0 ]] || die "mcp-candidate requires candidate arguments"
+  "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" candidate "$@"
+}
+
 cmd_mcp_interface() {
   [[ $# -gt 0 ]] || die "mcp-interface requires at least one available interface"
   "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" choose-interface "$@"
@@ -284,6 +290,7 @@ main() {
     github) cmd_github "$@" ;;
     read) cmd_read "$@" ;;
     mcp-sources) cmd_mcp_sources "$@" ;;
+    mcp-candidate) cmd_mcp_candidate "$@" ;;
     mcp-interface) cmd_mcp_interface "$@" ;;
     help|-h|--help) usage ;;
     install|raw|configure|setup|uninstall|skill|transcribe)
