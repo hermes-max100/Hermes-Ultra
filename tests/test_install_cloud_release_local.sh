@@ -43,7 +43,9 @@ mkdir -p "$VAR_ROOT/state"
 printf 'durable-state\n' > "$VAR_ROOT/state/sentinel"
 R1="$TMP/r1"; A1="$TMP/release1.tar.gz"; make_release "$R1" one "$A1"
 SHA1="$(sha256sum "$A1" | awk '{print $1}')"
-SYSTEMD_DIR="$TMP/systemd"; mkdir -p "$SYSTEMD_DIR"
+SYSTEMD_DIR="$TMP/systemd"; mkdir -p "$SYSTEMD_DIR/hermes-runtime.service.d"
+printf '[Service]\nExecStart=/legacy/hermes\n' > "$SYSTEMD_DIR/hermes-runtime.service.d/0205.conf"
+printf '[Service]\nEnvironment=KEEP_ME=1\n' > "$SYSTEMD_DIR/hermes-runtime.service.d/keep.conf"
 HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" HERMES_SYSTEMD_DIR="$SYSTEMD_DIR" \
   bash "$INSTALLER" "$A1" "$SHA1" | grep -q '^HERMES_LOCAL_INSTALL=PASS release='
 CURRENT1="$(readlink -f "$INSTALL_ROOT/current")"
@@ -57,6 +59,8 @@ grep -q 'Web Guidelines one' "$VAR_ROOT/.hermes/skills/web-design-guidelines/SKI
 grep -qx durable-state "$VAR_ROOT/state/sentinel"
 UNIT="$SYSTEMD_DIR/hermes-runtime.service"
 [[ -f "$UNIT" ]] || { echo 'runtime systemd unit missing' >&2; exit 1; }
+[[ ! -e "$SYSTEMD_DIR/hermes-runtime.service.d/0205.conf" ]] || { echo 'legacy 0205 runtime override survived install' >&2; exit 1; }
+[[ -f "$SYSTEMD_DIR/hermes-runtime.service.d/keep.conf" ]] || { echo 'unrelated runtime override was removed' >&2; exit 1; }
 grep -q 'User=hermes' "$UNIT"
 grep -q 'serve --host 127.0.0.1 --port 9119' "$UNIT"
 grep -q 'Restart=on-failure' "$UNIT"
