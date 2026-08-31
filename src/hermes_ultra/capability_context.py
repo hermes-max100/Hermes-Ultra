@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Iterable, Mapping, Sequence
 
+from .autonomy import ActionContext
+from .capability_projection import CapabilityProjection
 from .contracts import CapabilityResult, FailureClass
 
 
@@ -44,6 +46,7 @@ class TaskRequirements:
     required: frozenset[Capability]
     preferred: frozenset[Capability] = frozenset()
     quality_first: bool = True
+    advisory_metadata: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,7 @@ class OrchestrationResult:
     verification: VerificationResult
     attempted_steps: tuple[EscalationStep, ...] = ()
     memory_written: bool = False
+    capability_projection: CapabilityProjection | None = None
 
 
 class RuleBasedCapabilityClassifier:
@@ -206,7 +210,7 @@ class ContextBuilder:
         requirements: TaskRequirements,
         items: Sequence[ContextItem] = (),
     ) -> CapabilityResult[ContextBundle]:
-        del requirements  # Requirements are routed separately; context remains evidence-only.
+        del requirements
 
         task_item = ContextItem(
             key="__task__",
@@ -285,8 +289,27 @@ class CapabilityContextOrchestrator:
 
     This class deliberately owns no provider ranking, pricing policy, or approval
     registry. It asks the injected router to select the model and only escalates
-    tools when verification says the current answer lacks evidence.
+    tools when verification says the current answer lacks evidence. Capability
+    projection is advisory context metadata, never a replacement authority.
     """
+
+    _STEP_CAPABILITIES = {
+        EscalationStep.FILE_RETRIEVAL: "files.retrieve",
+        EscalationStep.SEARCH: "research.search",
+        EscalationStep.DEEP_RESEARCH: "research.deep",
+        EscalationStep.CODE_EXECUTION: "compute.execute",
+        EscalationStep.CONNECTOR: "connector.invoke",
+        EscalationStep.SPECIALIST: "specialist.delegate",
+    }
+
+    _STEP_ACTIONS = {
+        EscalationStep.FILE_RETRIEVAL: ActionContext("file_retrieval", reversible=True),
+        EscalationStep.SEARCH: ActionContext("research_search", reversible=True, remote=True),
+        EscalationStep.DEEP_RESEARCH: ActionContext("deep_research", reversible=True, remote=True),
+        EscalationStep.CODE_EXECUTION: ActionContext("code_execution", reversible=True),
+        EscalationStep.CONNECTOR: ActionContext("connector_invoke", reversible=True, remote=True),
+        EscalationStep.SPECIALIST: ActionContext("specialist_delegate", reversible=True, remote=True),
+    }
 
     def __init__(
         self,
@@ -300,6 +323,8 @@ class CapabilityContextOrchestrator:
         tool_executor=None,
         escalation_policy: ToolEscalationPolicy | None = None,
         memory_writer=None,
+        capability_projector=None,
+        capability_expander=None,
         max_escalations: int = 6,
     ) -> None:
         if max_escalations < 0:
@@ -313,7 +338,20 @@ class CapabilityContextOrchestrator:
         self.tool_executor = tool_executor
         self.escalation_policy = escalation_policy or ToolEscalationPolicy()
         self.memory_writer = memory_writer
+        self.capability_projector = capability_projector
+        self.capability_expander = capability_expander
         self.max_escalations = max_escalations
+
+    @staticmethod
+    def _with_projection_metadata(
+        requirements: TaskRequirements,
+        projection: CapabilityProjection | None,
+    ) -> TaskRequirements:
+        if projection is None:
+            return requirements
+        metadata = dict(requirements.advisory_metadata)
+        metadata["capability_projection"] = projection.to_router_metadata()
+        return replace(requirements, advisory_metadata=metadata)
 
     @staticmethod
     def _normalize_items(value: object) -> tuple[ContextItem, ...]:
@@ -399,6 +437,10 @@ class CapabilityContextOrchestrator:
                 metadata=classified.metadata,
             )
         requirements = classified.value
+        projection: CapabilityProjection | None = None
+        if self.capability_projector is not None:
+            projection = self.capability_projector.project(task)
+            requirements = self._with_projection_metadata(requirements, projection)
 
         source_result = self._source_items(task=task, requirements=requirements)
         if not source_result.ok or source_result.value is None:
@@ -411,6 +453,7 @@ class CapabilityContextOrchestrator:
 
         context_items = list(source_result.value)
         attempted: list[EscalationStep] = []
+        authorization_boundaries: list[Mapping[str, object]] = []
 
         while True:
             context_result = self.context_builder.build(
@@ -505,6 +548,7 @@ class CapabilityContextOrchestrator:
                         verification=verification,
                         attempted_steps=tuple(attempted),
                         memory_written=memory_written,
+                        capability_projection=projection,
                     ),
                     metadata={
                         "context_dropped_keys": context.dropped_keys,
@@ -531,6 +575,52 @@ class CapabilityContextOrchestrator:
 
                 if self.tool_executor is None:
                     break
+
+                capability_id = self._STEP_CAPABILITIES[step]
+                if (
+                    projection is not None
+                    and self.capability_expander is not None
+                    and not projection.contains(capability_id)
+                ):
+                    expansion_result = self.capability_expander.request(
+                        task_id=task.task_id,
+                        capability_id=capability_id,
+                        reason=f"evidence escalation requires {step.value}",
+                        expected_utility=0.9,
+                        action=self._STEP_ACTIONS[step],
+                    )
+                    if not isinstance(expansion_result, CapabilityResult):
+                        continue
+                    if not expansion_result.ok or expansion_result.value is None:
+                        if expansion_result.recoverable:
+                            continue
+                        return CapabilityResult.failure(
+                            expansion_result.failure_class or FailureClass.UNKNOWN,
+                            expansion_result.message or "capability expansion failed",
+                            recoverable=False,
+                            metadata={
+                                **dict(expansion_result.metadata),
+                                "attempted_steps": tuple(item.value for item in attempted),
+                            },
+                        )
+                    expansion = expansion_result.value
+                    if not expansion.expanded:
+                        authorization_boundaries.append(
+                            {
+                                "step": step.value,
+                                "capability_id": capability_id,
+                                "approval_category": expansion.approval_category,
+                                "reason": expansion.reason,
+                            }
+                        )
+                        continue
+                    descriptor = self.capability_expander.catalog.require(capability_id)
+                    projection = projection.include_on_demand(
+                        descriptor,
+                        expected_utility=0.9,
+                        reason=f"escalation:{step.value}",
+                    )
+                    requirements = self._with_projection_metadata(requirements, projection)
 
                 tool_result = self.tool_executor.execute(
                     step=step,
@@ -565,4 +655,7 @@ class CapabilityContextOrchestrator:
             return self._failure(
                 verification.reason or "evidence remained insufficient after tool escalation",
                 attempted=attempted,
+                metadata={
+                    "authorization_boundaries": tuple(authorization_boundaries),
+                } if authorization_boundaries else None,
             )
