@@ -29,6 +29,7 @@ class RevenueOutcomeMetricTests(unittest.TestCase):
             "appointments_booked": 5,
             "proposals_sent": 4,
             "sales_closed": 2,
+            "completed_outcomes": 2,
             "conversions": 2,
             "gross_revenue": 2000.0,
             "attributed_revenue": 1800.0,
@@ -50,6 +51,7 @@ class RevenueOutcomeMetricTests(unittest.TestCase):
         self.assertEqual(100.0, d["cost_per_appointment"])
         self.assertEqual(125.0, d["cost_per_proposal"])
         self.assertEqual(250.0, d["cost_per_sale"])
+        self.assertEqual(250.0, d["cost_per_completed_outcome"])
         self.assertEqual(900.0, d["attributed_revenue_per_sale"])
 
     def test_legacy_ai_api_cost_is_used_only_when_new_inference_cost_is_zero(self):
@@ -57,7 +59,7 @@ class RevenueOutcomeMetricTests(unittest.TestCase):
             "gross_revenue": 100.0, "refunds": 0.0, "platform_fees": 0.0,
             "ad_spend": 0.0, "tool_cost": 0.0, "other_cost": 0.0,
             "qualified_leads": 0, "appointments_booked": 0, "proposals_sent": 0,
-            "sales_closed": 0, "leads": 0, "clicks": 0, "conversions": 0,
+            "sales_closed": 0, "completed_outcomes": 0, "leads": 0, "clicks": 0, "conversions": 0,
             "attributed_revenue": 0.0,
         }
         legacy = self.mod.derived_metrics({**base, "inference_cost": 0.0, "ai_api_cost": 10.0})
@@ -71,7 +73,7 @@ class RevenueOutcomeMetricTests(unittest.TestCase):
             "experiment_id": "exp-1",
             "metrics": {
                 "qualified_leads": 3, "appointments_booked": 2, "proposals_sent": 1,
-                "sales_closed": 1, "attributed_revenue": 600.0, "gross_revenue": 700.0,
+                "sales_closed": 1, "completed_outcomes": 1, "attributed_revenue": 600.0, "gross_revenue": 700.0,
                 "platform_fees": 20.0, "ad_spend": 50.0, "inference_cost": 10.0,
                 "tool_cost": 5.0, "other_cost": 0.0,
             },
@@ -79,6 +81,8 @@ class RevenueOutcomeMetricTests(unittest.TestCase):
         groups = self.mod.aggregate_events(rows, "experiment_id")
         self.assertEqual(2, groups[0]["appointments_booked"])
         self.assertEqual(1, groups[0]["sales_closed"])
+        self.assertEqual(1, groups[0]["completed_outcomes"])
+        self.assertEqual(85.0, groups[0]["derived"]["cost_per_completed_outcome"])
         self.assertEqual(600.0, groups[0]["attributed_revenue"])
         self.assertGreater(groups[0]["derived"]["profit"], 0)
 
