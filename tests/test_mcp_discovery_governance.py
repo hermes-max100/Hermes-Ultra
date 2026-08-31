@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = ROOT / "src/system/mcp-discovery-governance.py"
 SOURCES = ROOT / "config/mcp-discovery-sources.json"
+AGENT_REACH = ROOT / "src/system/agent-reach.sh"
 
 
 def load_module(path: Path, name: str):
@@ -109,6 +112,31 @@ class MCPDiscoveryGovernanceTests(unittest.TestCase):
         mutated["sources"][0]["can_activate"] = True
         errors = self.mod.validate_source_registry(mutated)
         self.assertTrue(any("can_activate" in error for error in errors))
+
+    def test_agent_reach_exposes_governed_mcp_sources_without_installing_anything(self):
+        proc = subprocess.run(
+            ["bash", str(AGENT_REACH), "mcp-sources"],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        rows = json.loads(proc.stdout)
+        self.assertEqual(rows[0]["id"], "official_mcp_registry")
+        allmcp = next(row for row in rows if row["id"] == "allmcpservers")
+        self.assertEqual(allmcp["trust"], "UNTRUSTED_DISCOVERY_ONLY")
+        self.assertFalse(allmcp["can_install"])
+        self.assertFalse(allmcp["can_activate"])
+
+    def test_agent_reach_exposes_best_fit_interface_choice(self):
+        proc = subprocess.run(
+            ["bash", str(AGENT_REACH), "mcp-interface", "official_mcp", "cli_skill"],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(json.loads(proc.stdout)["interface"], "cli_skill")
 
 
 if __name__ == "__main__":
