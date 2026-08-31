@@ -43,12 +43,16 @@ src/system/agent-reach.sh github "query"
 src/system/agent-reach.sh read "https://example.com"
 src/system/agent-reach.sh check-update
 src/system/agent-reach.sh mcp-sources
+src/system/agent-reach.sh mcp-candidate --source allmcpservers --name "Example MCP" --homepage "https://example.invalid/mcp" --repository "https://github.com/example/example-mcp"
 src/system/agent-reach.sh mcp-interface official_mcp cli_skill
 ```
 
 `mcp-sources` returns the governed discovery-source order from
-`config/mcp-discovery-sources.json`. `mcp-interface` applies the same registry's
-best-fit interface preference without executing the selected interface.
+`config/mcp-discovery-sources.json`. `mcp-candidate` converts a discovered item
+into a local `DISCOVERED`, runtime-disabled, verification-required candidate;
+it does not contact or activate the provider. `mcp-interface` applies the same
+registry's best-fit interface preference without executing the selected
+interface.
 
 The runtime wrapper never installs or upgrades software. Provisioning is a
 separate governance/operator boundary:
@@ -107,8 +111,10 @@ activation authority.
 
 Interface choice is also not MCP-first. When multiple supported interfaces are
 available, Hermes prefers: native capability, CLI + Skill, official API,
-official MCP, verified community MCP, then browser automation. This is a
-selection hint only; profile/effect/authority gates still apply before use.
+official MCP, verified community MCP, then browser automation. This order is a
+fail-closed governance invariant, not a mutable MCP-first preference. The
+selection remains a hint only; profile/effect/authority gates still apply before
+use.
 
 ### Doctor/update
 
