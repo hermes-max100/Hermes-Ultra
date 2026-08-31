@@ -38,6 +38,8 @@ Existing narrow approval boundaries remain for materially consequential operatio
 
 Normal research, planning, local file work, tests, skill/tool discovery, reversible configuration work, isolated worktree operations, diagnostics, and other bounded low-consequence actions should not acquire new approval friction from this integration.
 
+A tool's power is not itself sufficient to classify every use of that tool as consequential. Classification must prefer the semantics of the specific action, its scope, reversibility, external effect, and existing authorization context. For example, a reversible file edit in an isolated worktree is not equivalent to destructive production mutation merely because both use a filesystem-capable interface.
+
 ### 2.3 Evidence informs execution; it does not paralyze it
 
 Hermes Ultra should retain OMH's useful distinction between:
@@ -254,6 +256,14 @@ Suggested minimum:
 
 The classifier should be explicit and testable. It must not silently upgrade ordinary tool use into `CONSEQUENTIAL` merely because the tool is powerful.
 
+### 8.1 Interaction with the current Hermes Relay policy
+
+Current `main` consolidates Hermes Relay and includes coarse operation classes for device mutation, filesystem mutation, process control, external communication, and observation. Those classes are useful telemetry and default-policy inputs, but they must not become the only consequence classifier for this design.
+
+During implementation, existing Relay policy entries must be mapped to action-level semantics. A broad class such as `filesystem_mutation` or `process_control` may contain both routine reversible work and genuinely consequential actions. The integration must preserve existing mandatory authorization boundaries while allowing narrower autonomous treatment when the concrete action is reversible, bounded, and already within the user's standing scope.
+
+No OMH-derived component may make the Relay policy more restrictive by default simply because a capability belongs to a powerful tool family.
+
 ## 9. Learning and Utility Feedback
 
 Capability expansion events should eventually support learning which capabilities deserve context and compute.
@@ -287,6 +297,7 @@ Tranche 1 is accepted only when all of the following are demonstrated with comma
 10. Existing supply-chain, secret-scan, rollback, release-provenance, and production validation gates continue to pass.
 11. Clean-clone or equivalent isolated replay succeeds.
 12. No production deployment occurs until the canonical CI-built release artifact passes the existing release gates.
+13. Tests demonstrate that a coarse Relay tool class does not by itself force a bounded reversible action into `CONSEQUENTIAL`; action semantics and reversibility must participate in the decision.
 
 ## 11. Alternatives Considered
 
@@ -304,8 +315,8 @@ Tranche 1 is accepted only when all of the following are demonstrated with comma
 
 ## 12. Implementation Sequence After Written-Spec Review
 
-1. map the existing Hermes Ultra capability/evidence interfaces;
-2. write failing acceptance tests for projection and autonomous expansion;
+1. map the existing Hermes Ultra capability/evidence interfaces and the current Relay policy surface;
+2. write failing acceptance tests for projection, autonomous expansion, and action-level consequence classification;
 3. implement the minimal capability descriptor/projection records;
 4. implement append-only expansion evidence;
 5. integrate the small consequence classifier with existing authorization boundaries;
