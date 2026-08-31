@@ -160,6 +160,36 @@ class MCPDiscoveryGovernanceTests(unittest.TestCase):
         self.assertFalse(allmcp["can_install"])
         self.assertFalse(allmcp["can_activate"])
 
+    def test_agent_reach_normalizes_discovered_candidate_without_escalating_it(self):
+        proc = subprocess.run(
+            [
+                "bash",
+                str(AGENT_REACH),
+                "mcp-candidate",
+                "--source",
+                "allmcpservers",
+                "--name",
+                "Example MCP",
+                "--homepage",
+                "https://example.invalid/mcp",
+                "--repository",
+                "https://github.com/example/example-mcp",
+            ],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        candidate = json.loads(proc.stdout)
+        self.assertEqual(candidate["lifecycle_state"], "DISCOVERED")
+        self.assertFalse(candidate["runtime_enabled"])
+        self.assertTrue(candidate["verification_required"])
+        self.assertFalse(candidate["can_promote"])
+        self.assertFalse(candidate["can_install"])
+        self.assertFalse(candidate["can_activate"])
+        self.assertEqual(candidate["source"]["id"], "allmcpservers")
+        self.assertEqual(candidate["source"]["trust"], "UNTRUSTED_DISCOVERY_ONLY")
+
     def test_agent_reach_exposes_best_fit_interface_choice(self):
         proc = subprocess.run(
             ["bash", str(AGENT_REACH), "mcp-interface", "official_mcp", "cli_skill"],
