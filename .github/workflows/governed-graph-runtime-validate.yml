@@ -11,6 +11,10 @@ on:
       - 'src/system/native_execution_backends.py'
       - 'src/system/codex_app_server.py'
       - 'src/system/background_task_reconciler.py'
+      - 'src/system/hermes_relay_policy.py'
+      - 'src/system/hermes_relay_adapter.py'
+      - 'src/system/hermes_relay_reconciler.py'
+      - 'config/hermes-relay-policy.json'
       - 'src/system/governed-graph-runtime.sh'
       - 'config/governed-graph-runtime.json'
       - 'config/governed-graph-plan.example.json'
@@ -23,6 +27,9 @@ on:
       - 'tests/test_execution_state.py'
       - 'tests/test_codex_app_server.py'
       - 'tests/test_background_task_reconciler.py'
+      - 'tests/test_hermes_relay_policy.py'
+      - 'tests/test_hermes_relay_adapter.py'
+      - 'tests/test_hermes_relay_reconciler.py'
       - 'tests/test_governed_graph_runtime.sh'
       - 'src/system/hermes-power-up.sh'
   pull_request:
@@ -36,6 +43,10 @@ on:
       - 'src/system/native_execution_backends.py'
       - 'src/system/codex_app_server.py'
       - 'src/system/background_task_reconciler.py'
+      - 'src/system/hermes_relay_policy.py'
+      - 'src/system/hermes_relay_adapter.py'
+      - 'src/system/hermes_relay_reconciler.py'
+      - 'config/hermes-relay-policy.json'
       - 'src/system/governed-graph-runtime.sh'
       - 'config/governed-graph-runtime.json'
       - 'config/governed-graph-plan.example.json'
@@ -48,6 +59,9 @@ on:
       - 'tests/test_execution_state.py'
       - 'tests/test_codex_app_server.py'
       - 'tests/test_background_task_reconciler.py'
+      - 'tests/test_hermes_relay_policy.py'
+      - 'tests/test_hermes_relay_adapter.py'
+      - 'tests/test_hermes_relay_reconciler.py'
       - 'tests/test_governed_graph_runtime.sh'
       - 'src/system/hermes-power-up.sh'
   workflow_dispatch:
@@ -61,7 +75,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        uses: actions/checkout@3d3c42e5aac5b1630ceea73d27597364c9af683 # v7
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
