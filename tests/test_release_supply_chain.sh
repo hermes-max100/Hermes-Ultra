@@ -3,6 +3,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+grep -q 'HERMES_RELAY_SOURCE_DIR is required for production builds' "$ROOT_DIR/scripts/build-cloud-release.sh"
+grep -q 'stage-hermes-relay-source.sh' "$ROOT_DIR/scripts/build-cloud-release.sh"
+ERR="$TMP/missing-relay.err"
+if HERMES_PRODUCTION_BUILD=1 HERMES_AGENT_SOURCE_DIR="$TMP/fake-agent" HERMES_DIST_DIR="$TMP/missing-dist" bash "$ROOT_DIR/scripts/build-cloud-release.sh" >/dev/null 2>"$ERR"; then
+  echo 'production build accepted missing Relay inputs' >&2; exit 1
+fi
+grep -q 'HERMES_RELAY_SOURCE_DIR is required for production builds' "$ERR"
 DIST="$TMP/dist"
 mkdir -p "$DIST"
 HERMES_DIST_DIR="$DIST" SOURCE_DATE_EPOCH=20260821T000000Z bash "$ROOT_DIR/scripts/build-cloud-release.sh" >/dev/null

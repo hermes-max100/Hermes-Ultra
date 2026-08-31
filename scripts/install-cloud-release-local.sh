@@ -23,6 +23,7 @@ TMP_TARGET="$RELEASES_DIR/.${RELEASE_ID}.tmp.$$"
 RUNTIME_TMP="${RUNTIME_ROOT}.tmp.${RELEASE_ID}.$$"
 RUNTIME_PREVIOUS="${RUNTIME_ROOT}.previous"
 CURRENT_PREVIOUS="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+RELAY_INSTALLER_OVERRIDE="${HERMES_RELAY_INSTALLER:-}"
 SUCCESS=0; RUNTIME_SWAPPED=0; RUNTIME_HAD_PREVIOUS=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0
 cleanup(){
   local rc=$?
@@ -94,6 +95,11 @@ else
   mv "$TMP_TARGET" "$TARGET"
 fi
 if [[ "$TEST_MODE" != 1 ]]; then chown -R hermes:hermes "$TARGET"; fi
+RELAY_INSTALLER="${RELAY_INSTALLER_OVERRIDE:-$TARGET/scripts/install-hermes-relay.sh}"
+[[ -x "$RELAY_INSTALLER" ]] || { echo 'Hermes Relay installer missing from release' >&2; exit 1; }
+if [[ "$TEST_MODE" == 1 ]]; then
+  "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$(command -v python3)"     --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR" --test-mode
+fi
 
 if [[ "$TEST_MODE" != 1 ]]; then
   VENDORED="$TARGET/vendor/hermes-agent/0.20.5"
@@ -109,6 +115,7 @@ if [[ "$TEST_MODE" != 1 ]]; then
   if [[ -f "$RUNTIME_TMP/tools/skills_sync.py" ]]; then
     runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" "$PY" "$RUNTIME_TMP/tools/skills_sync.py"
   fi
+  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes"     "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$PY"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
   rm -rf "$RUNTIME_PREVIOUS"
   if [[ -d "$RUNTIME_ROOT" ]]; then mv "$RUNTIME_ROOT" "$RUNTIME_PREVIOUS"; RUNTIME_HAD_PREVIOUS=1; fi
   mv "$RUNTIME_TMP" "$RUNTIME_ROOT"; RUNTIME_SWAPPED=1
@@ -205,6 +212,9 @@ PYHEALTH
       "$TARGET/scripts/configure-tailscale-hermes.sh"
     fi
   fi
+  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes"     "$RELAY_INSTALLER" activate --release-root "$TARGET" --runtime-python "$RUNTIME_ROOT/venv/bin/python"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
+else
+  "$RELAY_INSTALLER" activate --release-root "$TARGET" --runtime-python "$(command -v python3)"     --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR" --test-mode
 fi
 SUCCESS=1
 printf 'HERMES_LOCAL_INSTALL=PASS release=%s\n' "$RELEASE_ID"

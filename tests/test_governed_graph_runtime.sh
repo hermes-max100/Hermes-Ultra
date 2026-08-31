@@ -11,6 +11,9 @@ python3 -m py_compile "$ROOT_DIR/src/system/execution_state.py"
 python3 -m py_compile "$ROOT_DIR/src/system/native_execution_backends.py"
 python3 -m py_compile "$ROOT_DIR/src/system/codex_app_server.py"
 python3 -m py_compile "$ROOT_DIR/src/system/background_task_reconciler.py"
+python3 -m py_compile "$ROOT_DIR/src/system/hermes_relay_policy.py"
+python3 -m py_compile "$ROOT_DIR/src/system/hermes_relay_adapter.py"
+python3 -m py_compile "$ROOT_DIR/src/system/hermes_relay_reconciler.py"
 bash -n "$RUNTIME"
 python3 -m json.tool "$ROOT_DIR/config/governed-graph-runtime.json" >/dev/null
 python3 -m json.tool "$ROOT_DIR/config/governed-graph-plan.schema.json" >/dev/null
@@ -19,7 +22,10 @@ python3 -m unittest -v \
   "$ROOT_DIR/tests/test_execution_state.py" \
   "$ROOT_DIR/tests/test_governed_graph_runtime.py" \
   "$ROOT_DIR/tests/test_codex_app_server.py" \
-  "$ROOT_DIR/tests/test_background_task_reconciler.py"
+  "$ROOT_DIR/tests/test_background_task_reconciler.py" \
+  "$ROOT_DIR/tests/test_hermes_relay_policy.py" \
+  "$ROOT_DIR/tests/test_hermes_relay_adapter.py" \
+  "$ROOT_DIR/tests/test_hermes_relay_reconciler.py"
 
 analysis_json="$TMP_DIR/analysis.json"
 "$RUNTIME" analyze \

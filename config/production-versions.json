@@ -6,9 +6,9 @@
     "url": "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.19"
   },
   "hermes_relay_android": {
-    "tag": "android-v1.12.0",
-    "version": "1.12.0",
-    "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.12.0"
+    "tag": "android-v1.13.2",
+    "version": "1.13.2",
+    "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.13.2"
   },
   "orca_runtime": {
     "tag": "v1.4.190",

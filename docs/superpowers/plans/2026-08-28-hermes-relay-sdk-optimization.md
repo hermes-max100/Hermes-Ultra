@@ -37,9 +37,9 @@ sha256sum src/system/dynamic-router.sh config/cloud-model-catalog.json tests/tes
 Expected:
 
 ```text
-ad04816c63dd56d2f8469218e7d40a294ffa3697  src/system/dynamic-router.sh
-eb2503bef0c561b6aba839e5ca7d6d37263d5bdd  config/cloud-model-catalog.json
-960a9bec716e55f290d14cd9aa3ab454a0c50aa2  tests/test_dynamic_router.sh
+9c6466e48781f4e417dee147524ad33ca78a1a631feb9785d9be3798888495b7  src/system/dynamic-router.sh
+9514640689702d7a5f3eaea80bb92453dc98b40847cc3317e8f77faa444b4629  config/cloud-model-catalog.json
+d9db6851108bbf4b65a9800d1b58f1faa9d4a7172426368c0583a78ee3add790  tests/test_dynamic_router.sh
 ```
 
 ---
