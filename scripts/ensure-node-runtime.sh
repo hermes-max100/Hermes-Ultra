@@ -12,7 +12,8 @@ node_ready() {
   local raw major
   raw="$(node --version 2>/dev/null || true)"; raw="${raw#v}"; major="${raw%%.*}"
   [[ "$major" =~ ^[0-9]+$ ]] || return 1
-  (( major >= MIN_MAJOR ))
+  (( major >= MIN_MAJOR )) || return 1
+  [[ "$raw" == "$NODE_VERSION" ]]
 }
 
 if node_ready; then
@@ -38,5 +39,5 @@ echo "$SHA256  $TMP/node.tar.xz" | sha256sum -c - >/dev/null
 rm -rf "$TARGET"; mkdir -p "$TARGET"
 tar -xJf "$TMP/node.tar.xz" --strip-components=1 -C "$TARGET"
 for cmd in node npm npx corepack; do [[ -e "$TARGET/bin/$cmd" ]] && ln -sfn "$TARGET/bin/$cmd" "/usr/local/bin/$cmd"; done
-node_ready || { echo "installed Node runtime does not satisfy Node.js >= $MIN_MAJOR with npm/npx" >&2; exit 1; }
+node_ready || { echo "installed Node runtime does not satisfy pinned Node.js $NODE_VERSION with npm/npx" >&2; exit 1; }
 printf 'NODE_RUNTIME=PASS version=%s npm=%s npx=%s\n' "$(node --version)" "$(npm --version)" "$(npx --version)"
