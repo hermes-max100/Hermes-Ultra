@@ -311,7 +311,7 @@ class AgentReachSecurityTests(unittest.TestCase):
     def _make_source_fixture(self, td: str) -> tuple[Path, Path]:
         source = Path(td) / "source"
         source.mkdir()
-        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "init", "-q", "--template=", str(source)], check=True)
         subprocess.run(["git", "-C", str(source), "config", "user.email", "test@example.invalid"], check=True)
         subprocess.run(["git", "-C", str(source), "config", "user.name", "Hermes Test"], check=True)
         (source / "pyproject.toml").write_text(
