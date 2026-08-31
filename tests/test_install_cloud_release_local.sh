@@ -6,11 +6,17 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 make_release() {
   local dir="$1" marker="$2" archive="$3"
-  mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.20.5"
+  mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.20.5" \
+    "$dir/hermes-max/.agents/skills/design-engineer" "$dir/hermes-max/.agents/skills/web-design-guidelines"
   printf '{"schema_version":1}\n' > "$dir/hermes-max/skills-lock.json"
   printf '{"spdxVersion":"SPDX-2.3"}\n' > "$dir/hermes-max/SBOM.spdx.json"
   printf '{"source_commit":"test-%s"}\n' "$marker" > "$dir/hermes-max/RELEASE_PROVENANCE.json"
   printf '%s\n' "$marker" > "$dir/hermes-max/release-marker.txt"
+  cp "$ROOT_DIR/scripts/sync-hermes-ultra-runtime-skills.sh" "$dir/hermes-max/scripts/"
+  printf -- '---\nname: design-engineer\ndescription: test %s\n---\n# Design Engineer %s\n' "$marker" "$marker" > "$dir/hermes-max/.agents/skills/design-engineer/SKILL.md"
+  printf '{"schema_version":1,"marker":"%s"}\n' "$marker" > "$dir/hermes-max/.agents/skills/design-engineer/acceptance.json"
+  printf '{"schema_version":1,"marker":"%s"}\n' "$marker" > "$dir/hermes-max/.agents/skills/design-engineer/sources.json"
+  printf -- '---\nname: web-design-guidelines\ndescription: test %s\n---\n# Web Guidelines %s\n' "$marker" "$marker" > "$dir/hermes-max/.agents/skills/web-design-guidelines/SKILL.md"
   printf 'v2026.8.19\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_TAG"
   printf '0123456789abcdef0123456789abcdef01234567\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_COMMIT"
   printf '{"source_tag":"v2026.8.19","version":"0.20.5"}\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json"
@@ -41,7 +47,13 @@ SYSTEMD_DIR="$TMP/systemd"; mkdir -p "$SYSTEMD_DIR"
 HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" HERMES_SYSTEMD_DIR="$SYSTEMD_DIR" \
   bash "$INSTALLER" "$A1" "$SHA1" | grep -q '^HERMES_LOCAL_INSTALL=PASS release='
 CURRENT1="$(readlink -f "$INSTALL_ROOT/current")"
+RID1="${SHA1:0:16}"
 [[ -f "$CURRENT1/release-marker.txt" ]] && grep -qx one "$CURRENT1/release-marker.txt"
+[[ "$(readlink "$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current")" == "$RID1" ]]
+[[ -L "$VAR_ROOT/.hermes/skills/design-engineer" ]]
+[[ -L "$VAR_ROOT/.hermes/skills/web-design-guidelines" ]]
+grep -q 'Design Engineer one' "$VAR_ROOT/.hermes/skills/design-engineer/SKILL.md"
+grep -q 'Web Guidelines one' "$VAR_ROOT/.hermes/skills/web-design-guidelines/SKILL.md"
 grep -qx durable-state "$VAR_ROOT/state/sentinel"
 UNIT="$SYSTEMD_DIR/hermes-runtime.service"
 [[ -f "$UNIT" ]] || { echo 'runtime systemd unit missing' >&2; exit 1; }
@@ -64,14 +76,25 @@ if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROO
 fi
 [[ "$(readlink -f "$INSTALL_ROOT/current")" == "$CURRENT1" ]]
 R2="$TMP/r2"; A2="$TMP/release2.tar.gz"; make_release "$R2" two "$A2"
+SHA2="$(sha256sum "$A2" | awk '{print $1}')"
+RID2="${SHA2:0:16}"
+if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_TEST_FAIL_AFTER_SKILL_SYNC=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
+  bash "$INSTALLER" "$A2" "$SHA2" >/dev/null 2>&1; then
+  echo 'post-skill-sync failure hook did not fail install' >&2; exit 1
+fi
+[[ "$(readlink -f "$INSTALL_ROOT/current")" == "$CURRENT1" ]]
+[[ "$(readlink "$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current")" == "$RID1" ]]
+grep -q 'Design Engineer one' "$VAR_ROOT/.hermes/skills/design-engineer/SKILL.md"
+
 printf 'tampered\n' >> "$R2/hermes-max/release-marker.txt"
 tar -C "$R2" -czf "$A2" hermes-max
-SHA2="$(sha256sum "$A2" | awk '{print $1}')"
+SHA2_TAMPERED="$(sha256sum "$A2" | awk '{print $1}')"
 if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
-  bash "$INSTALLER" "$A2" "$SHA2" >/dev/null 2>&1; then
+  bash "$INSTALLER" "$A2" "$SHA2_TAMPERED" >/dev/null 2>&1; then
   echo 'tampered internal manifest accepted' >&2; exit 1
 fi
 [[ "$(readlink -f "$INSTALL_ROOT/current")" == "$CURRENT1" ]]
+[[ "$(readlink "$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current")" == "$RID1" ]]
 grep -qx durable-state "$VAR_ROOT/state/sentinel"
 grep -q -- '--require-hashes' "$INSTALLER"
 grep -q -- '--no-build-isolation' "$INSTALLER"

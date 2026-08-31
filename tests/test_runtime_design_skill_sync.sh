@@ -5,7 +5,7 @@ SYNC="$ROOT_DIR/scripts/sync-hermes-ultra-runtime-skills.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-[[ -x "$SYNC" ]] || { echo 'runtime design skill sync script missing' >&2; exit 1; }
+[[ -f "$SYNC" ]] || { echo 'runtime design skill sync script missing' >&2; exit 1; }
 
 make_release() {
   local root="$1" marker="$2"
@@ -75,5 +75,15 @@ if HERMES_HOME="$HOME3" bash "$SYNC" apply "$TMP/incomplete" bad >/dev/null 2>&1
   exit 1
 fi
 [[ ! -e "$HOME3/managed-skill-releases/hermes-ultra/current" ]]
+
+# The internal selector itself is fail-closed if replaced by a non-symlink.
+HOME4="$TMP/selector-collision-home"
+mkdir -p "$HOME4/managed-skill-releases/hermes-ultra"
+printf '%s\n' unexpected > "$HOME4/managed-skill-releases/hermes-ultra/current"
+if HERMES_HOME="$HOME4" bash "$SYNC" apply "$R1" r1 >/dev/null 2>&1; then
+  echo 'non-symlink managed selector was overwritten' >&2
+  exit 1
+fi
+grep -qx unexpected "$HOME4/managed-skill-releases/hermes-ultra/current"
 
 echo 'runtime design skill sync tests passed'

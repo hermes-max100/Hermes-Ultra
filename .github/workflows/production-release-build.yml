@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/production-release-build.yml'
       - '.github/workflows/cloud-foundation-validate.yml'
+      - '.agents/skills/design-engineer/**'
+      - '.agents/skills/web-design-guidelines/**'
       - 'scripts/**'
       - 'tests/**'
       - 'config/**'
@@ -51,6 +53,12 @@ jobs:
           python -m pip install --disable-pip-version-check 'uv==0.12.7'
           uv --version | grep -Eq '^uv 0\.12\.7([[:space:]]|$)'
 
+      - name: Validate managed runtime design skills
+        run: |
+          python3 .agents/skills/design-engineer/validate.py
+          bash tests/test_runtime_design_skill_sync.sh
+          bash tests/test_install_cloud_release_local.sh
+
       - name: Build canonical production release
         env:
           HERMES_PRODUCTION_BUILD: '1'
@@ -72,6 +80,11 @@ jobs:
           test -f vendor/hermes-agent/0.20.5/requirements-hermes-all.lock.txt
           test -x scripts/ensure-node-runtime.sh
           test -x scripts/sync-mcp-provider-registry.sh
+          test -x scripts/sync-hermes-ultra-runtime-skills.sh
+          test -f .agents/skills/design-engineer/SKILL.md
+          test -f .agents/skills/design-engineer/acceptance.json
+          test -f .agents/skills/design-engineer/sources.json
+          test -f .agents/skills/web-design-guidelines/SKILL.md
           python3 - <<'PY'
           import json
           from pathlib import Path
