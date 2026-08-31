@@ -20,6 +20,14 @@ build_with_umask 077 "$TMP/u077"
 
 A="$TMP/u022/hermes-max-cloud-20260815T010000Z.tar.gz"
 B="$TMP/u077/hermes-max-cloud-20260815T010000Z.tar.gz"
+for archive in "$A" "$B"; do
+  listing="$TMP/$(basename "$(dirname "$archive")").list"
+  tar -tzf "$archive" > "$listing"
+  if grep -Eq '(^|/)(__pycache__/|[^/]+\.py[co]$)' "$listing"; then
+    echo 'generated Python cache leaked into cloud release' >&2
+    exit 1
+  fi
+done
 SHA_A="$(sha256sum "$A" | awk '{print $1}')"
 SHA_B="$(sha256sum "$B" | awk '{print $1}')"
 [[ "$SHA_A" == "$SHA_B" ]] || {

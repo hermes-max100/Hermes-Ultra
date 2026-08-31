@@ -38,8 +38,14 @@ tar -C "$ROOT_DIR" -cf - \
 
 if [[ "${HERMES_PRODUCTION_BUILD:-0}" == "1" ]]; then
   [[ -n "${HERMES_AGENT_SOURCE_DIR:-}" ]] || { echo 'HERMES_AGENT_SOURCE_DIR is required for production builds' >&2; exit 1; }
-  mkdir -p "$STAGE/vendor/hermes-agent"
+  [[ -n "${HERMES_RELAY_SOURCE_DIR:-}" ]] || { echo 'HERMES_RELAY_SOURCE_DIR is required for production builds' >&2; exit 1; }
+  [[ -n "${HERMES_RELAY_SERVER_WHEEL:-}" ]] || { echo 'HERMES_RELAY_SERVER_WHEEL is required for production builds' >&2; exit 1; }
+  mkdir -p "$STAGE/vendor/hermes-agent" "$STAGE/vendor/hermes-relay"
   HERMES_EXPORT_DEPENDENCY_LOCKS=1 bash "$ROOT_DIR/scripts/stage-hermes-agent-source.sh" "$HERMES_AGENT_SOURCE_DIR" "$STAGE/vendor/hermes-agent/0.20.5"
+  bash "$ROOT_DIR/scripts/stage-hermes-relay-source.sh" \
+    "$HERMES_RELAY_SOURCE_DIR" \
+    "$HERMES_RELAY_SERVER_WHEEL" \
+    "$STAGE/vendor/hermes-relay/server-v1.10.0"
 fi
 
 chmod +x "$STAGE"/scripts/*.sh "$STAGE"/src/system/*.sh "$STAGE"/tests/*.sh
@@ -50,8 +56,10 @@ chmod +x "$STAGE"/scripts/*.sh "$STAGE"/src/system/*.sh "$STAGE"/tests/*.sh
   bash tests/test_load_hermes_runtime_env.sh
 )
 
-# Tests must not leak runtime state into the release.
+# Tests must not leak runtime state or generated Python bytecode into the release.
 rm -rf "$STAGE/.hermes" "$STAGE/.skills/logs"
+find "$STAGE" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "$STAGE" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 # Fail closed before final archive creation if tracked source or staged content
 # contains credential-like material. The scanner reports detector classes only.

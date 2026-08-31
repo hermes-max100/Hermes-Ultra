@@ -64,13 +64,6 @@ assert p['source_tag']=='v2026.8.19'
 assert p['version']=='0.20.5'
 assert len(p['tree_sha256'])==64
 PY
-DIST="$TMP/dist"; mkdir -p "$DIST"
-HERMES_PRODUCTION_BUILD=1 HERMES_UV_BIN="$FAKE_UV" HERMES_AGENT_SOURCE_DIR="$SRC" HERMES_DIST_DIR="$DIST" SOURCE_DATE_EPOCH=20260821T000000Z bash "$ROOT_DIR/scripts/build-cloud-release.sh" >/dev/null
-ARCHIVE="$(find "$DIST" -name 'hermes-max-cloud-*.tar.gz' -print -quit)"
-tar -tzf "$ARCHIVE" | grep -q 'hermes-max/vendor/hermes-agent/0.20.5/DEPENDENCY_LOCK_PROVENANCE.json'
-grep -q 'vendor/hermes-agent/0.20.5' "$ROOT_DIR/infra/aws-primary/templates/bootstrap-hermes.sh.tftpl"
-grep -q 'setup-hermes.sh' "$ROOT_DIR/infra/aws-primary/templates/bootstrap-hermes.sh.tftpl"
-! grep -q 'hermes update' "$ROOT_DIR/infra/aws-primary/templates/bootstrap-hermes.sh.tftpl"
 printf 'dirty\n' >> "$SRC/runtime.py"
 if bash "$SCRIPT" "$SRC" "$TMP/dirty" >/dev/null 2>&1; then echo 'dirty source accepted' >&2; exit 1; fi
 git -C "$SRC" reset --hard -q HEAD

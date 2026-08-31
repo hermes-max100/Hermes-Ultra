@@ -7,7 +7,9 @@ trap 'rm -rf "$TMP"' EXIT
 make_release() {
   local dir="$1" marker="$2" archive="$3"
   mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.20.5" \
+    "$dir/hermes-max/vendor/hermes-relay/server-v1.10.0" \
     "$dir/hermes-max/.agents/skills/design-engineer" "$dir/hermes-max/.agents/skills/web-design-guidelines"
+  printf 'relay-fixture\n' > "$dir/hermes-max/vendor/hermes-relay/server-v1.10.0/fixture"
   printf '{"schema_version":1}\n' > "$dir/hermes-max/skills-lock.json"
   printf '{"spdxVersion":"SPDX-2.3"}\n' > "$dir/hermes-max/SBOM.spdx.json"
   printf '{"source_commit":"test-%s"}\n' "$marker" > "$dir/hermes-max/RELEASE_PROVENANCE.json"
@@ -46,10 +48,24 @@ SHA1="$(sha256sum "$A1" | awk '{print $1}')"
 SYSTEMD_DIR="$TMP/systemd"; mkdir -p "$SYSTEMD_DIR/hermes-runtime.service.d"
 printf '[Service]\nExecStart=/legacy/hermes\n' > "$SYSTEMD_DIR/hermes-runtime.service.d/0205.conf"
 printf '[Service]\nEnvironment=KEEP_ME=1\n' > "$SYSTEMD_DIR/hermes-runtime.service.d/keep.conf"
+RELAY_LOG="$TMP/relay-installer.log"; : > "$RELAY_LOG"
+FAKE_RELAY_INSTALLER="$TMP/fake-relay-installer.sh"
+cat > "$FAKE_RELAY_INSTALLER" <<'RELAY'
+#!/usr/bin/env bash
+set -euo pipefail
+mode="$1"; shift
+current=""
+if [[ -L "$FAKE_INSTALL_ROOT/current" ]]; then current="$(readlink -f "$FAKE_INSTALL_ROOT/current")"; fi
+printf '%s current=%s\n' "$mode" "$current" >> "$FAKE_RELAY_LOG"
+RELAY
+chmod +x "$FAKE_RELAY_INSTALLER"
 HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" HERMES_SYSTEMD_DIR="$SYSTEMD_DIR" \
+  HERMES_RELAY_INSTALLER="$FAKE_RELAY_INSTALLER" FAKE_RELAY_LOG="$RELAY_LOG" FAKE_INSTALL_ROOT="$INSTALL_ROOT" \
   bash "$INSTALLER" "$A1" "$SHA1" | grep -q '^HERMES_LOCAL_INSTALL=PASS release='
 CURRENT1="$(readlink -f "$INSTALL_ROOT/current")"
 RID1="${SHA1:0:16}"
+grep -Fxq 'prepare current=' "$RELAY_LOG"
+grep -Fxq "activate current=$CURRENT1" "$RELAY_LOG"
 [[ -f "$CURRENT1/release-marker.txt" ]] && grep -qx one "$CURRENT1/release-marker.txt"
 [[ "$(readlink "$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current")" == "$RID1" ]]
 [[ -L "$VAR_ROOT/.hermes/skills/design-engineer" ]]

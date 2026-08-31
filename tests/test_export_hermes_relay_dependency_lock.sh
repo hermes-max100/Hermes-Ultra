@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT="$ROOT_DIR/scripts/export-hermes-relay-dependency-lock.sh"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+SRC="$TMP/source"; DEST="$TMP/out"
+mkdir -p "$SRC" "$DEST"
+cat > "$SRC/pyproject.toml" <<'PYPROJECT'
+[project]
+name = "hermes-relay"
+version = "1.10.0"
+dependencies = ["aiohttp>=3.14.1,<4"]
+PYPROJECT
+cat > "$SRC/uv.lock" <<'LOCK'
+version = 1
+revision = 3
+requires-python = ">=3.11"
+[[package]]
+name = "aiohttp"
+version = "3.14.3"
+[[package]]
+name = "hermes-relay"
+version = "1.6.4"
+source = { editable = "." }
+dependencies = [{ name = "aiohttp" }]
+[package.metadata]
+requires-dist = [{ name = "aiohttp", specifier = ">=3.14.1,<4" }]
+LOCK
+FAKE_UV="$TMP/uv"
+cat > "$FAKE_UV" <<'UV'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${1:-}" == '--version' ]] && { echo 'uv 0.11.32 (test)'; exit 0; }
+args=" $* "
+[[ "$args" != *" --locked "* ]] || { echo 'test uv rejects --locked for stale upstream root metadata' >&2; exit 23; }
+[[ "$args" == *" --frozen "* ]] || { echo 'test uv requires immutable --frozen export' >&2; exit 24; }
+out=''
+for ((i=1;i<=$#;i++)); do
+  if [[ "${!i}" == '--output-file' ]]; then j=$((i+1)); out="${!j}"; fi
+done
+[[ -n "$out" ]]
+[[ " $* " == *' --frozen '* ]] || { echo 'expected --frozen' >&2; exit 7; }
+[[ " $* " != *' --locked '* ]] || { echo 'unexpected --locked' >&2; exit 8; }
+case "${FAKE_UV_MODE:-safe}" in
+  safe) printf 'aiohttp==3.14.3 \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > "$out" ;;
+  direct) printf 'aiohttp @ https://example.invalid/aiohttp.whl \\\n    --hash=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > "$out" ;;
+  unhashed) printf 'aiohttp==3.14.3\n' > "$out" ;;
+esac
+UV
+chmod +x "$FAKE_UV"
+[[ -x "$SCRIPT" ]] || { echo 'Relay dependency lock exporter missing' >&2; exit 1; }
+HERMES_UV_BIN="$FAKE_UV" bash "$SCRIPT" "$SRC" "$DEST"
+[[ -f "$DEST/requirements-hermes-relay.lock.txt" ]] || { echo 'runtime lock missing' >&2; exit 1; }
+[[ -f "$DEST/DEPENDENCY_LOCK_PROVENANCE.json" ]] || { echo 'lock provenance missing' >&2; exit 1; }
+grep -q -- '--hash=sha256:' "$DEST/requirements-hermes-relay.lock.txt"
+python3 - "$DEST/DEPENDENCY_LOCK_PROVENANCE.json" <<'PY'
+import json, pathlib, sys
+p=json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert p['mode']=='uv-export-frozen-validated-no-project'
+assert p['project_version']=='1.10.0'
+assert p['lock_project_version']=='1.6.4'
+assert p['root_version_mismatch'] is True
+assert p['dependency_metadata_match'] is True
+assert p['uv_version'].startswith('uv ')
+assert len(p['uv_lock_sha256'])==64
+assert len(p['runtime_requirements_sha256'])==64
+PY
+cp "$SRC/uv.lock" "$TMP/bad.lock"
+sed -i 's/>=3.14.1,<4/>=3.13.0,<4/' "$TMP/bad.lock"
+cp "$TMP/bad.lock" "$SRC/uv.lock"
+if HERMES_UV_BIN="$FAKE_UV" bash "$SCRIPT" "$SRC" "$TMP/dependency-mismatch" >/dev/null 2>&1; then
+  echo 'dependency metadata mismatch accepted' >&2; exit 1
+fi
+cp "$TMP/bad.lock" "$SRC/uv.lock.tmp"
+sed 's/>=3.13.0,<4/>=3.14.1,<4/' "$SRC/uv.lock.tmp" > "$SRC/uv.lock"
+rm "$SRC/uv.lock.tmp"
+for mode in direct unhashed; do
+  if FAKE_UV_MODE="$mode" HERMES_UV_BIN="$FAKE_UV" bash "$SCRIPT" "$SRC" "$TMP/$mode" >/dev/null 2>&1; then
+    echo "unsafe $mode export accepted" >&2; exit 1
+  fi
+done
+echo 'Hermes Relay dependency lock tests passed'

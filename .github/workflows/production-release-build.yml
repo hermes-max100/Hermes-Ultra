@@ -43,6 +43,23 @@ jobs:
           test "$(git -C vendor-src/hermes-agent rev-parse HEAD)" = 'fcbd1076a93841fa88855acce810e342a5b78101'
           git -C vendor-src/hermes-agent tag --points-at HEAD | grep -Fxq 'v2026.8.19'
 
+      - name: Checkout pinned Hermes Relay server 1.10.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: Codename-11/hermes-relay
+          ref: 08545ed32db07609c14730a7fc02cdd758f12434
+          path: vendor-src/hermes-relay
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify Relay source and fetch pinned wheel
+        run: |
+          test "$(git -C vendor-src/hermes-relay rev-parse HEAD)" = '08545ed32db07609c14730a7fc02cdd758f12434'
+          git -C vendor-src/hermes-relay tag --points-at HEAD | grep -Fxq 'server-v1.10.0'
+          mkdir -p vendor-src/hermes-relay-artifacts
+          curl --fail --location --proto '=https' --tlsv1.2             'https://github.com/Codename-11/hermes-relay/releases/download/server-v1.10.0/hermes_relay-1.10.0-py3-none-any.whl'             -o vendor-src/hermes-relay-artifacts/hermes_relay-1.10.0-py3-none-any.whl
+          echo '26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663  vendor-src/hermes-relay-artifacts/hermes_relay-1.10.0-py3-none-any.whl' | sha256sum -c -
+
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
@@ -58,13 +75,17 @@ jobs:
           python3 .agents/skills/design-engineer/validate.py
           bash tests/test_runtime_design_skill_sync.sh
           bash tests/test_install_cloud_release_local.sh
+          bash tests/test_release_candidate_inclusions.sh
+          bash tests/test_production_release_workflow.sh
 
       - name: Build canonical production release
         env:
           HERMES_PRODUCTION_BUILD: '1'
           HERMES_AGENT_SOURCE_DIR: ${{ github.workspace }}/vendor-src/hermes-agent
+          HERMES_RELAY_SOURCE_DIR: ${{ github.workspace }}/vendor-src/hermes-relay
+          HERMES_RELAY_SERVER_WHEEL: ${{ github.workspace }}/vendor-src/hermes-relay-artifacts/hermes_relay-1.10.0-py3-none-any.whl
           HERMES_DIST_DIR: ${{ github.workspace }}/dist-production
-          SOURCE_DATE_EPOCH: 20260830T210000Z
+          SOURCE_DATE_EPOCH: 20260831T070000Z
         run: bash scripts/build-cloud-release.sh
 
       - name: Verify production release evidence
@@ -78,23 +99,37 @@ jobs:
           sha256sum -c CLOUD_RELEASE_MANIFEST.sha256 >/dev/null
           test -f vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json
           test -f vendor/hermes-agent/0.20.5/requirements-hermes-all.lock.txt
+          test -f vendor/hermes-relay/server-v1.10.0/SOURCE_PROVENANCE.json
+          test -f vendor/hermes-relay/server-v1.10.0/requirements-hermes-relay.lock.txt
+          test -f vendor/hermes-relay/server-v1.10.0/hermes_relay-1.10.0-py3-none-any.whl
+          echo '26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663  vendor/hermes-relay/server-v1.10.0/hermes_relay-1.10.0-py3-none-any.whl' | sha256sum -c -
           test -x scripts/ensure-node-runtime.sh
+          test -x scripts/install-hermes-relay.sh
+          test -x scripts/hermes-relay-doctor.sh
           test -x scripts/sync-mcp-provider-registry.sh
           test -x scripts/sync-hermes-ultra-runtime-skills.sh
           test -f .agents/skills/design-engineer/SKILL.md
           test -f .agents/skills/design-engineer/acceptance.json
           test -f .agents/skills/design-engineer/sources.json
           test -f .agents/skills/web-design-guidelines/SKILL.md
+          if find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -print -quit | grep -q .; then
+            echo 'generated Python bytecode leaked into production artifact' >&2
+            exit 1
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
           root = Path('.')
           release = json.loads((root / 'RELEASE_PROVENANCE.json').read_text())
           source = json.loads((root / 'vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json').read_text())
+          relay = json.loads((root / 'vendor/hermes-relay/server-v1.10.0/SOURCE_PROVENANCE.json').read_text())
           assert release['source_commit'] == '${{ github.sha }}'
           assert source['source_commit'] == 'fcbd1076a93841fa88855acce810e342a5b78101'
           assert source['source_tag'] == 'v2026.8.19'
           assert source['version'] == '0.20.5'
+          assert relay['source_commit'] == '08545ed32db07609c14730a7fc02cdd758f12434'
+          assert relay['source_tag'] == 'server-v1.10.0'
+          assert relay['version'] == '1.10.0'
           PY
 
       - name: Upload one production artifact
