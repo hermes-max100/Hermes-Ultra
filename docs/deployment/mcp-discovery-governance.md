@@ -22,6 +22,11 @@ The Official MCP Registry is the canonical public discovery source. Vendor
 repositories/documentation provide provenance evidence. Supplemental catalogs
 and lists are discovery inputs only.
 
+The core hierarchy is fail-closed. Registry validation requires the Official
+MCP Registry, vendor repositories, and allMCPservers.com to remain present with
+their expected URL, authority, trust treatment, priority, and verification role.
+Deleting or repointing one of those required sources makes validation fail.
+
 ## Hard boundary
 
 Every configured discovery source must have:
@@ -84,6 +89,9 @@ order is:
 5. `verified_community_mcp`
 6. `browser_automation`
 
+This exact order is validated as a governance invariant. A configuration edit
+cannot silently reorder the list to make MCP the default.
+
 The first available interface in that ordered set is returned as a **selection
 hint**. Profile visibility, effect classification, credentials, authority, and
 runtime policy still control whether that interface may actually be used.
@@ -104,15 +112,23 @@ Scout consumes the same policy through Agent Reach:
 
 ```bash
 src/system/agent-reach.sh mcp-sources
+src/system/agent-reach.sh mcp-candidate \
+  --source allmcpservers \
+  --name "Example MCP" \
+  --homepage "https://example.invalid/mcp" \
+  --repository "https://github.com/example/example-mcp"
 src/system/agent-reach.sh mcp-interface official_mcp cli_skill
 ```
 
-These commands are local policy reads only. They do not contact, install,
-configure, authenticate to, promote, or activate an MCP server.
+`mcp-sources` is a local policy read. `mcp-candidate` performs local validation
+and normalization only. `mcp-interface` performs local interface selection only.
+None of these commands contacts, installs, configures, authenticates to,
+promotes, or activates an MCP server.
 
 External discovery itself continues to use Agent Reach's bounded public-search,
 public-GitHub, and SSRF-safe read paths. Retrieved material remains untrusted
-content and cannot act as instructions.
+content and cannot act as instructions. No scraper is introduced for a catalog
+that does not expose a stable governed API.
 
 ## Promotion path
 
@@ -138,13 +154,14 @@ The regression suite is `tests/test_mcp_discovery_governance.py`. It asserts:
 - Official MCP Registry remains canonical and highest priority.
 - Vendor repositories remain provenance-only.
 - allMCPservers.com remains `UNTRUSTED_DISCOVERY_ONLY`.
+- required source deletion/repointing and authority drift fail closed.
 - no discovery source can promote, install, or activate.
 - source ordering is deterministic.
 - untrusted candidates cannot escalate lifecycle/runtime state.
 - non-HTTPS and unknown-source candidate metadata fails closed.
-- best-fit interface selection is not MCP-first.
-- Agent Reach exposes the governed source list and interface selector without
-  provisioning or activation side effects.
+- best-fit interface selection is not MCP-first and cannot be reordered to MCP-first.
+- Agent Reach exposes the governed source list, candidate normalizer, and
+  interface selector without provisioning or activation side effects.
 
 `.github/workflows/mcp-universe-validate.yml` executes the regression and static
 JSON/Python/shell validation on relevant pull requests.
