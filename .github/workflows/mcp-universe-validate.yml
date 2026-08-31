@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/mcp-universe-validate.yml'
+      - '.skills/skills.d/agent-reach/SKILL.md'
       - 'config/mcp-provider-registry.json'
       - 'config/mcp-discovery-sources.json'
       - 'config/tool-registry.json'
       - 'config/production-versions.json'
+      - 'src/system/agent-reach.sh'
       - 'src/system/mcp-provider-registry.py'
       - 'src/system/mcp-discovery-governance.py'
       - 'src/system/mcp-provider-router.py'
@@ -59,6 +61,7 @@ jobs:
           python3 -m json.tool config/tool-registry.json >/dev/null
           python3 -m json.tool config/production-versions.json >/dev/null
           python3 -m py_compile src/system/mcp-provider-registry.py src/system/mcp-discovery-governance.py src/system/mcp-provider-router.py src/system/mcp-provider-sync.py src/system/mcp-stateless-gateway.py
+          bash -n src/system/agent-reach.sh
           bash -n scripts/ensure-node-runtime.sh
           bash -n scripts/sync-mcp-provider-registry.sh
           bash -n scripts/install-cloud-release-local.sh
