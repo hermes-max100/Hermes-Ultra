@@ -16,18 +16,21 @@ SYSTEMD_DIR="${HERMES_SYSTEMD_DIR:-/etc/systemd/system}"
 RELEASES_DIR="$INSTALL_ROOT/releases"
 CURRENT_LINK="$INSTALL_ROOT/current"
 STATE_ROOT="$VAR_ROOT/state"
-RUNTIME_ROOT="$VAR_ROOT/.hermes/hermes-agent"
+LEGACY_RUNTIME_ROOT="$VAR_ROOT/.hermes/hermes-agent"
+RUNTIME_RELEASES_DIR="$VAR_ROOT/.hermes/runtime-releases"
+RUNTIME_ACTIVE_LINK="$VAR_ROOT/.hermes/hermes-agent-current"
 RELEASE_ID="${EXPECTED_SHA:0:16}"
 TARGET="$RELEASES_DIR/$RELEASE_ID"
 TMP_TARGET="$RELEASES_DIR/.${RELEASE_ID}.tmp.$$"
-RUNTIME_TMP="${RUNTIME_ROOT}.tmp.${RELEASE_ID}.$$"
-RUNTIME_PREVIOUS="${RUNTIME_ROOT}.previous"
+RUNTIME_TARGET="$RUNTIME_RELEASES_DIR/$RELEASE_ID"
+RUNTIME_PREVIOUS="$(readlink -f "$RUNTIME_ACTIVE_LINK" 2>/dev/null || true)"
+if [[ -z "$RUNTIME_PREVIOUS" && -d "$LEGACY_RUNTIME_ROOT" ]]; then RUNTIME_PREVIOUS="$LEGACY_RUNTIME_ROOT"; fi
 CURRENT_PREVIOUS="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
-SUCCESS=0; RUNTIME_SWAPPED=0; RUNTIME_HAD_PREVIOUS=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0
+SUCCESS=0; RUNTIME_TARGET_CREATED=0; RUNTIME_ACTIVE_SWAPPED=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0; RUNTIME_SERVICE_WAS_ACTIVE=0
 cleanup(){
   local rc=$?
   if [[ "$SUCCESS" != 1 && "$TEST_MODE" != 1 && "$RUNTIME_SERVICE_STARTED" == 1 ]]; then systemctl stop hermes-runtime.service >/dev/null 2>&1 || true; fi
-  rm -rf "$TMP_TARGET" "$RUNTIME_TMP" 2>/dev/null || true
+  rm -rf "$TMP_TARGET" 2>/dev/null || true
   if [[ "$SUCCESS" != 1 && "$CURRENT_SWAPPED" == 1 ]]; then
     if [[ -n "$CURRENT_PREVIOUS" && -d "$CURRENT_PREVIOUS" ]]; then
       ln -sfn "$CURRENT_PREVIOUS" "$CURRENT_LINK.rollback" && mv -Tf "$CURRENT_LINK.rollback" "$CURRENT_LINK"
@@ -35,9 +38,16 @@ cleanup(){
       rm -f "$CURRENT_LINK"
     fi
   fi
-  if [[ "$SUCCESS" != 1 && "$RUNTIME_SWAPPED" == 1 ]]; then
-    rm -rf "$RUNTIME_ROOT"
-    if [[ "$RUNTIME_HAD_PREVIOUS" == 1 && -d "$RUNTIME_PREVIOUS" ]]; then mv "$RUNTIME_PREVIOUS" "$RUNTIME_ROOT"; fi
+  if [[ "$SUCCESS" != 1 && "$RUNTIME_ACTIVE_SWAPPED" == 1 ]]; then
+    if [[ -n "$RUNTIME_PREVIOUS" && -d "$RUNTIME_PREVIOUS" ]]; then
+      ln -sfn "$RUNTIME_PREVIOUS" "$RUNTIME_ACTIVE_LINK.rollback" && mv -Tf "$RUNTIME_ACTIVE_LINK.rollback" "$RUNTIME_ACTIVE_LINK"
+    else
+      rm -f "$RUNTIME_ACTIVE_LINK"
+    fi
+  fi
+  if [[ "$SUCCESS" != 1 && "$RUNTIME_TARGET_CREATED" == 1 && "$RUNTIME_TARGET" != "$RUNTIME_PREVIOUS" ]]; then rm -rf "$RUNTIME_TARGET"; fi
+  if [[ "$SUCCESS" != 1 && "$TEST_MODE" != 1 && "$RUNTIME_SERVICE_STARTED" == 1 && "$RUNTIME_SERVICE_WAS_ACTIVE" == 1 ]]; then
+    systemctl restart hermes-runtime.service >/dev/null 2>&1 || true
   fi
   return "$rc"
 }
@@ -46,12 +56,13 @@ trap cleanup EXIT
 if [[ "$TEST_MODE" != 1 && "$EUID" -ne 0 ]]; then echo 'installer must run as root' >&2; exit 1; fi
 for cmd in sha256sum tar find python3; do command -v "$cmd" >/dev/null || { echo "required command missing: $cmd" >&2; exit 1; }; done
 if [[ "$TEST_MODE" == 1 ]]; then
-  mkdir -p "$RELEASES_DIR" "$STATE_ROOT" "$VAR_ROOT/.hermes"
+  mkdir -p "$RELEASES_DIR" "$STATE_ROOT" "$VAR_ROOT/.hermes" "$RUNTIME_RELEASES_DIR"
 else
   command -v runuser >/dev/null 2>&1 || { echo 'runuser is required' >&2; exit 1; }
   command -v systemctl >/dev/null 2>&1 || { echo 'systemctl is required' >&2; exit 1; }
+  if systemctl is-active --quiet hermes-runtime.service 2>/dev/null; then RUNTIME_SERVICE_WAS_ACTIVE=1; fi
   if ! id hermes >/dev/null 2>&1; then useradd --system --create-home --home-dir "$VAR_ROOT" --shell /bin/bash hermes; fi
-  install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" "$VAR_ROOT/.hermes" "$VAR_ROOT/.config/hermes" "$STATE_ROOT"
+  install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" "$VAR_ROOT/.hermes" "$RUNTIME_RELEASES_DIR" "$VAR_ROOT/.config/hermes" "$STATE_ROOT"
 fi
 
 rm -rf "$TMP_TARGET"; mkdir -p "$TMP_TARGET"
@@ -98,29 +109,39 @@ if [[ "$TEST_MODE" != 1 ]]; then chown -R hermes:hermes "$TARGET"; fi
 if [[ "$TEST_MODE" != 1 ]]; then
   bash "$TARGET/scripts/ensure-node-runtime.sh"
   VENDORED="$TARGET/vendor/hermes-agent/0.20.5"
-  rm -rf "$RUNTIME_TMP"; cp -a "$VENDORED" "$RUNTIME_TMP"; chown -R hermes:hermes "$RUNTIME_TMP"
-  runuser -u hermes -- env HOME="$VAR_ROOT" python3 -m venv "$RUNTIME_TMP/venv" || { echo 'python venv creation failed; install python3-venv first' >&2; exit 1; }
-  PY="$RUNTIME_TMP/venv/bin/python"
-  runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 \
-    "$PY" -m pip install --require-hashes -r "$RUNTIME_TMP/requirements-hermes-build.lock.txt"
-  runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 \
-    "$PY" -m pip install --require-hashes -r "$RUNTIME_TMP/requirements-hermes-all.lock.txt"
-  runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 \
-    "$PY" -m pip install --no-deps --no-build-isolation -e "$RUNTIME_TMP"
-  if [[ -f "$RUNTIME_TMP/tools/skills_sync.py" ]]; then
-    runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" "$PY" "$RUNTIME_TMP/tools/skills_sync.py"
+  if [[ "$RUNTIME_PREVIOUS" != "$RUNTIME_TARGET" ]]; then
+    rm -rf "$RUNTIME_TARGET"
+    cp -a "$VENDORED" "$RUNTIME_TARGET"
+    RUNTIME_TARGET_CREATED=1
+    chown -R hermes:hermes "$RUNTIME_TARGET"
+    ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" python3 -m venv "$RUNTIME_TARGET/venv" ) || { echo 'python venv creation failed; install python3-venv first' >&2; exit 1; }
+    PY="$RUNTIME_TARGET/venv/bin/python"
+    ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 "$PY" -m pip install --require-hashes -r "$RUNTIME_TARGET/requirements-hermes-build.lock.txt" )
+    ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 "$PY" -m pip install --require-hashes -r "$RUNTIME_TARGET/requirements-hermes-all.lock.txt" )
+    ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 "$PY" -m pip install --no-deps --no-build-isolation -e "$RUNTIME_TARGET" )
+    if [[ -f "$RUNTIME_TARGET/tools/skills_sync.py" ]]; then
+      ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" "$PY" "$RUNTIME_TARGET/tools/skills_sync.py" )
+    fi
+  else
+    PY="$RUNTIME_TARGET/venv/bin/python"
   fi
-  rm -rf "$RUNTIME_PREVIOUS"
-  if [[ -d "$RUNTIME_ROOT" ]]; then mv "$RUNTIME_ROOT" "$RUNTIME_PREVIOUS"; RUNTIME_HAD_PREVIOUS=1; fi
-  mv "$RUNTIME_TMP" "$RUNTIME_ROOT"; RUNTIME_SWAPPED=1
-  install -d -o hermes -g hermes -m 0750 "$VAR_ROOT/.local/bin"
-  ln -sfn "$RUNTIME_ROOT/venv/bin/hermes" "$VAR_ROOT/.local/bin/hermes"
-  chown -h hermes:hermes "$VAR_ROOT/.local/bin/hermes"
+  ( cd /tmp && runuser -u hermes -- env HOME="$VAR_ROOT" "$PY" -c 'import hermes_cli, hermes_cli.mcp_config' )
+  for entry in hermes pip uvicorn; do
+    path="$RUNTIME_TARGET/venv/bin/$entry"
+    [[ -f "$path" ]] || continue
+    first="$(head -n1 "$path")"
+    [[ "$first" == "#!$RUNTIME_TARGET/venv/bin/"* ]] || { echo "runtime entrypoint is not final-path stable: $entry" >&2; exit 1; }
+  done
   runuser -u hermes -- "$TARGET/scripts/restore-vps-transfer.sh" --skip-agent-reach --skip-python-deps
-  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" \
-    HERMES_RUNTIME_PYTHON="$RUNTIME_ROOT/venv/bin/python" \
-    bash "$TARGET/scripts/sync-mcp-provider-registry.sh" apply
+  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" HERMES_RUNTIME_PYTHON="$RUNTIME_TARGET/venv/bin/python" bash "$TARGET/scripts/sync-mcp-provider-registry.sh" apply
   runuser -u hermes -- "$TARGET/scripts/verify-cloud-foundation.sh"
+  tmp_runtime_link="$VAR_ROOT/.hermes/.hermes-agent-current.install.$$"
+  ln -s "$RUNTIME_TARGET" "$tmp_runtime_link"
+  mv -Tf "$tmp_runtime_link" "$RUNTIME_ACTIVE_LINK"
+  RUNTIME_ACTIVE_SWAPPED=1
+  install -d -o hermes -g hermes -m 0750 "$VAR_ROOT/.local/bin"
+  ln -sfn "$RUNTIME_ACTIVE_LINK/venv/bin/hermes" "$VAR_ROOT/.local/bin/hermes"
+  chown -h hermes:hermes "$VAR_ROOT/.local/bin/hermes"
 fi
 
 TMP_LINK="$INSTALL_ROOT/.current.install.$$"
@@ -135,7 +156,7 @@ Wants=network-online.target
 Type=simple
 User=hermes
 Group=hermes
-WorkingDirectory=$RUNTIME_ROOT
+WorkingDirectory=$RUNTIME_ACTIVE_LINK
 Environment=HOME=$VAR_ROOT
 Environment=HERMES_HOME=$VAR_ROOT/.hermes
 Environment=PATH=$VAR_ROOT/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
