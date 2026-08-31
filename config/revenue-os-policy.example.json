@@ -27,7 +27,8 @@
     "draft_outreach",
     "draft_follow_up",
     "read_public_source",
-    "rank_opportunity"
+    "rank_opportunity",
+    "discover_public_leads"
   ],
   "metrics": {
     "primary": "profit",
@@ -38,7 +39,11 @@
       "cac",
       "roas",
       "conversion_rate",
-      "profit_per_lead"
+      "profit_per_lead",
+      "appointments_booked",
+      "attributed_revenue",
+      "gross_margin",
+      "cost_per_completed_outcome"
     ],
     "anti_goals": [
       "views_without_leads",
