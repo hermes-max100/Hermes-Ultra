@@ -26,6 +26,7 @@ EVENT_TYPES = {
     "lead",
     "qualified_lead",
     "appointment_booked",
+    "completed_outcome",
     "proposal_sent",
     "sale_closed",
     "conversion",
@@ -192,6 +193,7 @@ def metric_args(args: argparse.Namespace) -> dict[str, float | int]:
         "leads": int(args.leads),
         "qualified_leads": int(args.qualified_leads),
         "appointments_booked": int(args.appointments_booked),
+        "completed_outcomes": int(args.completed_outcomes),
         "proposals_sent": int(args.proposals_sent),
         "sales_closed": int(args.sales_closed),
         "conversions": int(args.conversions),
@@ -227,6 +229,7 @@ def derived_metrics(metrics: dict[str, float | int]) -> dict[str, float]:
     leads = int(metrics.get("leads", 0))
     qualified_leads = int(metrics.get("qualified_leads", 0))
     appointments = int(metrics.get("appointments_booked", 0))
+    completed_outcomes = int(metrics.get("completed_outcomes", 0))
     proposals = int(metrics.get("proposals_sent", 0))
     sales = int(metrics.get("sales_closed", 0))
     conversions = int(metrics.get("conversions", 0))
@@ -247,6 +250,7 @@ def derived_metrics(metrics: dict[str, float | int]) -> dict[str, float]:
         "cac": round(costs / conversions, 4) if conversions else 0.0,
         "cost_per_qualified_lead": round(costs / qualified_leads, 4) if qualified_leads else 0.0,
         "cost_per_appointment": round(costs / appointments, 4) if appointments else 0.0,
+        "cost_per_completed_outcome": round(costs / completed_outcomes, 4) if completed_outcomes else 0.0,
         "cost_per_proposal": round(costs / proposals, 4) if proposals else 0.0,
         "cost_per_sale": round(costs / sales, 4) if sales else 0.0,
         "attributed_revenue_per_sale": round(attributed_revenue / sales, 4) if sales else 0.0,
@@ -390,6 +394,7 @@ def aggregate_events(rows: list[dict[str, Any]], group_by: str) -> list[dict[str
                 "leads": 0,
                 "qualified_leads": 0,
                 "appointments_booked": 0,
+                "completed_outcomes": 0,
                 "proposals_sent": 0,
                 "sales_closed": 0,
                 "conversions": 0,
@@ -412,6 +417,7 @@ def aggregate_events(rows: list[dict[str, Any]], group_by: str) -> list[dict[str
             "leads",
             "qualified_leads",
             "appointments_booked",
+            "completed_outcomes",
             "proposals_sent",
             "sales_closed",
             "conversions",
@@ -434,6 +440,7 @@ def aggregate_events(rows: list[dict[str, Any]], group_by: str) -> list[dict[str
             "leads": bucket["leads"],
             "qualified_leads": bucket["qualified_leads"],
             "appointments_booked": bucket["appointments_booked"],
+            "completed_outcomes": bucket["completed_outcomes"],
             "proposals_sent": bucket["proposals_sent"],
             "sales_closed": bucket["sales_closed"],
             "conversions": bucket["conversions"],
@@ -604,6 +611,7 @@ def add_metrics(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--leads", type=int, default=0)
     parser.add_argument("--qualified-leads", type=int, default=0)
     parser.add_argument("--appointments-booked", type=int, default=0)
+    parser.add_argument("--completed-outcomes", type=int, default=0)
     parser.add_argument("--proposals-sent", type=int, default=0)
     parser.add_argument("--sales-closed", type=int, default=0)
     parser.add_argument("--conversions", type=int, default=0)
