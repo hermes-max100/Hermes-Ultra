@@ -9,6 +9,10 @@ on:
       - '.agents/skills/web-design-guidelines/**'
       - '.agents/skills/browser-harness-self-healing/**'
       - '.github/workflows/design-engineer-validate.yml'
+      - 'scripts/sync-hermes-ultra-runtime-skills.sh'
+      - 'scripts/install-cloud-release-local.sh'
+      - 'tests/test_runtime_design_skill_sync.sh'
+      - 'tests/test_install_cloud_release_local.sh'
   workflow_dispatch:
 
 permissions:
@@ -29,3 +33,8 @@ jobs:
 
       - name: Validate design-engineer policy and acceptance contract
         run: python3 .agents/skills/design-engineer/validate.py
+
+      - name: Validate runtime design skill activation and rollback
+        run: |
+          bash tests/test_runtime_design_skill_sync.sh
+          bash tests/test_install_cloud_release_local.sh

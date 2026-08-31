@@ -26,7 +26,10 @@ RUNTIME_TARGET="$RUNTIME_RELEASES_DIR/$RELEASE_ID"
 RUNTIME_PREVIOUS="$(readlink -f "$RUNTIME_ACTIVE_LINK" 2>/dev/null || true)"
 if [[ -z "$RUNTIME_PREVIOUS" && -d "$LEGACY_RUNTIME_ROOT" ]]; then RUNTIME_PREVIOUS="$LEGACY_RUNTIME_ROOT"; fi
 CURRENT_PREVIOUS="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
-SUCCESS=0; RUNTIME_TARGET_CREATED=0; RUNTIME_ACTIVE_SWAPPED=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0; RUNTIME_SERVICE_WAS_ACTIVE=0
+MANAGED_SKILLS_CURRENT="$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current"
+MANAGED_SKILLS_PREVIOUS="$(readlink "$MANAGED_SKILLS_CURRENT" 2>/dev/null || true)"
+RUNTIME_SKILL_SYNC_SCRIPT=""
+SUCCESS=0; RUNTIME_TARGET_CREATED=0; RUNTIME_ACTIVE_SWAPPED=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0; RUNTIME_SERVICE_WAS_ACTIVE=0; RUNTIME_SKILLS_SYNCED=0
 cleanup(){
   local rc=$?
   if [[ "$SUCCESS" != 1 && "$TEST_MODE" != 1 && "$RUNTIME_SERVICE_STARTED" == 1 ]]; then systemctl stop hermes-runtime.service >/dev/null 2>&1 || true; fi
@@ -43,6 +46,14 @@ cleanup(){
       ln -sfn "$RUNTIME_PREVIOUS" "$RUNTIME_ACTIVE_LINK.rollback" && mv -Tf "$RUNTIME_ACTIVE_LINK.rollback" "$RUNTIME_ACTIVE_LINK"
     else
       rm -f "$RUNTIME_ACTIVE_LINK"
+    fi
+  fi
+  if [[ "$SUCCESS" != 1 && "$RUNTIME_SKILLS_SYNCED" == 1 && -n "$RUNTIME_SKILL_SYNC_SCRIPT" ]]; then
+    rollback_release="${MANAGED_SKILLS_PREVIOUS:-NONE}"
+    if [[ "$TEST_MODE" == 1 ]]; then
+      HERMES_HOME="$VAR_ROOT/.hermes" bash "$RUNTIME_SKILL_SYNC_SCRIPT" rollback "$rollback_release" >/dev/null 2>&1 || true
+    else
+      HERMES_HOME="$VAR_ROOT/.hermes" bash "$RUNTIME_SKILL_SYNC_SCRIPT" rollback "$rollback_release" >/dev/null 2>&1 || true
     fi
   fi
   if [[ "$SUCCESS" != 1 && "$RUNTIME_TARGET_CREATED" == 1 && "$RUNTIME_TARGET" != "$RUNTIME_PREVIOUS" ]]; then rm -rf "$RUNTIME_TARGET"; fi
@@ -62,7 +73,7 @@ else
   command -v systemctl >/dev/null 2>&1 || { echo 'systemctl is required' >&2; exit 1; }
   if systemctl is-active --quiet hermes-runtime.service 2>/dev/null; then RUNTIME_SERVICE_WAS_ACTIVE=1; fi
   if ! id hermes >/dev/null 2>&1; then useradd --system --create-home --home-dir "$VAR_ROOT" --shell /bin/bash hermes; fi
-  install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" "$VAR_ROOT/.hermes" "$RUNTIME_RELEASES_DIR" "$VAR_ROOT/.config/hermes" "$STATE_ROOT"
+  install -d -o hermes -g hermes -m 0750 "$INSTALL_ROOT" "$RELEASES_DIR" "$VAR_ROOT/.hermes" "$VAR_ROOT/.hermes/skills" "$RUNTIME_RELEASES_DIR" "$VAR_ROOT/.config/hermes" "$STATE_ROOT"
 fi
 
 rm -rf "$TMP_TARGET"; mkdir -p "$TMP_TARGET"
@@ -103,6 +114,18 @@ if [[ -d "$TARGET" ]]; then
   rm -rf "$TMP_TARGET"
 else
   mv "$TMP_TARGET" "$TARGET"
+fi
+RUNTIME_SKILL_SYNC_SCRIPT="$TARGET/scripts/sync-hermes-ultra-runtime-skills.sh"
+[[ -f "$RUNTIME_SKILL_SYNC_SCRIPT" ]] || { echo 'managed runtime skill sync script missing from release' >&2; exit 1; }
+if [[ "$TEST_MODE" == 1 ]]; then
+  HERMES_HOME="$VAR_ROOT/.hermes" bash "$RUNTIME_SKILL_SYNC_SCRIPT" apply "$TARGET" "$RELEASE_ID"
+else
+  HERMES_HOME="$VAR_ROOT/.hermes" bash "$RUNTIME_SKILL_SYNC_SCRIPT" apply "$TARGET" "$RELEASE_ID"
+fi
+RUNTIME_SKILLS_SYNCED=1
+if [[ "$TEST_MODE" == 1 && "${HERMES_INSTALL_TEST_FAIL_AFTER_SKILL_SYNC:-0}" == 1 ]]; then
+  echo 'test failure after managed runtime skill sync' >&2
+  exit 97
 fi
 if [[ "$TEST_MODE" != 1 ]]; then chown -R hermes:hermes "$TARGET"; fi
 
