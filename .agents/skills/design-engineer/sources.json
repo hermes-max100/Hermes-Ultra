@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "reviewed_at": "2026-08-30",
   "policy": {
     "default_external_trust": "untrusted",
     "promotion_requires": [
@@ -22,8 +23,11 @@
       "trust_class": "trusted_core",
       "authority": "audit",
       "repository": "https://github.com/vercel-labs/web-interface-guidelines",
+      "reviewed_revision": "e3d624baaf29dc1fc645aff3e38f03e564d2d6b1",
+      "license": "MIT",
+      "review_status": "approved_core",
       "live_rules": "https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md",
-      "update_strategy": "fetch-current-rules-at-audit-time",
+      "update_strategy": "fetch-current-rules-at-audit-time-and-record-observed-revision_when_practical",
       "allowed_actions": [
         "read_rules",
         "audit_changed_ui",
@@ -40,7 +44,12 @@
       "trust_class": "trusted_core",
       "authority": "browser_verification",
       "repository": "https://github.com/microsoft/playwright",
+      "reviewed_revision": "de214f440b7e34937fe4886f046b78b757136087",
+      "license": "Apache-2.0",
+      "review_status": "approved_core",
       "mcp_repository": "https://github.com/microsoft/playwright-mcp",
+      "mcp_reviewed_revision": "d0c29a5658b93b6e62435ceaf362a7d7dfc3522d",
+      "mcp_license": "Apache-2.0",
       "interface_policy": {
         "deterministic_coding_loop": "prefer_project_native_tests_or_playwright_cli_skills",
         "persistent_exploratory_session": "prefer_playwright_mcp_or_existing_hermes_browser_harness",
@@ -65,6 +74,11 @@
       "trust_class": "candidate",
       "authority": "reference_analysis",
       "repository": "https://github.com/senlindesign/taste-skill",
+      "reviewed_revision": "6dce223f2f5665d3636ca9a44ec3a7aa1322a9b8",
+      "skill_blob_revision": "c5a2ecb1b20dc010bdf32d0c4d1ba523246429ff",
+      "extractor_blob_revision": "6f77615b8739e94dc34bcf39c7c8f684eaeb78e6",
+      "license": "NO_LICENSE_FILE_FOUND_AT_REVIEWED_REVISION",
+      "review_status": "quarantined_pending_license_and_full_behavior_review",
       "activation": "disabled_until_promoted",
       "allowed_actions": [
         "inspect_source",
@@ -72,11 +86,12 @@
         "reuse_general_measurement_method_with_trusted_browser_primitives"
       ],
       "forbidden_actions": [
+        "vendor_source",
         "auto_install",
         "auto_execute",
         "self_promote"
       ],
-      "promotion_note": "Record an immutable revision, verify license/dependencies/instructions, and evaluate behavior before activation."
+      "promotion_note": "Do not vendor or activate while licensing is unresolved. If licensing is resolved, review dependencies/instructions and evaluate behavior at an immutable revision before promotion."
     },
     {
       "id": "awesome-design-catalog",
@@ -84,6 +99,9 @@
       "trust_class": "scout_only",
       "authority": "discovery",
       "repository": "https://github.com/rikre/design-skills",
+      "reviewed_revision": "53c9fe6d8be161e48bcdaa0130d9bd542b1ff755",
+      "license": "MIT",
+      "review_status": "approved_scout_only",
       "allowed_actions": [
         "list_candidates",
         "inspect_candidate_metadata",
@@ -102,6 +120,9 @@
       "trust_class": "optional_adapter",
       "authority": "scaffolding_only",
       "repository": "https://github.com/abi/screenshot-to-code",
+      "reviewed_revision": "d026163f586dfa8c5c10d28c36edd59a9d3b0e88",
+      "license": "MIT",
+      "review_status": "license_verified_behavior_review_required_before_activation",
       "activation": "disabled_until_needed_and_reviewed",
       "allowed_actions": [
         "generate_initial_scaffold_from_authorized_reference",
