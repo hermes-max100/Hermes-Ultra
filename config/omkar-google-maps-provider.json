@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "provider_id": "omkar-google-maps",
+  "profile": "REVENUE_OS",
+  "state": "installed_disabled_until_auth",
+  "purpose": "Public local-business lead discovery and optional enrichment for Revenue OS.",
+  "network": {
+    "api_url": "http://127.0.0.1:8000",
+    "bind_scope": "loopback",
+    "public_ingress": false
+  },
+  "authority": {
+    "discovery": "autonomous",
+    "enrichment": "optional_bounded",
+    "outreach": "none",
+    "external_messages": false
+  },
+  "identity": {
+    "unique_identifier_order": ["KGMID", "PLACE_ID", "DATA_ID", "CID"]
+  },
+  "client": {
+    "package": "botasaurus-api",
+    "version": "4.0.10",
+    "sdist_sha256": "009fd7f59abba11725fe02d61b985757e9239a57afb6595b48b4da6ad4ed0a94"
+  },
+  "authentication": {
+    "secret_env_candidates": ["OMKAR_AUTH_TOKEN", "OMKAR_API_KEY"],
+    "persist_secret": false
+  },
+  "cost_attribution": {
+    "metric": "tool_cost",
+    "completed_outcome_metric": "cost_per_completed_outcome"
+  },
+  "downstream": ["local-service-funnel", "revenue-ledger"]
+}

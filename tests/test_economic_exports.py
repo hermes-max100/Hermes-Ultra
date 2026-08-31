@@ -8,6 +8,10 @@ def test_top_level_package_exports_economic_engine_surface():
         EconomicTask,
         FinancialAuthority,
         ResourceAllocationSignal,
+        OmkarGoogleMapsAdapter,
+        OmkarLead,
+        OmkarLeadBatch,
+        OmkarProviderError,
         SafeAdapter,
         ServiceSalesStrategy,
         StripeAdapter,
@@ -19,6 +23,10 @@ def test_top_level_package_exports_economic_engine_surface():
     assert EconomicEngine
     assert EconomicMetrics
     assert ResourceAllocationSignal
+    assert OmkarGoogleMapsAdapter
+    assert OmkarLead
+    assert OmkarLeadBatch
+    assert OmkarProviderError
     assert EconomicMode.SIMULATED.value == "SIMULATED"
     assert EconomicOperation.START_SERVICE_SALES.value == "START_SERVICE_SALES"
     assert EconomicTask
