@@ -38,5 +38,16 @@ PY
 [[ -f "$SYNC" ]] || { echo "sync script missing" >&2; exit 1; }
 python3 -m json.tool <(bash "$SYNC" dry-run) >/dev/null
 bash "$SYNC" dry-run | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["exa"]["enabled"] is True; assert d["playwright"]["enabled"] is True'
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+cat >"$TMP/runtime-python" <<'EOF'
+#!/usr/bin/env bash
+printf 'runtime-python-used\n' >"$HERMES_SYNC_PYTHON_MARKER"
+exit 0
+EOF
+chmod +x "$TMP/runtime-python"
+HERMES_RUNTIME_PYTHON="$TMP/runtime-python" HERMES_SYNC_PYTHON_MARKER="$TMP/marker" HERMES_HOME="$TMP/hermes" \
+  bash "$SYNC" apply >/dev/null
+[[ -f "$TMP/marker" ]] || { echo "MCP sync ignored HERMES_RUNTIME_PYTHON" >&2; exit 1; }
 bash -n "$SYNC"
 echo "MCP_PROVIDER_SYNC_TEST=PASS"
