@@ -53,8 +53,10 @@ chmod +x "$STAGE"/scripts/*.sh "$STAGE"/src/system/*.sh "$STAGE"/tests/*.sh
   bash tests/test_load_hermes_runtime_env.sh
 )
 
-# Tests must not leak runtime state into the release.
+# Tests must not leak runtime state or generated Python bytecode into the release.
 rm -rf "$STAGE/.hermes" "$STAGE/.skills/logs"
+find "$STAGE" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "$STAGE" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
 # Fail closed before final archive creation if tracked source or staged content
 # contains credential-like material. The scanner reports detector classes only.
