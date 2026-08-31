@@ -29,6 +29,7 @@ CURRENT_PREVIOUS="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
 MANAGED_SKILLS_CURRENT="$VAR_ROOT/.hermes/managed-skill-releases/hermes-ultra/current"
 MANAGED_SKILLS_PREVIOUS="$(readlink "$MANAGED_SKILLS_CURRENT" 2>/dev/null || true)"
 RUNTIME_SKILL_SYNC_SCRIPT=""
+RELAY_INSTALLER_OVERRIDE="${HERMES_RELAY_INSTALLER:-}"
 SUCCESS=0; RUNTIME_TARGET_CREATED=0; RUNTIME_ACTIVE_SWAPPED=0; CURRENT_SWAPPED=0; RUNTIME_SERVICE_STARTED=0; RUNTIME_SERVICE_WAS_ACTIVE=0; RUNTIME_SKILLS_SYNCED=0
 cleanup(){
   local rc=$?
@@ -128,6 +129,11 @@ if [[ "$TEST_MODE" == 1 && "${HERMES_INSTALL_TEST_FAIL_AFTER_SKILL_SYNC:-0}" == 
   exit 97
 fi
 if [[ "$TEST_MODE" != 1 ]]; then chown -R hermes:hermes "$TARGET"; fi
+RELAY_INSTALLER="${RELAY_INSTALLER_OVERRIDE:-$TARGET/scripts/install-hermes-relay.sh}"
+[[ -x "$RELAY_INSTALLER" ]] || { echo 'Hermes Relay installer missing from release' >&2; exit 1; }
+if [[ "$TEST_MODE" == 1 ]]; then
+  "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$(command -v python3)"     --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR" --test-mode
+fi
 
 if [[ "$TEST_MODE" != 1 ]]; then
   bash "$TARGET/scripts/ensure-node-runtime.sh"
@@ -155,6 +161,7 @@ if [[ "$TEST_MODE" != 1 ]]; then
     first="$(head -n1 "$path")"
     [[ "$first" == "#!$RUNTIME_TARGET/venv/bin/"* ]] || { echo "runtime entrypoint is not final-path stable: $entry" >&2; exit 1; }
   done
+  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes"     "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$PY"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
   runuser -u hermes -- "$TARGET/scripts/restore-vps-transfer.sh" --skip-agent-reach --skip-python-deps
   runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" HERMES_RUNTIME_PYTHON="$RUNTIME_TARGET/venv/bin/python" bash "$TARGET/scripts/sync-mcp-provider-registry.sh" apply
   runuser -u hermes -- "$TARGET/scripts/verify-cloud-foundation.sh"
@@ -257,6 +264,9 @@ PYHEALTH
       "$TARGET/scripts/configure-tailscale-hermes.sh"
     fi
   fi
+  HERMES_RELAY_HERMES_BIN="$VAR_ROOT/.local/bin/hermes"     "$RELAY_INSTALLER" activate --release-root "$TARGET" --runtime-python "$RUNTIME_TARGET/venv/bin/python"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
+else
+  "$RELAY_INSTALLER" activate --release-root "$TARGET" --runtime-python "$(command -v python3)"     --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR" --test-mode
 fi
 SUCCESS=1
 printf 'HERMES_LOCAL_INSTALL=PASS release=%s\n' "$RELEASE_ID"

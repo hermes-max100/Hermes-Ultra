@@ -1,0 +1,105 @@
+{
+  "classes": {
+    "device_mutation": {
+      "action_type": "relay.device_mutation",
+      "consequential": true,
+      "operations": [
+        "android_tap",
+        "android_tap_text",
+        "android_long_press",
+        "android_type",
+        "android_swipe",
+        "android_drag",
+        "android_open_app",
+        "android_press_key",
+        "android_scroll",
+        "android_media",
+        "android_setup",
+        "android_macro",
+        "android_clipboard_write",
+        "android_send_intent",
+        "android_broadcast",
+        "android_return_to_hermes"
+      ],
+      "risk_class": "medium"
+    },
+    "external_communication": {
+      "action_type": "relay.external_communication",
+      "consequential": true,
+      "operations": [
+        "android_call",
+        "android_send_sms",
+        "android_share_media",
+        "android_send_mms"
+      ],
+      "risk_class": "high"
+    },
+    "filesystem_mutation": {
+      "action_type": "relay.filesystem_mutation",
+      "consequential": true,
+      "operations": [
+        "desktop_write_file",
+        "desktop_patch",
+        "desktop_copy_directory",
+        "desktop_zip",
+        "desktop_unzip"
+      ],
+      "risk_class": "medium"
+    },
+    "observe": {
+      "action_type": "",
+      "consequential": false,
+      "operations": [
+        "android_ping",
+        "android_read_screen",
+        "android_find_nodes",
+        "android_screenshot",
+        "android_get_apps",
+        "android_current_app",
+        "android_describe_node",
+        "android_wait",
+        "android_clipboard_read",
+        "android_screen_hash",
+        "android_diff_screen",
+        "android_events",
+        "android_event_stream",
+        "android_location",
+        "android_search_contacts",
+        "desktop_read_file",
+        "desktop_search_files",
+        "desktop_list_processes",
+        "desktop_find_pid_by_port",
+        "desktop_job_status",
+        "desktop_job_logs",
+        "desktop_job_list",
+        "desktop_checksum",
+        "desktop_health",
+        "desktop_computer_status",
+        "desktop_computer_screenshot"
+      ],
+      "risk_class": "low"
+    },
+    "process_control": {
+      "action_type": "relay.process_control",
+      "consequential": true,
+      "operations": [
+        "desktop_terminal",
+        "desktop_powershell",
+        "desktop_spawn_detached",
+        "desktop_kill_process",
+        "desktop_job_start",
+        "desktop_job_cancel",
+        "desktop_computer_action",
+        "desktop_computer_grant_request",
+        "desktop_computer_cancel"
+      ],
+      "risk_class": "high"
+    }
+  },
+  "defaults": {
+    "desktop_access": "ask-every-time",
+    "full_access_auto": false,
+    "unconfigured_access": "restricted"
+  },
+  "schema_version": 1
+}

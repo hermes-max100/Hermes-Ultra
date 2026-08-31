@@ -6,9 +6,9 @@
     "url": "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.19"
   },
   "hermes_relay_android": {
-    "tag": "android-v1.12.0",
-    "version": "1.12.0",
-    "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.12.0"
+    "tag": "android-v1.13.2",
+    "version": "1.13.2",
+    "url": "https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.13.2"
   },
   "orca_runtime": {
     "tag": "v1.4.190",
@@ -18,9 +18,12 @@
     "sha256": "f5b321576d9c909f9e6987aa3bd20e8ff9f214d881b43c7109281cbc87878cde"
   },
   "node_runtime": {
-    "minimum_major": 18,
-    "packages": ["nodejs", "npm"],
-    "purpose": "MCP stdio providers including Playwright"
+    "minimum_major": 22,
+    "packages": [
+      "nodejs",
+      "npm"
+    ],
+    "purpose": "Pinned MCP stdio runtime including Playwright"
   },
-  "frozen_at": "2026-08-30"
+  "frozen_at": "2026-08-31"
 }
