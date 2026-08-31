@@ -21,6 +21,7 @@ grep -q 'sha256sum -c' "$BOOT"
 grep -q 'restore-vps-transfer.sh' "$BOOT"
 grep -q 'vendor/hermes-agent/0.20.5' "$BOOT" || { echo 'bootstrap does not use pinned Hermes Agent 0.20.5' >&2; exit 1; }
 grep -Eq 'nodejs.*npm|npm.*nodejs' "$BOOT" || { echo 'bootstrap does not provision Node/npm' >&2; exit 1; }
+grep -q 'nginx-core' "$BOOT" || { echo 'bootstrap does not provision loopback reverse proxy' >&2; exit 1; }
 grep -q 'ensure-node-runtime.sh' "$INSTALLER" || { echo 'local installer does not own Node runtime' >&2; exit 1; }
 grep -q 'sync-mcp-provider-registry.sh' "$INSTALLER" || { echo 'local installer does not apply MCP registry' >&2; exit 1; }
 grep -q 'configure-tailscale-hermes.sh' "$INSTALLER" || { echo 'local installer does not activate private Hermes/Orca runtime' >&2; exit 1; }
