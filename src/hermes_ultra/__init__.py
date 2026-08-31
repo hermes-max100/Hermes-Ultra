@@ -20,13 +20,39 @@ from .agency_agents import (
     IngestionResult,
     QualificationScore,
 )
-from .autonomy import ApprovalRegistry, AutonomyDecision
+from .autonomy import ActionConsequenceClassifier, ActionContext, ApprovalRegistry, AutonomyDecision
 from .benchmarks import (
     BenchmarkMetrics,
     BenchmarkReport,
     PromotionDecision,
     PromotionPolicy,
     ProviderRegistry,
+)
+from .capability_projection import (
+    CapabilityCatalog,
+    CapabilityExclusion,
+    CapabilityProjection,
+    CapabilityProjector,
+    ConsequenceClass,
+    EvidenceState,
+    ProjectedCapability,
+    ProjectionExclusionReason,
+    RuntimeCapabilityDescriptor,
+    default_runtime_capability_catalog,
+)
+from .capability_expansion import (
+    CapabilityExpansionController,
+    CapabilityExpansionDecision,
+    CapabilityExpansionEvent,
+    CapabilityObservation,
+)
+from .capability_diagnostics import (
+    CapabilityDiagnostic,
+    CapabilityDiagnosticReport,
+    CapabilityDoctor,
+    RuntimeCapabilityObservation,
+    VerificationHookRegistry,
+    VerificationHookResult,
 )
 from .capability_context import (
     Capability,
@@ -165,6 +191,8 @@ __all__ = [
     "AgencyAgentIngestor",
     "IngestionResult",
     "QualificationScore",
+    "ActionContext",
+    "ActionConsequenceClassifier",
     "ApprovalRegistry",
     "AutonomyDecision",
     "BenchmarkMetrics",
@@ -172,6 +200,26 @@ __all__ = [
     "PromotionDecision",
     "PromotionPolicy",
     "ProviderRegistry",
+    "CapabilityCatalog",
+    "CapabilityExclusion",
+    "CapabilityProjection",
+    "CapabilityProjector",
+    "ConsequenceClass",
+    "EvidenceState",
+    "ProjectedCapability",
+    "ProjectionExclusionReason",
+    "RuntimeCapabilityDescriptor",
+    "default_runtime_capability_catalog",
+    "CapabilityExpansionController",
+    "CapabilityExpansionDecision",
+    "CapabilityExpansionEvent",
+    "CapabilityObservation",
+    "CapabilityDiagnostic",
+    "CapabilityDiagnosticReport",
+    "CapabilityDoctor",
+    "RuntimeCapabilityObservation",
+    "VerificationHookRegistry",
+    "VerificationHookResult",
     "Capability",
     "CapabilityContextOrchestrator",
     "ContextBuilder",

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "source_repository": "rlaope/oh-my-hermes",
+  "stable_release": {
+    "tag": "v2.0.0",
+    "wheel_sha256": "302ef2e629d99159a5e059c754a13e93c3435088b518af69a378da902ee45725"
+  },
+  "research_snapshot": {
+    "commit": "06df4eac8f300d9aa27290661f9edb0fb61e9b9d"
+  },
+  "license": "MIT",
+  "runtime_authority": false,
+  "install_mode": "concepts_only",
+  "router_authority": "omniroute",
+  "durable_memory_authority": false
+}
