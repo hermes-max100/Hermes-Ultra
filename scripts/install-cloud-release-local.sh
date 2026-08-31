@@ -170,6 +170,9 @@ fi
 TMP_LINK="$INSTALL_ROOT/.current.install.$$"
 ln -s "$TARGET" "$TMP_LINK"; mv -Tf "$TMP_LINK" "$CURRENT_LINK"; CURRENT_SWAPPED=1
 mkdir -p "$SYSTEMD_DIR"
+LEGACY_RUNTIME_DROPIN="$SYSTEMD_DIR/hermes-runtime.service.d/0205.conf"
+rm -f "$LEGACY_RUNTIME_DROPIN"
+rmdir "$SYSTEMD_DIR/hermes-runtime.service.d" 2>/dev/null || true
 cat >"$SYSTEMD_DIR/hermes-runtime.service" <<UNIT
 [Unit]
 Description=Hermes Agent headless backend
