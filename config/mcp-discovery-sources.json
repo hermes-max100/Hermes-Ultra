@@ -1,0 +1,98 @@
+{
+  "schema_version": "hermes-mcp-discovery-sources-v1",
+  "canonical_source": "official_mcp_registry",
+  "interface_preference": [
+    "native",
+    "cli_skill",
+    "official_api",
+    "official_mcp",
+    "verified_community_mcp",
+    "browser_automation"
+  ],
+  "sources": [
+    {
+      "id": "official_mcp_registry",
+      "display_name": "Official MCP Registry",
+      "url": "https://registry.modelcontextprotocol.io/",
+      "authority": "canonical",
+      "trust": "CANONICAL_DISCOVERY",
+      "priority": 1000,
+      "query_mode": "registry_api",
+      "can_discover": true,
+      "can_verify": false,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    },
+    {
+      "id": "vendor_repositories",
+      "display_name": "Vendor repositories and documentation",
+      "url": "https://github.com/",
+      "authority": "provenance_verification",
+      "trust": "VERIFICATION_SOURCE",
+      "priority": 900,
+      "query_mode": "vendor_repo",
+      "can_discover": true,
+      "can_verify": true,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    },
+    {
+      "id": "docker_mcp_catalog",
+      "display_name": "Docker MCP Catalog",
+      "url": "https://hub.docker.com/mcp",
+      "authority": "supplemental_discovery",
+      "trust": "UNTRUSTED_DISCOVERY",
+      "priority": 600,
+      "query_mode": "catalog",
+      "can_discover": true,
+      "can_verify": false,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    },
+    {
+      "id": "allmcpservers",
+      "display_name": "All MCP Servers",
+      "url": "https://www.allmcpservers.com/",
+      "authority": "supplemental_discovery",
+      "trust": "UNTRUSTED_DISCOVERY_ONLY",
+      "priority": 500,
+      "query_mode": "site_search",
+      "can_discover": true,
+      "can_verify": false,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    },
+    {
+      "id": "github_search",
+      "display_name": "GitHub long-tail search",
+      "url": "https://github.com/search",
+      "authority": "long_tail_discovery",
+      "trust": "UNTRUSTED_DISCOVERY_ONLY",
+      "priority": 300,
+      "query_mode": "github_search",
+      "can_discover": true,
+      "can_verify": false,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    },
+    {
+      "id": "awesome_mcp_lists",
+      "display_name": "Curated MCP lists",
+      "url": "https://github.com/punkpeye/awesome-mcp-servers",
+      "authority": "weak_discovery",
+      "trust": "UNTRUSTED_DISCOVERY_ONLY",
+      "priority": 100,
+      "query_mode": "curated_list",
+      "can_discover": true,
+      "can_verify": false,
+      "can_promote": false,
+      "can_install": false,
+      "can_activate": false
+    }
+  ]
+}

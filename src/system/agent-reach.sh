@@ -14,6 +14,8 @@ SAFE_FETCH="$ROOT_DIR/src/system/agent-reach-safe-fetch.py"
 QUERY_HELPER="$ROOT_DIR/src/system/agent-reach-query.py"
 GITHUB_QUERY_HELPER="$ROOT_DIR/src/system/agent-reach-github-query.py"
 ENVELOPE="$ROOT_DIR/src/system/agent-reach-envelope.py"
+MCP_DISCOVERY_SOURCES="$ROOT_DIR/config/mcp-discovery-sources.json"
+MCP_DISCOVERY_GOVERNANCE="$ROOT_DIR/src/system/mcp-discovery-governance.py"
 PROVISIONER="$ROOT_DIR/scripts/provision-agent-reach.sh"
 TRUSTED_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/data/data/com.termux/files/usr/bin"
 export PATH="$TRUSTED_PATH"
@@ -29,10 +31,15 @@ Usage:
   src/system/agent-reach.sh search <query>
   src/system/agent-reach.sh github <query>
   src/system/agent-reach.sh read <public-http(s)-url>
+  src/system/agent-reach.sh mcp-sources
+  src/system/agent-reach.sh mcp-candidate --source <source-id> --name <name> [--homepage <https-url>] [--repository <https-url>]
+  src/system/agent-reach.sh mcp-interface <available-interface>...
 
 Security boundary:
   - Runtime never installs, updates, configures cookies, or accepts raw Agent
     Reach commands.
+  - MCP discovery commands expose source policy, normalize DISCOVERED candidates,
+    and select interfaces only; they cannot promote, install, or activate providers.
   - Provisioning is separate: scripts/provision-agent-reach.sh install
   - Internet/search results are emitted in an explicit untrusted JSON envelope.
 EOF
@@ -257,6 +264,21 @@ cmd_read() {
     | "$PYTHON_BIN" "$ENVELOPE" --kind web --source "$url"
 }
 
+cmd_mcp_sources() {
+  [[ $# -eq 0 ]] || die "mcp-sources takes no arguments"
+  "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" sources
+}
+
+cmd_mcp_candidate() {
+  [[ $# -gt 0 ]] || die "mcp-candidate requires candidate arguments"
+  "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" candidate "$@"
+}
+
+cmd_mcp_interface() {
+  [[ $# -gt 0 ]] || die "mcp-interface requires at least one available interface"
+  "$PYTHON_BIN" "$MCP_DISCOVERY_GOVERNANCE" --registry "$MCP_DISCOVERY_SOURCES" choose-interface "$@"
+}
+
 main() {
   local command="${1:-help}"
   [[ $# -gt 0 ]] && shift
@@ -267,6 +289,9 @@ main() {
     search) cmd_search "$@" ;;
     github) cmd_github "$@" ;;
     read) cmd_read "$@" ;;
+    mcp-sources) cmd_mcp_sources "$@" ;;
+    mcp-candidate) cmd_mcp_candidate "$@" ;;
+    mcp-interface) cmd_mcp_interface "$@" ;;
     help|-h|--help) usage ;;
     install|raw|configure|setup|uninstall|skill|transcribe)
       die "command '$command' is outside the read/collect runtime boundary; use governed provisioning/configuration instead"
