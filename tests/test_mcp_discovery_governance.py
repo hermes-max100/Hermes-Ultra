@@ -29,13 +29,16 @@ class MCPDiscoveryGovernanceTests(unittest.TestCase):
         cls.data = cls.mod.load_source_registry(SOURCES)
         cls.sources = {row["id"]: row for row in cls.data["sources"]}
 
+    def clone_registry(self):
+        return json.loads(json.dumps(self.data))
+
     def test_source_registry_is_valid_and_official_registry_is_canonical(self):
         self.assertEqual(self.mod.validate_source_registry(self.data), [])
         self.assertEqual(self.data["canonical_source"], "official_mcp_registry")
         canonical = self.sources["official_mcp_registry"]
         self.assertEqual(canonical["authority"], "canonical")
         self.assertEqual(canonical["trust"], "CANONICAL_DISCOVERY")
-        self.assertTrue(canonical["url"].startswith("https://registry.modelcontextprotocol.io"))
+        self.assertEqual(canonical["url"], "https://registry.modelcontextprotocol.io/")
 
     def test_allmcpservers_is_untrusted_discovery_only(self):
         source = self.sources["allmcpservers"]
@@ -105,13 +108,42 @@ class MCPDiscoveryGovernanceTests(unittest.TestCase):
         self.assertIsNone(choose(self.data, []))
 
     def test_registry_rejects_any_source_with_activation_power(self):
-        mutated = {
-            **self.data,
-            "sources": [dict(row) for row in self.data["sources"]],
-        }
+        mutated = self.clone_registry()
         mutated["sources"][0]["can_activate"] = True
         errors = self.mod.validate_source_registry(mutated)
         self.assertTrue(any("can_activate" in error for error in errors))
+
+    def test_registry_rejects_required_source_removal_or_authority_drift(self):
+        missing = self.clone_registry()
+        missing["sources"] = [row for row in missing["sources"] if row["id"] != "allmcpservers"]
+        self.assertTrue(
+            any("required source missing: allmcpservers" in error for error in self.mod.validate_source_registry(missing))
+        )
+
+        official = self.clone_registry()
+        next(row for row in official["sources"] if row["id"] == "official_mcp_registry")["url"] = "https://example.com/registry"
+        self.assertTrue(
+            any("official_mcp_registry: url must remain" in error for error in self.mod.validate_source_registry(official))
+        )
+
+        vendor = self.clone_registry()
+        next(row for row in vendor["sources"] if row["id"] == "vendor_repositories")["can_verify"] = False
+        self.assertTrue(
+            any("vendor_repositories: can_verify must remain true" in error for error in self.mod.validate_source_registry(vendor))
+        )
+
+    def test_registry_rejects_mcp_first_interface_preference_drift(self):
+        mutated = self.clone_registry()
+        mutated["interface_preference"] = [
+            "official_mcp",
+            "native",
+            "cli_skill",
+            "official_api",
+            "verified_community_mcp",
+            "browser_automation",
+        ]
+        errors = self.mod.validate_source_registry(mutated)
+        self.assertTrue(any("interface_preference must remain" in error for error in errors))
 
     def test_agent_reach_exposes_governed_mcp_sources_without_installing_anything(self):
         proc = subprocess.run(
