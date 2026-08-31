@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "name": "design-engineer-acceptance",
+  "required_gates": [
+    {
+      "id": "source_policy_pass",
+      "pass_when": "Every external capability used is permitted by sources.json at its current trust class and any required promotion evidence exists."
+    },
+    {
+      "id": "build_success",
+      "pass_when": "All project-required build, typecheck, lint, or compile commands affected by the change complete successfully."
+    },
+    {
+      "id": "no_new_console_errors",
+      "pass_when": "Changed rendered routes introduce no new relevant browser console errors and no unexplained relevant failed network requests."
+    },
+    {
+      "id": "responsive_pass",
+      "pass_when": "Changed rendered surfaces pass the repository viewport matrix, or the fallback mobile/tablet/desktop matrix when none exists."
+    },
+    {
+      "id": "accessibility_pass",
+      "pass_when": "Changed controls and flows retain semantic labeling, keyboard operation, visible focus, usable errors/recovery, and applicable project accessibility checks."
+    },
+    {
+      "id": "interaction_pass",
+      "pass_when": "Material user flows affected by the change complete in a real browser with expected state transitions."
+    },
+    {
+      "id": "web_interface_guidelines_pass",
+      "pass_when": "Applicable findings from the current official Vercel Web Interface Guidelines are resolved or explicitly documented as non-applicable with evidence."
+    },
+    {
+      "id": "visual_regression_pass",
+      "pass_when": "Stable project visual assertions pass, or visual regression is explicitly not_applicable because no rendered UI changed. Missing browser tooling is not a not_applicable reason for rendered UI changes."
+    }
+  ],
+  "fallback_viewports": [
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "name": "tablet",
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "visual_fidelity_dimensions": [
+    "structural_similarity",
+    "typography_similarity",
+    "spacing_rhythm_similarity",
+    "palette_surface_similarity",
+    "component_geometry_similarity"
+  ],
+  "prohibited_shortcuts": [
+    "auto_accept_changed_visual_baseline",
+    "delete_or_weaken_failing_assertion_to_obtain_pass",
+    "suppress_relevant_console_error_instead_of_fixing_root_cause",
+    "declare_pixel_perfect_without_measured_evidence",
+    "treat_source_code_review_as_rendered_ui_verification",
+    "allow_discovery_catalog_to_install_or_promote_itself"
+  ],
+  "failure_classes": [
+    "SOURCE_POLICY_FAILURE",
+    "BUILD_FAILURE",
+    "BROWSER_RUNTIME_FAILURE",
+    "INTERACTION_FAILURE",
+    "ACCESSIBILITY_FAILURE",
+    "RESPONSIVE_FAILURE",
+    "GUIDELINE_FAILURE",
+    "VISUAL_REGRESSION_FAILURE",
+    "EXTERNAL_BLOCKER"
+  ]
+}
