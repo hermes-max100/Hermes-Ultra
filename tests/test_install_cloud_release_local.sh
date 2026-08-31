@@ -52,6 +52,11 @@ grep -q 'Environment=ORCA_CLI_COMMAND=/opt/orca/bin/orca-ide' "$UNIT"
 grep -q 'Environment=ORCA_USER_DATA_PATH=/var/lib/hermes/.config/hermes/orca-client/orca' "$UNIT"
 grep -q 'Environment=ORCA_ENVIRONMENT=hermes-runtime' "$UNIT"
 grep -q 'Environment=ORCA_TELEMETRY_DISABLED=1' "$UNIT"
+grep -q "WorkingDirectory=$VAR_ROOT/.hermes/hermes-agent-current" "$UNIT"
+grep -q 'runtime-releases' "$INSTALLER" || { echo 'installer does not use final versioned runtime paths' >&2; exit 1; }
+grep -q 'hermes-agent-current' "$INSTALLER" || { echo 'installer lacks atomic runtime selector' >&2; exit 1; }
+! grep -q 'mv "$RUNTIME_TMP" "$RUNTIME_ROOT"' "$INSTALLER" || { echo 'installer still relocates a built venv' >&2; exit 1; }
+grep -q 'RUNTIME_SERVICE_WAS_ACTIVE' "$INSTALLER" || { echo 'installer does not restore prior service after rollback' >&2; exit 1; }
 grep -q '/api/health' "$INSTALLER"
 if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
   bash "$INSTALLER" "$A1" "$(printf 'f%.0s' {1..64})" >/dev/null 2>&1; then
