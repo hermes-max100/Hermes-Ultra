@@ -36,7 +36,38 @@ INTERFACE_TYPES = {
     "verified_community_mcp",
     "browser_automation",
 }
+EXPECTED_INTERFACE_PREFERENCE = (
+    "native",
+    "cli_skill",
+    "official_api",
+    "official_mcp",
+    "verified_community_mcp",
+    "browser_automation",
+)
 CONTROL_FIELDS = ("can_promote", "can_install", "can_activate")
+REQUIRED_SOURCE_CONSTRAINTS: dict[str, dict[str, Any]] = {
+    "official_mcp_registry": {
+        "url": "https://registry.modelcontextprotocol.io/",
+        "authority": "canonical",
+        "trust": "CANONICAL_DISCOVERY",
+        "priority": 1000,
+        "can_verify": False,
+    },
+    "vendor_repositories": {
+        "url": "https://github.com/",
+        "authority": "provenance_verification",
+        "trust": "VERIFICATION_SOURCE",
+        "priority": 900,
+        "can_verify": True,
+    },
+    "allmcpservers": {
+        "url": "https://www.allmcpservers.com/",
+        "authority": "supplemental_discovery",
+        "trust": "UNTRUSTED_DISCOVERY_ONLY",
+        "priority": 500,
+        "can_verify": False,
+    },
+}
 
 
 class DiscoveryGovernanceError(ValueError):
@@ -76,6 +107,11 @@ def validate_source_registry(data: Mapping[str, Any]) -> list[str]:
         or len(set(preference)) != len(preference)
     ):
         errors.append("interface_preference contains invalid or duplicate interface IDs")
+    elif preference != list(EXPECTED_INTERFACE_PREFERENCE):
+        errors.append(
+            "interface_preference must remain native, cli_skill, official_api, "
+            "official_mcp, verified_community_mcp, browser_automation"
+        )
 
     sources = data.get("sources")
     if not isinstance(sources, list) or not sources:
@@ -119,11 +155,26 @@ def validate_source_registry(data: Mapping[str, Any]) -> list[str]:
         if source.get("authority") == "canonical":
             canonical_ids.append(source_id)
 
+    for source_id, constraints in REQUIRED_SOURCE_CONSTRAINTS.items():
+        source = source_by_id.get(source_id)
+        if source is None:
+            errors.append(f"required source missing: {source_id}")
+            continue
+        for field, expected in constraints.items():
+            if source.get(field) != expected:
+                if field == "url":
+                    errors.append(f"{source_id}: url must remain {expected}")
+                else:
+                    rendered = str(expected).lower() if isinstance(expected, bool) else str(expected)
+                    errors.append(f"{source_id}: {field} must remain {rendered}")
+
     canonical_source = data.get("canonical_source")
     if not isinstance(canonical_source, str) or canonical_source not in source_by_id:
         errors.append("canonical_source must reference a configured source")
     else:
         canonical = source_by_id[canonical_source]
+        if canonical_source != "official_mcp_registry":
+            errors.append("canonical_source must remain official_mcp_registry")
         if canonical.get("authority") != "canonical":
             errors.append("canonical_source must have authority=canonical")
         if canonical.get("trust") != "CANONICAL_DISCOVERY":
@@ -134,17 +185,6 @@ def validate_source_registry(data: Mapping[str, Any]) -> list[str]:
             errors.append("canonical_source must have highest priority")
     if len(canonical_ids) != 1:
         errors.append("exactly one source must have authority=canonical")
-
-    allmcp = source_by_id.get("allmcpservers")
-    if allmcp is not None:
-        if allmcp.get("url") != "https://www.allmcpservers.com/":
-            errors.append("allmcpservers: canonical discovery URL must remain https://www.allmcpservers.com/")
-        if allmcp.get("trust") != "UNTRUSTED_DISCOVERY_ONLY":
-            errors.append("allmcpservers: trust must remain UNTRUSTED_DISCOVERY_ONLY")
-        if allmcp.get("authority") != "supplemental_discovery":
-            errors.append("allmcpservers: authority must remain supplemental_discovery")
-        if allmcp.get("can_verify") is not False:
-            errors.append("allmcpservers: can_verify must remain false")
 
     return errors
 
@@ -251,7 +291,11 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"valid": False, "errors": errors}, indent=2, sort_keys=True))
             return 2
         if args.command == "validate":
-            result: Any = {"valid": True, "sources": len(data["sources"]), "canonical_source": data["canonical_source"]}
+            result: Any = {
+                "valid": True,
+                "sources": len(data["sources"]),
+                "canonical_source": data["canonical_source"],
+            }
         elif args.command == "sources":
             result = ordered_sources(data)
         elif args.command == "candidate":
