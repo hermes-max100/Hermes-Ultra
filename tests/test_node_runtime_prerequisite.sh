@@ -24,6 +24,14 @@ chmod +x "$TMP/bin/node"
 if PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 bash "$SCRIPT" >/dev/null 2>&1; then
   echo 'Node 18 runtime was incorrectly accepted' >&2; exit 1
 fi
+cat >"$TMP/bin/node" <<'EOF'
+#!/usr/bin/env bash
+echo v24.19.0
+EOF
+chmod +x "$TMP/bin/node"
+if PATH="$TMP/bin:/usr/bin:/bin" HERMES_NODE_ALLOW_INSTALL=0 bash "$SCRIPT" >/dev/null 2>&1; then
+  echo 'un-pinned Node 24 runtime was incorrectly accepted' >&2; exit 1
+fi
 
 grep -q 'NODE_VERSION="${HERMES_NODE_VERSION:-22.23.2}"' "$SCRIPT" || { echo 'Node runtime is not pinned to 22.23.2' >&2; exit 1; }
 grep -q 'd60acfe00a2932254bb0ad20e01b0d74397a0875595de719654b214f4b03f307' "$SCRIPT" || { echo 'Node x64 checksum pin missing' >&2; exit 1; }
