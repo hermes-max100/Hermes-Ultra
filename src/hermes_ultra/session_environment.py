@@ -4,11 +4,17 @@ import hashlib
 import json
 import os
 import re
+import threading
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Iterable, Mapping
+from typing import Callable, Iterable, Mapping, TextIO
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback keeps thread safety.
+    fcntl = None  # type: ignore[assignment]
 
 from .evidence import EvidenceEnvelope, EvidenceRecorder, redact_secrets
 
@@ -123,7 +129,9 @@ class SessionEnvironment:
 
     Payloads are content-addressed and stored outside the event log. The event
     stream is the only workspace authority; current bindings are reconstructed
-    by replay and never trusted from a mutable snapshot.
+    by replay and never trusted from a mutable snapshot. Appends are serialized
+    per instance and, on POSIX systems, across processes with `flock` so parallel
+    autonomous workers cannot allocate duplicate event sequence numbers.
     """
 
     def __init__(
@@ -145,13 +153,29 @@ class SessionEnvironment:
         self.events_path = self.session_dir / "events.jsonl"
         self.compute_registry = compute_registry or SessionComputeRegistry()
         self.evidence_recorder = evidence_recorder
+        self._thread_lock = threading.RLock()
 
         self.payload_dir.mkdir(parents=True, exist_ok=True)
         self.events_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.events_path.exists():
-            with self.events_path.open("xb") as handle:
-                handle.flush()
-                os.fsync(handle.fileno())
+            try:
+                with self.events_path.open("xb") as handle:
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            except FileExistsError:
+                pass
+
+    @staticmethod
+    def _lock_handle(handle: TextIO, *, exclusive: bool) -> None:
+        if fcntl is None:
+            return
+        operation = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+        fcntl.flock(handle.fileno(), operation)
+
+    @staticmethod
+    def _unlock_handle(handle: TextIO) -> None:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _validate_payload_ref(payload_ref: str) -> str:
@@ -231,26 +255,35 @@ class SessionEnvironment:
             binding=binding_value,
         )
 
-    def events(self) -> tuple[SessionEvent, ...]:
+    def _read_events(self, handle: TextIO) -> tuple[SessionEvent, ...]:
+        handle.seek(0)
         events: list[SessionEvent] = []
-        with self.events_path.open("r", encoding="utf-8") as handle:
-            for line_number, line in enumerate(handle, start=1):
-                if not line.strip():
-                    continue
-                try:
-                    raw = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise SessionIntegrityError(
-                        f"invalid event JSON at line {line_number}"
-                    ) from exc
-                if not isinstance(raw, Mapping):
-                    raise SessionIntegrityError(
-                        f"event record at line {line_number} must be an object"
-                    )
-                events.append(
-                    self._event_from_mapping(raw, expected_sequence=len(events) + 1)
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise SessionIntegrityError(
+                    f"invalid event JSON at line {line_number}"
+                ) from exc
+            if not isinstance(raw, Mapping):
+                raise SessionIntegrityError(
+                    f"event record at line {line_number} must be an object"
                 )
+            events.append(
+                self._event_from_mapping(raw, expected_sequence=len(events) + 1)
+            )
         return tuple(events)
+
+    def events(self) -> tuple[SessionEvent, ...]:
+        with self._thread_lock:
+            with self.events_path.open("r", encoding="utf-8") as handle:
+                self._lock_handle(handle, exclusive=False)
+                try:
+                    return self._read_events(handle)
+                finally:
+                    self._unlock_handle(handle)
 
     def _record_evidence(self, event: SessionEvent) -> None:
         if self.evidence_recorder is None:
@@ -284,20 +317,26 @@ class SessionEnvironment:
             raise ValueError("bind_as cannot be blank")
 
         payload_ref = self._store_payload(payload)
-        sequence = len(self.events()) + 1
-        event = SessionEvent(
-            sequence=sequence,
-            event_type=normalized_type,
-            payload_ref=payload_ref,
-            recorded_at=_now(),
-            metadata=dict(_json_safe(dict(metadata or {}))),
-            binding=binding,
-        )
-        event_bytes = _canonical_bytes(event.to_dict()) + b"\n"
-        with self.events_path.open("ab") as handle:
-            handle.write(event_bytes)
-            handle.flush()
-            os.fsync(handle.fileno())
+        normalized_metadata = dict(_json_safe(dict(metadata or {})))
+        with self._thread_lock:
+            with self.events_path.open("a+", encoding="utf-8") as handle:
+                self._lock_handle(handle, exclusive=True)
+                try:
+                    sequence = len(self._read_events(handle)) + 1
+                    event = SessionEvent(
+                        sequence=sequence,
+                        event_type=normalized_type,
+                        payload_ref=payload_ref,
+                        recorded_at=_now(),
+                        metadata=normalized_metadata,
+                        binding=binding,
+                    )
+                    handle.seek(0, os.SEEK_END)
+                    handle.write(_canonical_bytes(event.to_dict()).decode("utf-8") + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                finally:
+                    self._unlock_handle(handle)
         self._record_evidence(event)
         return event
 
