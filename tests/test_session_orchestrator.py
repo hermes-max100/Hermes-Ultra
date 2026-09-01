@@ -114,8 +114,8 @@ def test_session_aware_orchestrator_records_task_source_tool_and_outcome(tmp_pat
     assert events[2].metadata["step"] == "search"
 
 
-def test_session_aware_orchestrator_rejects_task_session_mismatch_without_running():
-    environment = SessionEnvironment(Path("/tmp/hermes-session-mismatch"), task_id="expected-task")
+def test_session_aware_orchestrator_rejects_task_session_mismatch_without_running(tmp_path: Path):
+    environment = SessionEnvironment(tmp_path, task_id="expected-task")
     executor = ModelExecutor()
     orchestrator = SessionAwareCapabilityContextOrchestrator(
         session_environment=environment,
