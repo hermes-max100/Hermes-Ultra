@@ -114,6 +114,26 @@ def test_session_aware_orchestrator_records_task_source_tool_and_outcome(tmp_pat
     assert events[2].metadata["step"] == "search"
 
 
+def test_repeated_run_initializes_task_session_only_once(tmp_path: Path):
+    environment = SessionEnvironment(tmp_path, task_id="repeat-task")
+    orchestrator = SessionAwareCapabilityContextOrchestrator(
+        session_environment=environment,
+        router=Router(),
+        model_executor=ModelExecutor(),
+        verifier=AcceptingVerifier(),
+    )
+    task = TaskSpec("repeat-task", "answer this question")
+
+    first = orchestrator.run(task)
+    second = orchestrator.run(task)
+
+    assert first.ok is True
+    assert second.ok is True
+    events = environment.events()
+    assert tuple(event.event_type for event in events) == ("task", "outcome", "outcome")
+    assert sum(event.event_type == "task" for event in events) == 1
+
+
 def test_session_aware_orchestrator_rejects_task_session_mismatch_without_running(tmp_path: Path):
     environment = SessionEnvironment(tmp_path, task_id="expected-task")
     executor = ModelExecutor()
