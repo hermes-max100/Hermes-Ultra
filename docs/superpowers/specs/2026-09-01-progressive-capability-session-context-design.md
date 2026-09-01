@@ -37,7 +37,7 @@ The runtime never changes lifecycle state, provider state, registry state, appro
 
 ### Discovery
 
-Discovery reuses the existing `CapabilityProjector` ranking semantics by creating a query-enriched task view. It should not duplicate a second ranking policy. Results expose compact summaries plus `discoverable_ids`, so omission from a shortlist never becomes loss of capability.
+Discovery reuses the existing `CapabilityProjector` ranking semantics by creating a query-enriched task view. It does not duplicate a second ranking policy. Results expose compact summaries plus `discoverable_ids`, so omission from a shortlist never becomes loss of capability.
 
 Unavailable descriptors may be discoverable and describable but are never dispatchable. This lets Hermes know that a capability exists without silently activating it.
 
@@ -55,7 +55,7 @@ Unavailable descriptors may be discoverable and describable but are never dispat
 
 If the descriptor is unknown, return `DEPENDENCY_MISSING`. If it exists but is not runtime-available, return recoverable `AUTHORITY_REQUIRED`; do not execute and do not attempt promotion. If a projection is present and omitted the requested capability, use the existing `CapabilityExpansionController`. Reversible local and already-authorized reversible remote actions expand autonomously and audibly. Existing consequential boundaries return `AUTHORITY_REQUIRED` and do not execute.
 
-The injected executor is responsible for actual capability execution and existing routing. The progressive runtime must preserve `CapabilityResult` semantics from that executor.
+The injected executor is responsible for actual capability execution and existing routing. The progressive runtime preserves `CapabilityResult` semantics from that executor.
 
 ### Authority invariants
 
@@ -109,17 +109,18 @@ If an existing `EvidenceRecorder` is injected, each append/compute operation rec
 
 ## Orchestrator integration
 
-Extend `CapabilityContextOrchestrator` with an optional `session_environment` dependency.
+Add `src/hermes_ultra/session_orchestrator.py` with `SessionAwareCapabilityContextOrchestrator`, a thin adapter/subclass around the existing `CapabilityContextOrchestrator` rather than modifying the core routing loop.
 
-When present:
+The adapter wraps the already-injected context sources, tool executor, and verifier so it can record:
 
-1. Record the task objective once at run start.
-2. Record context-source `ContextItem`s as session events.
-3. Record successful tool-result `ContextItem`s as session events.
-4. Record the final verification/outcome metadata.
-5. Do not change routing, tool escalation, approval, memory-writer, or evidence semantics.
+1. the task objective once at run start,
+2. successful context-source `ContextItem`s,
+3. successful tool-result `ContextItem`s,
+4. the accepted final verification/outcome metadata.
 
-This first integration makes the environment available to long-running loops without forcing all existing context consumers to migrate at once. `SessionEnvironment` itself exposes bounded projection/search APIs so future loops can replace repeated prompt replay with targeted projections without another interface change.
+The base `CapabilityContextOrchestrator` remains authoritative for classification, routing, tool escalation, capability expansion, approval boundaries, verification semantics, and memory writes. The session adapter records operational context only. A task/session ID mismatch fails recoverably before model or tool execution.
+
+This isolation keeps the existing orchestrator unchanged for consumers that do not opt into long-horizon session state, while making the environment immediately usable by loops that do. `SessionEnvironment` exposes bounded projection/search APIs so future loops can replace repeated prompt replay with targeted projections without another storage-interface change.
 
 ## Failure behavior
 
@@ -129,6 +130,7 @@ This first integration makes the environment available to long-running loops wit
 - Executor failure: propagate the existing `CapabilityResult` failure unchanged where possible.
 - Session payload corruption/hash mismatch: raise `SessionIntegrityError` before returning data to the model/runtime.
 - Malformed session log record or sequence discontinuity: raise `SessionIntegrityError`.
+- Task/session mismatch: recoverable `ADAPTER_REJECTED` before model or tool execution.
 - Evidence-recorder failure must not mutate already-written session data.
 
 ## Testing requirements
@@ -154,8 +156,9 @@ This first integration makes the environment available to long-running loops wit
 
 ### Integration
 
-- `CapabilityContextOrchestrator` works unchanged when no session environment is supplied.
-- With a session environment, task/context/tool/outcome events are recorded without changing router selection or approval behavior.
+- `CapabilityContextOrchestrator` works unchanged when the session adapter is not used.
+- `SessionAwareCapabilityContextOrchestrator` records task/context/tool/outcome events without changing router selection or approval behavior.
+- A task/session mismatch fails before execution and writes no session event.
 
 ## Acceptance criteria
 
