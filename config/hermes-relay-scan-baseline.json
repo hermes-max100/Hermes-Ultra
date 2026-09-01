@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "decision": "allow_exact_reviewed_snapshot",
+  "source": "Codename-11/hermes-relay",
+  "tag": "server-v1.10.0",
+  "source_commit": "08545ed32db07609c14730a7fc02cdd758f12434",
+  "source_manifest_sha256": "a75aa7085c77fe6e3bf3ad09ab3ceb4016834f697858124a526823843552de37",
+  "scanner_version": "plugin-guard-v1",
+  "raw_verdict": "dangerous",
+  "finding_count": 94,
+  "finding_fingerprint_sha256": "0dcd8fe38aaac7a9a510251301e5d1360e9c418e2c5e2fdd24879ef7b92df400",
+  "finding_severity_counts": {"critical": 11, "high": 6, "medium": 77},
+  "finding_pattern_counts": {
+    "backtick_subshell": 1,
+    "bind_all_interfaces": 1,
+    "curl_pipe_shell": 1,
+    "dns_exfil": 1,
+    "hardcoded_ip_port": 7,
+    "hermes_config_mod": 9,
+    "hermes_env_access": 16,
+    "hex_encoded_string": 3,
+    "python_subprocess": 14,
+    "shell_rc_mod": 25,
+    "ssh_dir_access": 4,
+    "suid_bit": 1,
+    "unicode_escape_chain": 2,
+    "unpinned_npm_install": 1,
+    "unpinned_pip_install": 8
+  },
+  "reviewed_at": "2026-09-01",
+  "review_rationale": "Exact pinned Relay server snapshot reviewed after production preflight reproduced scanner false positives in configuration references, defensive denylist documentation, generated dashboard code, and bounded subprocess/network functionality. Installer still forces a Tailscale-only bind and verifies upstream commit, wheel, and source manifest before this baseline can apply."
+}
