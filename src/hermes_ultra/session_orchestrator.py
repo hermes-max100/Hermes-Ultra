@@ -144,6 +144,33 @@ class SessionAwareCapabilityContextOrchestrator(CapabilityContextOrchestrator):
             **kwargs,
         )
 
+    def _initialize_task(self, task: TaskSpec) -> CapabilityResult[object] | None:
+        existing = self.session_environment.select(event_type="task", limit=1)
+        if existing:
+            payload = self.session_environment.load_payload(existing[0].payload_ref)
+            if isinstance(payload, dict) and payload.get("objective") != task.objective:
+                return CapabilityResult.failure(
+                    FailureClass.ADAPTER_REJECTED,
+                    "task objective does not match the initialized session objective",
+                    recoverable=True,
+                    metadata={
+                        "task_id": str(task.task_id),
+                        "session_task_id": self.session_environment.task_id,
+                    },
+                )
+            return None
+
+        self.session_environment.append(
+            "task",
+            {
+                "task_id": str(task.task_id),
+                "objective": task.objective,
+                "capability_hints": sorted(_hint_value(hint) for hint in task.capability_hints),
+                "metadata": dict(task.metadata),
+            },
+        )
+        return None
+
     def run(self, task: TaskSpec):
         if str(task.task_id) != self.session_environment.task_id:
             return CapabilityResult.failure(
@@ -156,13 +183,7 @@ class SessionAwareCapabilityContextOrchestrator(CapabilityContextOrchestrator):
                 },
             )
 
-        self.session_environment.append(
-            "task",
-            {
-                "task_id": str(task.task_id),
-                "objective": task.objective,
-                "capability_hints": sorted(_hint_value(hint) for hint in task.capability_hints),
-                "metadata": dict(task.metadata),
-            },
-        )
+        initialization_failure = self._initialize_task(task)
+        if initialization_failure is not None:
+            return initialization_failure
         return super().run(task)
