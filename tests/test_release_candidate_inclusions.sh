@@ -4,9 +4,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 for path in \
   config/hermes-relay-policy.json \
   config/hermes-relay-upstream.json \
+  config/hermes-relay-scan-baseline.json \
   scripts/stage-hermes-relay-source.sh \
   scripts/export-hermes-relay-dependency-lock.sh \
   scripts/install-hermes-relay.sh \
+  scripts/verify-hermes-relay-scan-baseline.py \
   scripts/hermes-relay-doctor.sh \
   src/system/hermes_relay_adapter.py \
   src/system/hermes_relay_policy.py \
