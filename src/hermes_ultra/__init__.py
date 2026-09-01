@@ -122,6 +122,7 @@ from .mcp_gateway import (
     McpToolDescriptor,
     McpTransport,
 )
+from .mcp_progressive import McpCapabilityBinding, McpProgressiveCapabilityFacade
 from .openmontage import MediaJob, MediaPipelineResult, OpenMontageAdapter
 from .orchestrator import CodingTaskResult, HermesUltraOrchestrator, ResearchTaskResult
 from .progressive_capabilities import (
@@ -299,6 +300,8 @@ __all__ = [
     "McpServerDiscovery",
     "McpToolDescriptor",
     "McpTransport",
+    "McpCapabilityBinding",
+    "McpProgressiveCapabilityFacade",
     "MediaJob",
     "MediaPipelineResult",
     "OpenMontageAdapter",
