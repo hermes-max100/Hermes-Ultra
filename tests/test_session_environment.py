@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -40,6 +42,28 @@ def test_append_externalizes_redacted_payload_and_keeps_event_log_compact(tmp_pa
     assert payload["message"] == "hello world"
     assert payload["authorization"] == "[REDACTED]"
     assert payload["nested"]["api_key"] == "[REDACTED]"
+
+
+def test_concurrent_append_serializes_event_sequence(tmp_path: Path, monkeypatch):
+    env = SessionEnvironment(tmp_path, task_id="task-concurrent")
+    original_events = env.events
+    rendezvous = threading.Barrier(2)
+
+    def synchronized_snapshot():
+        snapshot = original_events()
+        rendezvous.wait(timeout=5)
+        return snapshot
+
+    monkeypatch.setattr(env, "events", synchronized_snapshot)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(env.append, "note", {"value": value}) for value in (1, 2)]
+        results = [future.result(timeout=10) for future in futures]
+
+    monkeypatch.setattr(env, "events", original_events)
+    events = env.events()
+    assert tuple(event.sequence for event in events) == (1, 2)
+    assert {event.payload_ref for event in events} == {event.payload_ref for event in results}
+    assert {env.load_payload(event.payload_ref)["value"] for event in events} == {1, 2}
 
 
 def test_reopen_rebuilds_workspace_from_append_only_events(tmp_path: Path):
