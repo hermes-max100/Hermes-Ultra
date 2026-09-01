@@ -37,7 +37,9 @@ chmod +x "$BIN"/*
 make_release() {
   local root="$1"
   local vendor="$root/vendor/hermes-relay/server-v1.10.0"
-  mkdir -p "$root/config" "$vendor/source/plugin" "$vendor/source/plugin/relay"
+  mkdir -p "$root/config" "$root/scripts" "$vendor/source/plugin" "$vendor/source/plugin/relay"
+  cp "$ROOT_DIR/config/hermes-relay-scan-baseline.json" "$root/config/hermes-relay-scan-baseline.json"
+  cp "$ROOT_DIR/scripts/verify-hermes-relay-scan-baseline.py" "$root/scripts/verify-hermes-relay-scan-baseline.py"
   printf 'name: hermes-relay\nmanifest_version: 1\nversion: 1.10.0\n' > "$vendor/source/plugin/plugin.yaml"
   printf 'runtime\n' > "$vendor/source/plugin/relay/server.py"
   printf 'version = 1\n' > "$vendor/uv.lock"
@@ -95,6 +97,12 @@ for verdict in caution dangerous; do
     echo "$verdict plugin scan accepted" >&2; exit 1
   fi
 done
+
+# Test-only scan overrides must never bypass the production prepare path.
+COMMON_PROD=(--release-root "$RELEASE" --runtime-python "$BIN/python-runtime" --hermes-home "$HERMES_HOME" --systemd-dir "$SYSTEMD_DIR")
+if PATH="$BIN:$PATH" FAKE_COMMAND_LOG="$LOG" HERMES_RELAY_TEST_SCAN_VERDICT=safe bash "$SCRIPT" prepare "${COMMON_PROD[@]}" >/dev/null 2>&1; then
+  echo 'production scan override accepted' >&2; exit 1
+fi
 
 : > "$LOG"
 PATH="$BIN:$PATH" FAKE_COMMAND_LOG="$LOG" HERMES_RELAY_HERMES_BIN="$BIN/hermes" HERMES_RELAY_TEST_HEALTH=ok bash "$SCRIPT" activate "${COMMON[@]}" | grep -q 'HERMES_RELAY_ACTIVATE=PASS'
