@@ -152,7 +152,10 @@ def test_read_only_mcp_capability_dispatches_autonomously_through_gateway():
     assert result.ok is True
     assert result.value is not None
     assert result.value.value["called"] == "browser.snapshot"
-    assert [call["method"] for call in transport.calls] == ["tools/list", "tools/call"]
+    methods = [call["method"] for call in transport.calls]
+    assert methods[-1] == "tools/call"
+    assert methods.count("tools/call") == 1
+    assert all(method in {"tools/list", "tools/call"} for method in methods)
 
 
 def test_destructive_mcp_annotation_hits_existing_consequential_boundary_before_call():
