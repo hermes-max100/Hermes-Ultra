@@ -40,7 +40,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scan-result", required=True)
     parser.add_argument("--baseline", required=True)
-    parser.add_argument("--source-manifest", required=True)
+    parser.add_argument("--plugin-root", required=True)
     parser.add_argument("--source", required=True)
     parser.add_argument("--tag", required=True)
     source_group = parser.add_mutually_exclusive_group(required=True)
@@ -63,9 +63,20 @@ def main() -> int:
             return fail(f"source_commit:{type(exc).__name__}")
 
     try:
-        manifest_sha = hashlib.sha256(Path(args.source_manifest).read_bytes()).hexdigest()
+        plugin_root = Path(args.plugin_root)
+        if not plugin_root.is_dir():
+            raise OSError('plugin root is not a directory')
+        plugin_rows = []
+        for path in sorted(p for p in plugin_root.rglob('*') if p.is_file()):
+            plugin_rows.append({
+                'path': path.relative_to(plugin_root).as_posix(),
+                'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+            })
+        if not plugin_rows:
+            raise OSError('plugin root contains no files')
+        plugin_tree_sha = digest_json(plugin_rows)
     except OSError as exc:
-        return fail(f"source_manifest:{type(exc).__name__}")
+        return fail(f"plugin_root:{type(exc).__name__}")
 
     expected = {
         "schema_version": 1,
@@ -73,7 +84,7 @@ def main() -> int:
         "source": args.source,
         "tag": args.tag,
         "source_commit": source_commit,
-        "source_manifest_sha256": manifest_sha,
+        "plugin_tree_sha256": plugin_tree_sha,
         "scanner_version": scan.get("scanner_version"),
         "raw_verdict": scan.get("verdict"),
         "finding_count": len(findings),

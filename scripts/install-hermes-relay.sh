@@ -88,7 +88,7 @@ PYSCAN
   fi
   if python3 "$SCAN_BASELINE_VERIFIER" \
       --scan-result "$scan_json" --baseline "$SCAN_BASELINE" \
-      --source-commit-file "$VENDOR/SOURCE_COMMIT" --source-manifest "$VENDOR/SOURCE_MANIFEST.sha256" \
+      --source-commit-file "$VENDOR/SOURCE_COMMIT" --plugin-root "$PLUGIN" \
       --source 'Codename-11/hermes-relay' --tag 'server-v1.10.0' >&2; then
     rm -f "$scan_json"
     printf 'reviewed-safe\n'

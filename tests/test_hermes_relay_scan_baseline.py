@@ -19,8 +19,10 @@ class RelayScanBaselineTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
-        self.manifest = self.root / "SOURCE_MANIFEST.sha256"
-        self.manifest.write_text("abc  source/plugin/plugin.yaml\n")
+        self.plugin = self.root / "plugin"
+        (self.plugin / "relay").mkdir(parents=True)
+        (self.plugin / "plugin.yaml").write_text("name: hermes-relay\n")
+        (self.plugin / "relay" / "server.py").write_text("print('relay')\n")
         self.commit = "08545ed32db07609c14730a7fc02cdd758f12434"
         self.findings = [{
             "severity": "critical", "pattern_id": "hermes_config_mod",
@@ -35,6 +37,13 @@ class RelayScanBaselineTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+
+    def _plugin_tree_sha(self):
+        rows=[]
+        for path in sorted(p for p in self.plugin.rglob("*") if p.is_file()):
+            rows.append({"path": path.relative_to(self.plugin).as_posix(), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+        return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
     def _write_scan(self, findings, scanner="plugin-guard-v1", verdict="dangerous"):
         self.scan.write_text(json.dumps({"scanner_version": scanner, "verdict": verdict, "findings": findings}))
 
@@ -44,7 +53,7 @@ class RelayScanBaselineTests(unittest.TestCase):
             "source": "Codename-11/hermes-relay",
             "tag": "server-v1.10.0",
             "source_commit": self.commit,
-            "source_manifest_sha256": hashlib.sha256(self.manifest.read_bytes()).hexdigest(),
+            "plugin_tree_sha256": self._plugin_tree_sha(),
             "scanner_version": "plugin-guard-v1",
             "raw_verdict": "dangerous",
             "finding_count": len(findings),
@@ -58,7 +67,7 @@ class RelayScanBaselineTests(unittest.TestCase):
         return subprocess.run([
             "python3", str(SCRIPT), "--scan-result", str(self.scan),
             "--baseline", str(self.baseline), "--source-commit", commit or self.commit,
-            "--source-manifest", str(self.manifest), "--source", "Codename-11/hermes-relay",
+            "--plugin-root", str(self.plugin), "--source", "Codename-11/hermes-relay",
             "--tag", "server-v1.10.0",
         ], text=True, capture_output=True)
 
@@ -75,8 +84,8 @@ class RelayScanBaselineTests(unittest.TestCase):
     def test_changed_source_commit_is_rejected(self):
         self.assertNotEqual(self.run_verify("f" * 40).returncode, 0)
 
-    def test_changed_source_manifest_is_rejected(self):
-        self.manifest.write_text("changed\n")
+    def test_changed_plugin_tree_is_rejected(self):
+        (self.plugin / "relay" / "server.py").write_text("print('changed')\n")
         self.assertNotEqual(self.run_verify().returncode, 0)
 
     def test_scanner_version_change_is_rejected(self):
