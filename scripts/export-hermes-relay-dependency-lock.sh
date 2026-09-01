@@ -67,6 +67,12 @@ python3 - "$TMP" "$RUNTIME" <<'PY'
 import pathlib, re, sys
 src, out = map(pathlib.Path, sys.argv[1:])
 text = src.read_text()
+lines=[]
+for line in text.splitlines():
+    if line.startswith('#    uv export ') and ' --output-file ' in line:
+        line = line.rsplit(' --output-file ', 1)[0] + ' --output-file <normalized>'
+    lines.append(line)
+text = '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
 if re.search(r'(?m)^\s*-e\s+', text) or re.search(r'(?i)(git\+|https?://)', text):
     raise SystemExit('frozen export contains editable or direct URL dependency')
 blocks=[]; current=[]
