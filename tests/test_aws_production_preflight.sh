@@ -27,12 +27,31 @@ if [[ "$1 $2" == 'status --json' ]]; then
 elif [[ "$1 $2" == 'ip -4' ]]; then
   echo '100.64.0.10'
 elif [[ "$1" == serve ]]; then
-  printf '%s\n' "$*" > "${FAKE_TS_LOG:?}"
+  printf '%s\n' "$*" >> "${FAKE_TS_LOG:?}"
 else
   exit 2
 fi
 TS
 chmod +x "$BIN/tailscale"
+cat > "$BIN/nginx" <<'NGINX'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${FAKE_NGINX_LOG:?}"
+NGINX
+chmod +x "$BIN/nginx"
+cat > "$BIN/systemctl" <<'SYSTEMCTL'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${FAKE_SYSTEMCTL_LOG:?}"
+SYSTEMCTL
+chmod +x "$BIN/systemctl"
+cat > "$BIN/curl" <<'CURL'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${FAKE_CURL_LOG:?}"
+printf '{"ok":true,"version":"0.20.5"}\n'
+CURL
+chmod +x "$BIN/curl"
 cat > "$BIN/orca-installer" <<'ORCA'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -51,8 +70,14 @@ if PATH="$BIN:$PATH" FAKE_AWS_AUTH=bad bash "$ROOT_DIR/scripts/aws-production-pr
 grep -q '^AWS_AUTH=FAIL$' "$TMP/auth.out"
 if PATH="$BIN:$PATH" FAKE_TS_STATE=NeedsLogin FAKE_TS_LOG="$TMP/ts.log" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null 2>&1; then echo 'logged-out Tailscale accepted' >&2; exit 1; fi
 [[ ! -f "$TMP/orca.log" ]]
-PATH="$BIN:$PATH" FAKE_TS_LOG="$TMP/ts.log" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null
-grep -q '^serve --bg --yes http://127.0.0.1:9119$' "$TMP/ts.log"
+PATH="$BIN:$PATH" FAKE_TS_LOG="$TMP/ts.log" FAKE_NGINX_LOG="$TMP/nginx.log" FAKE_SYSTEMCTL_LOG="$TMP/systemctl.log" FAKE_CURL_LOG="$TMP/curl.log" HERMES_NGINX_CONF_PATH="$TMP/hermes-tailnet.conf" HERMES_NGINX_DEFAULT_SITE="$TMP/default" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null
+grep -q '^serve --tcp=9119 off$' "$TMP/ts.log"
+grep -q '^serve --bg --yes http://127.0.0.1:9120$' "$TMP/ts.log"
+grep -q 'listen 127.0.0.1:9120;' "$TMP/hermes-tailnet.conf"
+grep -q 'proxy_set_header Host 127.0.0.1:9119;' "$TMP/hermes-tailnet.conf"
+grep -q 'proxy_set_header Origin http://127.0.0.1:9119;' "$TMP/hermes-tailnet.conf"
+grep -q '^enable --now nginx.service$' "$TMP/systemctl.log"
+grep -q '127.0.0.1:9120/api/health' "$TMP/curl.log"
 grep -q '^address=100.64.0.10$' "$TMP/orca.log"
 ! grep -qi funnel "$ROOT_DIR/scripts/configure-tailscale-hermes.sh"
 echo 'AWS production preflight tests passed'
