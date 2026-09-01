@@ -122,8 +122,24 @@ from .mcp_gateway import (
     McpToolDescriptor,
     McpTransport,
 )
+from .mcp_progressive import McpCapabilityBinding, McpProgressiveCapabilityFacade
 from .openmontage import MediaJob, MediaPipelineResult, OpenMontageAdapter
 from .orchestrator import CodingTaskResult, HermesUltraOrchestrator, ResearchTaskResult
+from .progressive_capabilities import (
+    CapabilityDescription,
+    CapabilityDiscoveryHit,
+    CapabilityDiscoveryResult,
+    CapabilityDispatchResult,
+    ProgressiveCapabilityRuntime,
+)
+from .session_environment import (
+    SessionComputeRegistry,
+    SessionEnvironment,
+    SessionEvent,
+    SessionIntegrityError,
+    SessionProjection,
+)
+from .session_orchestrator import SessionAwareCapabilityContextOrchestrator
 from .skill_lifecycle import (
     DEFAULT_DISCOVERY_SOURCES,
     AuthorityProfile,
@@ -284,12 +300,25 @@ __all__ = [
     "McpServerDiscovery",
     "McpToolDescriptor",
     "McpTransport",
+    "McpCapabilityBinding",
+    "McpProgressiveCapabilityFacade",
     "MediaJob",
     "MediaPipelineResult",
     "OpenMontageAdapter",
     "CodingTaskResult",
     "HermesUltraOrchestrator",
     "ResearchTaskResult",
+    "CapabilityDescription",
+    "CapabilityDiscoveryHit",
+    "CapabilityDiscoveryResult",
+    "CapabilityDispatchResult",
+    "ProgressiveCapabilityRuntime",
+    "SessionComputeRegistry",
+    "SessionEnvironment",
+    "SessionEvent",
+    "SessionIntegrityError",
+    "SessionProjection",
+    "SessionAwareCapabilityContextOrchestrator",
     "DEFAULT_DISCOVERY_SOURCES",
     "AuthorityProfile",
     "CandidatePromotionPipeline",
