@@ -1,0 +1,153 @@
+{
+  "schema_version": "hermes-mcp-toolkit-registry-v1",
+  "authority": {
+    "provider_registry": "config/mcp-provider-registry.json",
+    "composition_can_promote": false,
+    "composition_can_route": false
+  },
+  "backends": {
+    "mcp_market": {
+      "kind": "provisioning_plan",
+      "executes_remote_api": false,
+      "notes": "Render a credential-free MCP Market Toolkit provisioning plan; use only documented vendor workflows to provision it."
+    }
+  },
+  "toolkits": [
+    {
+      "id": "hermes_development",
+      "display_name": "Hermes Development",
+      "profile": "coding",
+      "backend": "mcp_market",
+      "runtime_enabled": true,
+      "allowed_effects": ["read", "external_write"],
+      "selections": [
+        {
+          "provider_id": "github",
+          "capability": "repository.read",
+          "effect": "read",
+          "alias": "github_repo_read"
+        },
+        {
+          "provider_id": "github",
+          "capability": "repository.write",
+          "effect": "external_write",
+          "alias": "github_repo_write"
+        },
+        {
+          "provider_id": "context7",
+          "capability": "docs.retrieve",
+          "effect": "read",
+          "alias": "context7_docs"
+        },
+        {
+          "provider_id": "sentry",
+          "capability": "errors.read",
+          "effect": "read",
+          "alias": "sentry_errors"
+        },
+        {
+          "provider_id": "supabase",
+          "capability": "database.read",
+          "effect": "read",
+          "alias": "supabase_database_read"
+        },
+        {
+          "provider_id": "playwright",
+          "capability": "browser.capture",
+          "effect": "read",
+          "alias": "playwright_capture"
+        }
+      ]
+    },
+    {
+      "id": "hermes_production_readonly",
+      "display_name": "Hermes Production Read Only",
+      "profile": "research",
+      "backend": "mcp_market",
+      "runtime_enabled": false,
+      "allowed_effects": ["read"],
+      "selections": [
+        {
+          "provider_id": "exa",
+          "capability": "web.read",
+          "effect": "read",
+          "alias": "exa_web_read"
+        },
+        {
+          "provider_id": "context7",
+          "capability": "docs.retrieve",
+          "effect": "read",
+          "alias": "context7_docs"
+        },
+        {
+          "provider_id": "sentry",
+          "capability": "errors.read",
+          "effect": "read",
+          "alias": "sentry_errors"
+        }
+      ]
+    },
+    {
+      "id": "hermes_security_lab",
+      "display_name": "Hermes Security Lab",
+      "profile": "security_research",
+      "backend": "mcp_market",
+      "runtime_enabled": false,
+      "allowed_effects": ["read", "authorized_security_execution"],
+      "selections": [
+        {
+          "provider_id": "pentest_tools",
+          "capability": "security.scan",
+          "effect": "authorized_security_execution",
+          "alias": "authorized_security_scan"
+        },
+        {
+          "provider_id": "whoisxml",
+          "capability": "threat_intel.read",
+          "effect": "read",
+          "alias": "threat_intel_read"
+        },
+        {
+          "provider_id": "malware_patrol",
+          "capability": "ioc.lookup",
+          "effect": "read",
+          "alias": "ioc_lookup"
+        }
+      ]
+    },
+    {
+      "id": "hermes_revenue",
+      "display_name": "Hermes Revenue",
+      "profile": "revenue",
+      "backend": "mcp_market",
+      "runtime_enabled": false,
+      "allowed_effects": ["read", "external_write"],
+      "selections": [
+        {
+          "provider_id": "exa",
+          "capability": "web.search",
+          "effect": "read",
+          "alias": "market_research"
+        },
+        {
+          "provider_id": "playwright",
+          "capability": "browser.capture",
+          "effect": "read",
+          "alias": "browser_capture"
+        },
+        {
+          "provider_id": "composio",
+          "capability": "workflow.execute",
+          "effect": "external_write",
+          "alias": "workflow_execute"
+        },
+        {
+          "provider_id": "upload_post",
+          "capability": "social.publish",
+          "effect": "external_write",
+          "alias": "social_publish"
+        }
+      ]
+    }
+  ]
+}
