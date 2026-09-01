@@ -1,7 +1,7 @@
 # Nightcrawler Profile Design
 
 Date: 2026-09-01
-Status: Approved architecture, pending implementation plan
+Status: Architecture approved in chat; written spec pending owner review
 Branch: `ai/nightcrawler-profile`
 
 ## 1. Purpose
@@ -16,12 +16,14 @@ Core rule:
 
 Nightcrawler MUST NOT weaken, stub, simulate, remove, or rewrite an admitted tool merely because the tool is risky. When an upstream artifact is admitted, its original capability set remains available to Nightcrawler, subject only to the same platform-wide controls that already apply to Hermes-Ultra as a whole.
 
+Nightcrawler admission MUST NOT add a new per-tool approval requirement solely because a capability is classified as risky. Risk classification determines profile placement and cross-profile authorization; it does not reduce Nightcrawler-native capability.
+
 ## 2. Non-goals
 
 Nightcrawler is not:
 
 - a reduced-function security sandbox;
-- a fake or training-only replacement for real tools;
+- a fake, lab-only, or training-only replacement for real tools;
 - a second Hermes brain;
 - a new memory system;
 - a new model router;
@@ -41,7 +43,7 @@ Initial Nightcrawler inventory SHALL include, once provenance is resolved and pi
 - the `dark-web-osint-tools` catalog as a discovery/reference source;
 - Obliterus, as identified by the owner;
 - the `apurvsinghgautam/HTTP-Reverse-Shell` artifact;
-- authorized pentesting and exploitation tooling;
+- pentesting and exploitation tooling;
 - Tor and dark-web research tooling;
 - scanners and active assessment tooling;
 - malware-analysis and reverse-engineering skills;
@@ -51,7 +53,11 @@ Initial Nightcrawler inventory SHALL include, once provenance is resolved and pi
 
 The implementation inventory MUST resolve each admitted capability to an exact local skill, repository, package, binary, model, MCP server, or service identity. External artifacts MUST be provenance-pinned before activation.
 
+The implementation MUST resolve the owner's Obliterus reference to a concrete artifact identity before activation and MUST NOT guess or substitute a different tool when the identity is ambiguous.
+
 A tool's admission to Nightcrawler changes **where its execution authority lives**, not what the tool can do.
+
+The HTTP reverse-shell artifact and other real execution tools MUST remain real execution tools inside Nightcrawler. Adapters MAY normalize invocation, policy checks, receipts, and evidence, but MUST NOT convert them into simulation-only or lab-only substitutes.
 
 ## 4. Global capability visibility
 
@@ -193,6 +199,8 @@ A capability SHOULD be placed in Nightcrawler when it materially increases one o
 
 During implementation, Hermes-Ultra's existing skill/plugin inventory SHALL be audited against these criteria. The resulting inventory becomes an explicit Nightcrawler catalog rather than an implicit blacklist.
 
+Risk placement MUST NOT alter the upstream artifact, remove a function, or silently insert a weaker substitute.
+
 ## 11. Existing cyber profiles
 
 Existing cyber-specific or quarantine-oriented profiles, including `cyberkimi-quarantine`, are inputs to the Nightcrawler inventory review.
@@ -285,7 +293,8 @@ Implementation MUST include tests proving:
 10. Provenance mismatch blocks invocation without deleting or modifying the Nightcrawler capability.
 11. Agents can recommend visible Nightcrawler capabilities they are not authorized to execute.
 12. Risk inventory placement does not rewrite or reduce admitted upstream functionality.
-13. Protected model-routing files remain byte-for-byte unchanged.
+13. Real execution capabilities are not relabeled or replaced as lab-only/simulation-only solely because they live in Nightcrawler.
+14. Protected model-routing files remain byte-for-byte unchanged.
 
 ## 17. Acceptance criteria
 
@@ -295,6 +304,7 @@ Nightcrawler is accepted when:
 - the initial risky capability inventory is explicit and provenance-backed;
 - all Hermes profiles can inspect the Nightcrawler catalog;
 - Nightcrawler retains the admitted tools' original capability surfaces;
+- Nightcrawler-native execution does not require a cross-profile grant;
 - non-Nightcrawler execution requires owner-authorized grants;
 - owner grants can be narrow, broad, temporary, or explicitly persistent;
 - no privilege chaining occurs unless explicitly owner-authorized;
