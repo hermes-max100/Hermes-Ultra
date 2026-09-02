@@ -1,0 +1,48 @@
+name: deployment-connectivity-probe
+
+on:
+  push:
+    branches: ['ops/deploy-5fe92276']
+    paths: ['.github/workflows/deployment-connectivity-probe.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report configured deployment channels
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TAILSCALE_OAUTH_CLIENT_ID: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+          HERMES_SSH_PRIVATE_KEY: ${{ secrets.HERMES_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os
+          groups = {
+              'TAILSCALE_AUTHKEY': ['TAILSCALE_AUTHKEY', 'TS_AUTHKEY'],
+              'TAILSCALE_OAUTH': ['TS_OAUTH_CLIENT_ID', 'TS_OAUTH_SECRET'],
+              'TAILSCALE_OAUTH_ALT': ['TAILSCALE_OAUTH_CLIENT_ID', 'TAILSCALE_OAUTH_CLIENT_SECRET'],
+              'AWS_STATIC': ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+              'AWS_ROLE': ['AWS_ROLE_ARN'],
+              'SSH_KEY': ['HERMES_SSH_PRIVATE_KEY', 'DEPLOY_SSH_PRIVATE_KEY', 'SSH_PRIVATE_KEY'],
+          }
+          available = []
+          for name, keys in groups.items():
+              ok = all(bool(os.environ.get(k, '')) for k in keys)
+              print(f'{name}={str(ok).lower()}')
+              if ok:
+                  available.append(name)
+          print('DEPLOY_CHANNELS=' + (','.join(available) if available else 'NONE'))
+          PY
