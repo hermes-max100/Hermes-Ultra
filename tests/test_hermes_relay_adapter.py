@@ -115,5 +115,51 @@ class RelayAdapterTests(unittest.TestCase):
             d.observe({**event(6), "schema_version": 2})
 
 
+class RelayReplayHardeningTests(unittest.TestCase):
+    def setUp(self):
+        self.mod = load_module()
+
+    def event(self, seq, *, epoch="epoch-1", truncated=False):
+        return {
+            "type": "stream.event",
+            "schema_version": 1,
+            "session_id": "s1",
+            "run_id": "r1",
+            "seq": seq,
+            "replay_epoch": epoch,
+            "truncated": truncated,
+            "event": "assistant.delta",
+            "payload": {},
+        }
+
+    def test_truncated_replay_blocks_stream_until_authoritative_rebuild_ack(self):
+        d = self.mod.RelayEventDeduper()
+        self.assertTrue(d.observe(self.event(10)).accepted)
+        cut = d.observe(self.event(11, truncated=True))
+        self.assertFalse(cut.accepted)
+        self.assertTrue(cut.requires_rebuild)
+        self.assertEqual(cut.reason, "truncated_replay")
+        blocked = d.observe(self.event(12))
+        self.assertFalse(blocked.accepted)
+        self.assertTrue(blocked.requires_rebuild)
+        d.acknowledge_rebuild("s1", "r1", replay_epoch="epoch-1", baseline_seq=11)
+        self.assertTrue(d.observe(self.event(12)).accepted)
+
+    def test_epoch_change_and_unseen_sequence_regression_require_rebuild(self):
+        d = self.mod.RelayEventDeduper()
+        self.assertTrue(d.observe(self.event(20, epoch="e1")).accepted)
+        changed = d.observe(self.event(1, epoch="e2"))
+        self.assertFalse(changed.accepted)
+        self.assertTrue(changed.requires_rebuild)
+        self.assertEqual(changed.reason, "replay_epoch_changed")
+        d.acknowledge_rebuild("s1", "r1", replay_epoch="e2", baseline_seq=0)
+        self.assertTrue(d.observe(self.event(1, epoch="e2")).accepted)
+        self.assertTrue(d.observe(self.event(5, epoch="e2")).accepted)
+        regressed = d.observe(self.event(2, epoch="e2"))
+        self.assertFalse(regressed.accepted)
+        self.assertTrue(regressed.requires_rebuild)
+        self.assertEqual(regressed.reason, "sequence_regression")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

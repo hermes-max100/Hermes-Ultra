@@ -90,12 +90,17 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-ROUTE_JSON="$route_json" SYSTEM_PROMPT="$SYSTEM_PROMPT" USER_PROMPT="$QUERY" python3 <<'PY'
+ROOT_DIR="$ROOT_DIR" ROUTE_JSON="$route_json" SYSTEM_PROMPT="$SYSTEM_PROMPT" USER_PROMPT="$QUERY" python3 <<'PY'
 import json
 import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+
+root = Path(os.environ["ROOT_DIR"])
+sys.path.insert(0, str(root / "src"))
+from hermes_ultra.provider_runtime import ProviderRequestPolicy
 
 route = json.loads(os.environ["ROUTE_JSON"])
 provider = route.get("provider", "")
@@ -124,6 +129,43 @@ api_key = os.environ.get(key_env, "") if key_env else ""
 if key_env and not api_key:
     raise SystemExit(f"missing API key: {key_env}")
 
+
+def load_json(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def model_metadata() -> dict:
+    merged = {}
+    for path in (
+        root / "config/cloud-model-catalog.json",
+        Path(os.environ.get("HERMES_CLOUD_MODEL_LOCAL_CATALOG", root / ".hermes/cloud-model-catalog.local.json")),
+    ):
+        catalog = load_json(path)
+        provider_row = catalog.get("providers", {}).get(provider, {}) if isinstance(catalog.get("providers"), dict) else {}
+        rows = provider_row.get("models", []) if isinstance(provider_row, dict) else []
+        for row in rows if isinstance(rows, list) else []:
+            if isinstance(row, dict) and str(row.get("id", "")) == model:
+                merged.update(row)
+    return merged
+
+
+policy = ProviderRequestPolicy()
+local_settings = {
+    "ollama_num_ctx": os.environ.get("HERMES_OLLAMA_NUM_CTX") or os.environ.get("OLLAMA_NUM_CTX"),
+    "num_ctx": os.environ.get("HERMES_NUM_CTX"),
+    "max_output_tokens": os.environ.get("HERMES_LOCAL_MAX_OUTPUT_TOKENS"),
+}
+limits = policy.resolve_limits(
+    provider=provider,
+    model=model,
+    model_metadata=model_metadata(),
+    local_runtime_settings=local_settings,
+)
+
 base_url = os.environ.get(base_env, default_base).rstrip("/")
 url = f"{base_url}/chat/completions"
 payload = {
@@ -134,6 +176,16 @@ payload = {
     ],
     "temperature": float(os.environ.get("HERMES_RUN_TEMPERATURE", "0.2")),
 }
+explicit_cap = os.environ.get("HERMES_RUN_MAX_OUTPUT_TOKENS", "").strip()
+if explicit_cap:
+    try:
+        parsed_cap = int(explicit_cap)
+    except ValueError as exc:
+        raise SystemExit("HERMES_RUN_MAX_OUTPUT_TOKENS must be a positive integer") from exc
+    if parsed_cap <= 0:
+        raise SystemExit("HERMES_RUN_MAX_OUTPUT_TOKENS must be a positive integer")
+    payload["max_tokens"] = parsed_cap
+payload = policy.apply_limits(payload, limits)
 
 headers = {
     "Content-Type": "application/json",
@@ -142,19 +194,38 @@ headers = {
 if api_key:
     headers["Authorization"] = f"Bearer {api_key}"
 
-request = urllib.request.Request(
-    url,
-    data=json.dumps(payload).encode("utf-8"),
-    headers=headers,
-    method="POST",
-)
 
-try:
+def request_once(request_payload):
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
     with urllib.request.urlopen(request, timeout=int(os.environ.get("HERMES_RUN_TIMEOUT", "120"))) as response:
-        data = json.loads(response.read().decode("utf-8", errors="replace"))
-except urllib.error.HTTPError as exc:
-    body = exc.read().decode("utf-8", errors="replace")
-    raise SystemExit(f"provider HTTP error {exc.code}: {body[:1000]}")
+        return json.loads(response.read().decode("utf-8", errors="replace"))
+
+
+max_limit_retries = int(os.environ.get("HERMES_RUN_LIMIT_RETRIES", "1"))
+if max_limit_retries < 0 or max_limit_retries > 2:
+    raise SystemExit("HERMES_RUN_LIMIT_RETRIES must be between 0 and 2")
+retry_count = 0
+while True:
+    try:
+        data = request_once(payload)
+        break
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        if retry_count < max_limit_retries and policy.is_limit_error(body):
+            try:
+                corrected = policy.build_retry_payload(payload, error_text=body, limits=limits)
+            except ValueError:
+                corrected = None
+            if corrected is not None and corrected != payload:
+                payload = corrected
+                retry_count += 1
+                continue
+        raise SystemExit(f"provider HTTP error {exc.code}: {body[:1000]}")
 
 choices = data.get("choices", [])
 if not choices:
@@ -164,5 +235,8 @@ message = choices[0].get("message", {})
 print(message.get("content", ""))
 print()
 print("---")
-print(f"model={route.get('model')} provider={provider} provider_model_id={model} skill_source={route.get('skill_source')}")
+print(
+    f"model={route.get('model')} provider={provider} provider_model_id={model} "
+    f"skill_source={route.get('skill_source')} limit_source={limits.source} limit_retries={retry_count}"
+)
 PY
