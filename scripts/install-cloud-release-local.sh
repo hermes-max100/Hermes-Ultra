@@ -161,7 +161,7 @@ if [[ "$TEST_MODE" != 1 ]]; then
     first="$(head -n1 "$path")"
     [[ "$first" == "#!$RUNTIME_TARGET/venv/bin/"* ]] || { echo "runtime entrypoint is not final-path stable: $entry" >&2; exit 1; }
   done
-  runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes"     "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$PY"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
+  "$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$PY"       --hermes-home "$VAR_ROOT/.hermes" --systemd-dir "$SYSTEMD_DIR"
   runuser -u hermes -- "$TARGET/scripts/restore-vps-transfer.sh" --skip-agent-reach --skip-python-deps
   runuser -u hermes -- env HOME="$VAR_ROOT" HERMES_HOME="$VAR_ROOT/.hermes" HERMES_RUNTIME_PYTHON="$RUNTIME_TARGET/venv/bin/python" bash "$TARGET/scripts/sync-mcp-provider-registry.sh" apply
   runuser -u hermes -- "$TARGET/scripts/verify-cloud-foundation.sh"

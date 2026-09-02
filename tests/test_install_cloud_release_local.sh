@@ -89,6 +89,10 @@ grep -q 'runtime-releases' "$INSTALLER" || { echo 'installer does not use final 
 grep -q 'hermes-agent-current' "$INSTALLER" || { echo 'installer lacks atomic runtime selector' >&2; exit 1; }
 ! grep -q 'mv "$RUNTIME_TMP" "$RUNTIME_ROOT"' "$INSTALLER" || { echo 'installer still relocates a built venv' >&2; exit 1; }
 grep -q 'RUNTIME_SERVICE_WAS_ACTIVE' "$INSTALLER" || { echo 'installer does not restore prior service after rollback' >&2; exit 1; }
+if grep -q 'runuser -u hermes.*RELAY_INSTALLER.*prepare' "$INSTALLER"; then
+  echo 'Relay prepare incorrectly runs as hermes against root-owned runtime venv' >&2; exit 1
+fi
+grep -q '"$RELAY_INSTALLER" prepare --release-root "$TARGET" --runtime-python "$PY"' "$INSTALLER" || { echo 'Relay prepare is not executed by the privileged installer' >&2; exit 1; }
 grep -q '/api/health' "$INSTALLER"
 if HERMES_INSTALL_TEST_MODE=1 HERMES_INSTALL_ROOT="$INSTALL_ROOT" HERMES_VAR_ROOT="$VAR_ROOT" \
   bash "$INSTALLER" "$A1" "$(printf 'f%.0s' {1..64})" >/dev/null 2>&1; then
