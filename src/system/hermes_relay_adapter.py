@@ -202,28 +202,42 @@ class RelayStreamObservation:
     run_id: str | None
     seq: int
     event: str
+    replay_epoch: str = "legacy"
+    requires_rebuild: bool = False
 
 
 class RelayEventDeduper:
+    """Bounded stream dedupe plus explicit replay-integrity state.
+
+    A stream becomes rebuild-blocked when replay is reported truncated, its replay
+    epoch changes, or a previously unseen sequence regresses. Callers must rebuild
+    from authoritative session state and then acknowledge that rebuild before any
+    later events from that stream are accepted.
+    """
+
     def __init__(self, max_entries: int = 4096):
         if isinstance(max_entries, bool) or not isinstance(max_entries, int) or max_entries <= 0:
             raise RelayProtocolError("max_entries must be a positive integer")
         self.max_entries = min(max_entries, 4096)
-        self._seen: OrderedDict[tuple[str, str | None, int], None] = OrderedDict()
+        self._seen: OrderedDict[tuple[str, str, str | None, int], None] = OrderedDict()
         self._highest: OrderedDict[tuple[str, str | None], int] = OrderedDict()
+        self._epochs: OrderedDict[tuple[str, str | None], str] = OrderedDict()
+        self._blocked: OrderedDict[tuple[str, str | None], str] = OrderedDict()
 
     @property
     def size(self) -> int:
         return len(self._seen)
 
     @staticmethod
-    def _validate(event: Mapping[str, Any]) -> tuple[str, str | None, int, str]:
+    def _validate(event: Mapping[str, Any]) -> tuple[str, str | None, int, str, str, bool]:
         if event.get("type") != "stream.event" or event.get("schema_version") != 1:
             raise RelayProtocolError("unsupported stream event schema")
         session_id = event.get("session_id")
         run_id = event.get("run_id")
         seq = event.get("seq")
         event_name = event.get("event")
+        replay_epoch = event.get("replay_epoch", "legacy")
+        truncated = event.get("truncated", False)
         if not isinstance(session_id, str) or not session_id:
             raise RelayProtocolError("stream event session id missing")
         if run_id is not None and (not isinstance(run_id, str) or not run_id):
@@ -234,36 +248,168 @@ class RelayEventDeduper:
             raise RelayProtocolError("stream event name missing")
         if not isinstance(event.get("payload"), Mapping):
             raise RelayProtocolError("stream event payload invalid")
-        return session_id, run_id, seq, event_name
+        if not isinstance(replay_epoch, str) or not replay_epoch.strip():
+            raise RelayProtocolError("stream event replay epoch invalid")
+        if not isinstance(truncated, bool):
+            raise RelayProtocolError("stream event truncated flag invalid")
+        return session_id, run_id, seq, event_name, replay_epoch.strip(), truncated
 
-    def _remember(self, key: tuple[str, str | None, int]) -> None:
+    def _trim(self, mapping: OrderedDict[Any, Any]) -> None:
+        while len(mapping) > self.max_entries:
+            mapping.popitem(last=False)
+
+    def _remember(self, key: tuple[str, str, str | None, int]) -> None:
         self._seen[key] = None
         self._seen.move_to_end(key)
-        while len(self._seen) > self.max_entries:
-            self._seen.popitem(last=False)
+        self._trim(self._seen)
 
-    def observe(self, event: Mapping[str, Any]) -> RelayStreamObservation:
-        session_id, run_id, seq, event_name = self._validate(event)
-        key = (session_id, run_id, seq)
-        stream = (session_id, run_id)
-        if key in self._seen:
-            self._seen.move_to_end(key)
-            return RelayStreamObservation(False, "duplicate", False, session_id, run_id, seq, event_name)
-        highest = self._highest.get(stream)
-        if highest is not None and seq <= highest:
-            self._remember(key)
-            return RelayStreamObservation(False, "out_of_order", False, session_id, run_id, seq, event_name)
-        self._remember(key)
-        self._highest[stream] = seq
-        self._highest.move_to_end(stream)
-        while len(self._highest) > self.max_entries:
-            self._highest.popitem(last=False)
+    def _block(self, stream: tuple[str, str | None], epoch: str) -> None:
+        self._blocked[stream] = epoch
+        self._blocked.move_to_end(stream)
+        self._trim(self._blocked)
+
+    def _observation(
+        self,
+        *,
+        accepted: bool,
+        reason: str,
+        terminal_success: bool,
+        session_id: str,
+        run_id: str | None,
+        seq: int,
+        event_name: str,
+        replay_epoch: str,
+        requires_rebuild: bool = False,
+    ) -> RelayStreamObservation:
         return RelayStreamObservation(
-            True,
-            "accepted",
-            event_name in SUCCESS_STREAM_EVENTS,
+            accepted,
+            reason,
+            terminal_success,
             session_id,
             run_id,
             seq,
             event_name,
+            replay_epoch,
+            requires_rebuild,
+        )
+
+    def acknowledge_rebuild(
+        self,
+        session_id: str,
+        run_id: str | None,
+        *,
+        replay_epoch: str,
+        baseline_seq: int = -1,
+    ) -> None:
+        if not isinstance(session_id, str) or not session_id:
+            raise RelayProtocolError("stream rebuild session id missing")
+        if run_id is not None and (not isinstance(run_id, str) or not run_id):
+            raise RelayProtocolError("stream rebuild run id invalid")
+        if not isinstance(replay_epoch, str) or not replay_epoch.strip():
+            raise RelayProtocolError("stream rebuild replay epoch invalid")
+        if isinstance(baseline_seq, bool) or not isinstance(baseline_seq, int) or baseline_seq < -1:
+            raise RelayProtocolError("stream rebuild baseline sequence invalid")
+        stream = (session_id, run_id)
+        for key in [key for key in self._seen if key[1:3] == stream]:
+            self._seen.pop(key, None)
+        self._epochs[stream] = replay_epoch.strip()
+        self._epochs.move_to_end(stream)
+        self._trim(self._epochs)
+        self._highest[stream] = baseline_seq
+        self._highest.move_to_end(stream)
+        self._trim(self._highest)
+        self._blocked.pop(stream, None)
+
+    def observe(self, event: Mapping[str, Any]) -> RelayStreamObservation:
+        session_id, run_id, seq, event_name, replay_epoch, truncated = self._validate(event)
+        stream = (session_id, run_id)
+        key = (replay_epoch, session_id, run_id, seq)
+
+        if stream in self._blocked:
+            return self._observation(
+                accepted=False,
+                reason="rebuild_required",
+                terminal_success=False,
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_name=event_name,
+                replay_epoch=replay_epoch,
+                requires_rebuild=True,
+            )
+
+        known_epoch = self._epochs.get(stream)
+        if known_epoch is None:
+            self._epochs[stream] = replay_epoch
+            self._epochs.move_to_end(stream)
+            self._trim(self._epochs)
+        elif replay_epoch != known_epoch:
+            self._block(stream, replay_epoch)
+            return self._observation(
+                accepted=False,
+                reason="replay_epoch_changed",
+                terminal_success=False,
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_name=event_name,
+                replay_epoch=replay_epoch,
+                requires_rebuild=True,
+            )
+
+        if truncated:
+            self._block(stream, replay_epoch)
+            return self._observation(
+                accepted=False,
+                reason="truncated_replay",
+                terminal_success=False,
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_name=event_name,
+                replay_epoch=replay_epoch,
+                requires_rebuild=True,
+            )
+
+        if key in self._seen:
+            self._seen.move_to_end(key)
+            return self._observation(
+                accepted=False,
+                reason="duplicate",
+                terminal_success=False,
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_name=event_name,
+                replay_epoch=replay_epoch,
+            )
+
+        highest = self._highest.get(stream)
+        if highest is not None and seq <= highest:
+            self._block(stream, replay_epoch)
+            return self._observation(
+                accepted=False,
+                reason="sequence_regression",
+                terminal_success=False,
+                session_id=session_id,
+                run_id=run_id,
+                seq=seq,
+                event_name=event_name,
+                replay_epoch=replay_epoch,
+                requires_rebuild=True,
+            )
+
+        self._remember(key)
+        self._highest[stream] = seq
+        self._highest.move_to_end(stream)
+        self._trim(self._highest)
+        return self._observation(
+            accepted=True,
+            reason="accepted",
+            terminal_success=event_name in SUCCESS_STREAM_EVENTS,
+            session_id=session_id,
+            run_id=run_id,
+            seq=seq,
+            event_name=event_name,
+            replay_epoch=replay_epoch,
         )
