@@ -199,9 +199,13 @@ record_memory_trajectory() {
   local memory="$ROOT_DIR/src/system/memory-fabric.py"
   [[ -f "$memory" ]] || return 0
   local mode="$1" router_output="$2" envelope
-  envelope="$(python3 - "$QUERY" "$PROFILE" "$PROJECT" "$mode" "$router_output" <<'PY'
+  envelope="$(python3 - "$ROOT_DIR" "$QUERY" "$PROFILE" "$PROJECT" "$mode" "$router_output" <<'PY'
 import hashlib, json, os, sys
-query, profile, project, mode, router_output = sys.argv[1:6]
+from pathlib import Path
+root, query, profile, project, mode, router_output = sys.argv[1:7]
+sys.path.insert(0, str(Path(root) / "src"))
+from hermes_ultra.trajectory_metrics import TrajectoryEvaluator
+
 skill_override = os.environ.get("HERMES_SKILL_SET_OVERRIDE", "")
 tool_override = os.environ.get("HERMES_TOOL_SET_OVERRIDE", "")
 selected_skills = [item for item in skill_override.split(",") if item]
@@ -216,6 +220,19 @@ try:
         selected_skills = parsed.get("skills", []) if isinstance(parsed.get("skills"), list) else []
 except Exception:
     parsed = {}
+
+route_action = {"type": "route", "status": "success", "mode": mode, "project": project, "profile": profile, "selected_tools": selected_tools}
+actions = [route_action]
+raw_actions = os.environ.get("HERMES_TRAJECTORY_ACTIONS_JSON", "").strip()
+if raw_actions:
+    try:
+        supplied = json.loads(raw_actions)
+        if isinstance(supplied, list) and supplied:
+            actions = supplied
+    except json.JSONDecodeError:
+        pass
+trajectory_metrics = TrajectoryEvaluator().evaluate(actions).to_dict()
+
 print(json.dumps({
     "producer": "hermes-dispatch",
     "objective": query,
@@ -223,7 +240,7 @@ print(json.dumps({
     "selected_agent": profile,
     "selected_skills": selected_skills,
     "model": "/".join(part for part in [model_key, model_id] if part),
-    "actions": [{"type": "route", "mode": mode, "project": project, "profile": profile, "selected_tools": selected_tools}],
+    "actions": actions,
     "predicted_outcome": "query routed to dynamic profile, selected skills, and eligible tool schemas",
     "observed_outcome": "dispatch output emitted",
     "status": "completed",
@@ -238,6 +255,8 @@ print(json.dumps({
         "parsed_router_output": parsed,
         "trace_id": os.environ.get("HERMES_TRACE_ID", ""),
         "span_id": os.environ.get("HERMES_TRACE_SPAN_ID", ""),
+        "trajectory_metrics": trajectory_metrics,
+        "adaptation_signal": trajectory_metrics["adaptation"],
     },
 }, sort_keys=True))
 PY
