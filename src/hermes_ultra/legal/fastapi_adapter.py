@@ -4,7 +4,7 @@ from typing import Any
 
 from .service import LegalService
 from .transport import MatterAuthorizer, invoke_transport
-from .types import ExternalAccess, LegalBoundaryError, Sensitivity
+from .types import ExternalAccess, LegalBoundaryError, LegalExecutionError, Sensitivity
 
 
 def create_fastapi_router(
@@ -56,7 +56,9 @@ def create_fastapi_router(
                     else None
                 ),
             )
+        except LegalExecutionError as exc:
+            raise HTTPException(status_code=500, detail="legal_tool_execution_failed") from None
         except (LegalBoundaryError, ValueError) as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
+            raise HTTPException(status_code=403, detail=str(exc)) from None
 
     return router
