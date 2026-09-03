@@ -7,6 +7,7 @@ from typing import Any
 from .policy import LegalPolicy
 from .provenance import ProvenanceGuard
 from .types import (
+    AuditRecord,
     LegalContext,
     MatterIsolationViolation,
     PolicyViolation,
@@ -36,23 +37,27 @@ LEGAL_TOOL_ROUTES: dict[str, frozenset[RouteKind]] = {
 
 
 class LegalService:
-    """Shared legal core used by MCP, HTTP, CLI, or in-process callers.
-
-    Transports do not receive direct access to handlers. Every execution passes
-    through this service, which authorizes the route before dispatch.
-    """
+    """Shared legal core used by MCP, HTTP, CLI, or in-process callers."""
 
     def __init__(self, *, policy: LegalPolicy | None = None) -> None:
         self.policy = policy or LegalPolicy()
         self.provenance = ProvenanceGuard()
         self._resources: dict[str, tuple[str, Any]] = {}
-        self._handlers: dict[str, Handler] = {
-            "redact_for_external_model": self._redaction_handler,
-        }
+        self._handlers: dict[str, Handler] = {"redact_for_external_model": self._redaction_handler}
+        self._audit: list[AuditRecord] = []
 
     @property
     def tool_names(self) -> tuple[str, ...]:
         return tuple(LEGAL_TOOL_ROUTES)
+
+    @property
+    def audit_records(self) -> tuple[AuditRecord, ...]:
+        return tuple(self._audit)
+
+    def _record(self, context: LegalContext, tool_name: str, route: RouteRequest, outcome: str, reason: str) -> None:
+        self._audit.append(
+            AuditRecord(len(self._audit) + 1, context.matter_id, tool_name, route.kind, outcome, reason)
+        )
 
     def register_handler(self, tool_name: str, handler: Handler) -> None:
         if tool_name not in LEGAL_TOOL_ROUTES:
@@ -86,8 +91,10 @@ class LegalService:
         *,
         redact_keys: set[str] | frozenset[str],
     ) -> RedactedPayload:
-        del context  # context is accepted deliberately so callers cannot bypass matter-scoped APIs.
-        normalized = {str(key).casefold() for key in redact_keys}
+        del context
+        normalized = {str(key).casefold() for key in redact_keys if str(key).strip()}
+        if not normalized:
+            raise PolicyViolation("redact_keys_required")
         touched: set[str] = set()
 
         def walk(value: Any) -> Any:
@@ -106,11 +113,10 @@ class LegalService:
                 return tuple(walk(item) for item in value)
             return copy.deepcopy(value)
 
-        return RedactedPayload(
-            payload=walk(payload),
-            redacted=True,
-            redacted_keys=tuple(sorted(touched)),
-        )
+        sanitized = walk(payload)
+        if not touched:
+            raise PolicyViolation("redaction_target_not_found")
+        return RedactedPayload(sanitized, True, tuple(sorted(touched)))
 
     def _redaction_handler(self, context: LegalContext, arguments: Mapping[str, Any]) -> RedactedPayload:
         if "payload" not in arguments:
@@ -119,9 +125,7 @@ class LegalService:
         if not isinstance(raw_keys, (list, tuple, set, frozenset)):
             raise PolicyViolation("redact_keys_must_be_collection")
         return self.redact_for_external_model(
-            context,
-            arguments["payload"],
-            redact_keys={str(key) for key in raw_keys},
+            context, arguments["payload"], redact_keys={str(key) for key in raw_keys}
         )
 
     def execute(
@@ -132,17 +136,27 @@ class LegalService:
         *,
         route: RouteRequest | None = None,
     ) -> Any:
+        requested_route = route or RouteRequest(kind=RouteKind.LOCAL)
         if tool_name not in LEGAL_TOOL_ROUTES:
+            self._record(context, tool_name, requested_route, "DENY", "unknown_legal_tool")
             raise PolicyViolation("unknown_legal_tool")
         if not isinstance(arguments, Mapping):
+            self._record(context, tool_name, requested_route, "DENY", "tool_arguments_must_be_mapping")
             raise PolicyViolation("tool_arguments_must_be_mapping")
-
-        requested_route = route or RouteRequest(kind=RouteKind.LOCAL)
-        self.policy.authorize(context, requested_route)
-        if requested_route.kind not in LEGAL_TOOL_ROUTES[tool_name]:
-            raise PolicyViolation("tool_route_forbidden")
-
-        handler = self._handlers.get(tool_name)
-        if handler is None:
-            raise PolicyViolation("tool_handler_unavailable")
-        return handler(context, copy.deepcopy(dict(arguments)))
+        try:
+            self.policy.authorize(context, requested_route)
+            if requested_route.kind not in LEGAL_TOOL_ROUTES[tool_name]:
+                raise PolicyViolation("tool_route_forbidden")
+            handler = self._handlers.get(tool_name)
+            if handler is None:
+                raise PolicyViolation("tool_handler_unavailable")
+        except PolicyViolation as exc:
+            self._record(context, tool_name, requested_route, "DENY", str(exc))
+            raise
+        try:
+            result = handler(context, copy.deepcopy(dict(arguments)))
+        except Exception:
+            self._record(context, tool_name, requested_route, "ERROR", "handler_error")
+            raise
+        self._record(context, tool_name, requested_route, "EXECUTED", "authorized")
+        return result
