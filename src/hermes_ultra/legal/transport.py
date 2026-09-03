@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
 
 from .service import LegalService
-from .types import ExternalAccess, LegalContext, PolicyViolation, RouteKind, RouteRequest, Sensitivity
+from .types import (
+    ExternalAccess,
+    LegalContext,
+    MatterIsolationViolation,
+    PolicyViolation,
+    RouteKind,
+    RouteRequest,
+    Sensitivity,
+)
 
-
-def _enum(enum_type: type[Enum], value: str, label: str) -> Enum:
-    try:
-        return enum_type(value)
-    except (TypeError, ValueError) as exc:
-        raise PolicyViolation(f"invalid_{label}") from exc
+MatterAuthorizer = Callable[[str], bool]
 
 
 def to_wire(value: Any) -> Any:
@@ -28,32 +32,45 @@ def to_wire(value: Any) -> Any:
     return value
 
 
+def _route_kind(value: str) -> RouteKind:
+    try:
+        return RouteKind(value)
+    except (TypeError, ValueError) as exc:
+        raise PolicyViolation("invalid_route_kind") from exc
+
+
+def _authorize_matter(matter_authorizer: MatterAuthorizer, matter_id: str) -> None:
+    try:
+        authorized = matter_authorizer(matter_id)
+    except Exception as exc:
+        raise MatterIsolationViolation("matter_authorization_failed") from exc
+    if authorized is not True:
+        raise MatterIsolationViolation("matter_not_authorized")
+
+
 async def invoke_transport(
     service: LegalService,
     tool_name: str,
     *,
     matter_id: str,
     arguments: dict[str, Any],
-    sensitivity: str = "LEGAL_PRIVILEGED",
-    external_access: str = "DENY",
+    matter_authorizer: MatterAuthorizer,
+    sensitivity: Sensitivity = Sensitivity.LEGAL_PRIVILEGED,
+    external_access: ExternalAccess = ExternalAccess.DENY,
     route_kind: str = "LOCAL",
     provider: str | None = None,
-    endpoint: str | None = None,
-    payload_redacted: bool = False,
+    redaction_attestation: str | None = None,
 ) -> Any:
-    parsed_sensitivity = _enum(Sensitivity, sensitivity, "sensitivity")
-    parsed_access = _enum(ExternalAccess, external_access, "external_access")
-    parsed_route = _enum(RouteKind, route_kind, "route_kind")
+    _authorize_matter(matter_authorizer, matter_id)
     context = LegalContext(
         matter_id=matter_id,
-        sensitivity=parsed_sensitivity,  # type: ignore[arg-type]
-        external_access=parsed_access,  # type: ignore[arg-type]
+        sensitivity=sensitivity,
+        external_access=external_access,
     )
     route = RouteRequest(
-        kind=parsed_route,  # type: ignore[arg-type]
+        kind=_route_kind(route_kind),
         provider=provider,
-        endpoint=endpoint,
-        payload_redacted=payload_redacted,
+        redaction_attestation=redaction_attestation,
     )
     result = service.execute(context, tool_name, arguments, route=route)
     if inspect.isawaitable(result):
