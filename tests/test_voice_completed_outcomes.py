@@ -29,7 +29,11 @@ def test_completed_job_records_one_completed_outcome_and_attributed_revenue(tmp_
         strategy_id=runtime.strategy_id,
         outcome_type="appointment_booked",
         currency=context.currency,
-        metadata={"call_id": context.call_id, "booking_reference": "booking-1"},
+        metadata={
+            "call_id": context.call_id,
+            "tenant_id": context.tenant_id,
+            "booking_reference": "booking-1",
+        },
         idempotency_key="voice:call-1:appointment",
     )
 
@@ -82,7 +86,11 @@ def test_completed_job_rejects_conflicting_idempotent_revenue_retry(tmp_path) ->
         strategy_id=runtime.strategy_id,
         outcome_type="appointment_booked",
         currency=context.currency,
-        metadata={"call_id": context.call_id, "booking_reference": "booking-3"},
+        metadata={
+            "call_id": context.call_id,
+            "tenant_id": context.tenant_id,
+            "booking_reference": "booking-3",
+        },
         idempotency_key="voice:call-3:appointment",
     )
     runtime.record_completed_job(
@@ -98,4 +106,29 @@ def test_completed_job_rejects_conflicting_idempotent_revenue_retry(tmp_path) ->
             booking_reference="booking-3",
             job_reference="job-3",
             attributed_revenue=Decimal("901"),
+        )
+
+
+def test_completed_job_cannot_attribute_another_tenants_appointment(tmp_path) -> None:
+    runtime, ledger = _runtime(tmp_path)
+    context = CallContext(call_id="shared-call", run_id="shared-run", tenant_id="tenant-b")
+    ledger.record_business_outcome(
+        run_id=context.run_id,
+        strategy_id=runtime.strategy_id,
+        outcome_type="appointment_booked",
+        currency=context.currency,
+        metadata={
+            "call_id": context.call_id,
+            "tenant_id": "tenant-a",
+            "booking_reference": "booking-a",
+        },
+        idempotency_key="voice:tenant-a:shared-call:appointment",
+    )
+
+    with pytest.raises(PermissionError, match="appointment"):
+        runtime.record_completed_job(
+            context,
+            booking_reference="booking-a",
+            job_reference="job-b",
+            attributed_revenue=Decimal("500"),
         )
