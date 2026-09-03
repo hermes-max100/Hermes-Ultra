@@ -3,19 +3,24 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .service import LegalService
-from .transport import invoke_transport
+from .transport import MatterAuthorizer, invoke_transport
+from .types import ExternalAccess, Sensitivity
 
 
-def _tool_wrapper(service: LegalService, tool_name: str) -> Callable[..., Any]:
+def _tool_wrapper(
+    service: LegalService,
+    tool_name: str,
+    *,
+    matter_authorizer: MatterAuthorizer,
+    sensitivity: Sensitivity,
+    external_access: ExternalAccess,
+) -> Callable[..., Any]:
     async def legal_tool(
         matter_id: str,
         arguments: dict[str, Any],
-        sensitivity: str = "LEGAL_PRIVILEGED",
-        external_access: str = "DENY",
         route_kind: str = "LOCAL",
         provider: str | None = None,
-        endpoint: str | None = None,
-        payload_redacted: bool = False,
+        redaction_attestation: str | None = None,
     ) -> Any:
         """Execute a Hermes Legal capability through the private governance boundary."""
         return await invoke_transport(
@@ -23,12 +28,12 @@ def _tool_wrapper(service: LegalService, tool_name: str) -> Callable[..., Any]:
             tool_name,
             matter_id=matter_id,
             arguments=arguments,
+            matter_authorizer=matter_authorizer,
             sensitivity=sensitivity,
             external_access=external_access,
             route_kind=route_kind,
             provider=provider,
-            endpoint=endpoint,
-            payload_redacted=payload_redacted,
+            redaction_attestation=redaction_attestation,
         )
 
     legal_tool.__name__ = tool_name
@@ -37,25 +42,39 @@ def _tool_wrapper(service: LegalService, tool_name: str) -> Callable[..., Any]:
     return legal_tool
 
 
-def create_mcp_server(service: LegalService | None = None) -> Any:
-    """Create a Hermes Legal MCP server using the official MCP Python SDK v2.
+def create_mcp_server(
+    service: LegalService | None = None,
+    *,
+    matter_authorizer: MatterAuthorizer,
+    sensitivity: Sensitivity = Sensitivity.LEGAL_PRIVILEGED,
+    external_access: ExternalAccess = ExternalAccess.DENY,
+) -> Any:
+    """Create a private Hermes Legal MCP server using official MCP Python SDK v2.
 
-    The SDK is an optional transport dependency. The legal policy/core remains
-    importable and testable without MCP installed.
+    Matter authorization and the maximum egress mode are deployment-owned inputs,
+    not tool-call parameters that an agent can escalate.
     """
     try:
         from mcp.server import MCPServer
-    except ImportError as exc:  # pragma: no cover - depends on optional runtime package
+    except ImportError as exc:  # pragma: no cover - optional runtime package
         raise RuntimeError("Hermes Legal MCP requires the optional 'mcp>=2,<3' dependency") from exc
 
     legal_service = service or LegalService()
     server = MCPServer(
         "Hermes Legal Private",
         instructions=(
-            "Private first-party legal tools. Treat all inputs and outputs as matter-scoped. "
-            "External access defaults to DENY; public MCP, Monid, and unknown routes are forbidden."
+            "Private first-party legal tools. Matter scope and maximum egress are fixed by the server. "
+            "Public MCP, Monid, and unknown routes are forbidden."
         ),
     )
     for tool_name in legal_service.tool_names:
-        server.add_tool(_tool_wrapper(legal_service, tool_name))
+        server.add_tool(
+            _tool_wrapper(
+                legal_service,
+                tool_name,
+                matter_authorizer=matter_authorizer,
+                sensitivity=sensitivity,
+                external_access=external_access,
+            )
+        )
     return server
