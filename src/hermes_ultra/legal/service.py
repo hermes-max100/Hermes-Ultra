@@ -27,6 +27,7 @@ from .types import (
 )
 
 Handler = Callable[[LegalContext, Mapping[str, Any]], Any]
+HandlerKey = tuple[str, RouteKind, str | None]
 
 LEGAL_TOOL_ROUTES: dict[str, frozenset[RouteKind]] = {
     "document_reader": frozenset({RouteKind.LOCAL}),
@@ -95,6 +96,17 @@ def _reject_unproven_claim_markers(value: Any) -> None:
             _reject_unproven_claim_markers(item)
 
 
+def _handler_provider(route_kind: RouteKind, provider: str | None) -> str | None:
+    if route_kind is RouteKind.LOCAL:
+        if provider is not None and str(provider).strip():
+            raise PolicyViolation("local_handler_provider_forbidden")
+        return None
+    normalized = provider.strip() if isinstance(provider, str) else ""
+    if not normalized:
+        raise PolicyViolation("external_handler_provider_required")
+    return normalized
+
+
 class LegalService:
     """Shared legal core used by MCP, HTTP, CLI, or in-process callers."""
 
@@ -102,7 +114,9 @@ class LegalService:
         self.policy = policy or LegalPolicy()
         self.provenance = ProvenanceGuard()
         self._resources: dict[str, tuple[str, Any]] = {}
-        self._handlers: dict[str, Handler] = {"redact_for_external_model": self._redaction_handler}
+        self._handlers: dict[HandlerKey, Handler] = {
+            ("redact_for_external_model", RouteKind.LOCAL, None): self._redaction_handler
+        }
         self._audit: list[AuditRecord] = []
         self._audit_lock = threading.Lock()
         key = redaction_key if redaction_key is not None else secrets.token_bytes(32)
@@ -125,12 +139,27 @@ class LegalService:
                 AuditRecord(len(self._audit) + 1, context.matter_id, tool_name, route.kind, outcome, reason)
             )
 
-    def register_handler(self, tool_name: str, handler: Handler) -> None:
+    def register_handler(
+        self,
+        tool_name: str,
+        handler: Handler,
+        *,
+        route_kind: RouteKind = RouteKind.LOCAL,
+        provider: str | None = None,
+    ) -> None:
         if tool_name not in LEGAL_TOOL_ROUTES:
             raise PolicyViolation("unknown_legal_tool")
         if not callable(handler):
             raise PolicyViolation("tool_handler_must_be_callable")
-        self._handlers[tool_name] = handler
+        if not isinstance(route_kind, RouteKind):
+            raise PolicyViolation("invalid_handler_route_kind")
+        if route_kind not in LEGAL_TOOL_ROUTES[tool_name]:
+            raise PolicyViolation("handler_route_forbidden")
+        normalized_provider = _handler_provider(route_kind, provider)
+        key = (tool_name, route_kind, normalized_provider)
+        if key in self._handlers:
+            raise PolicyViolation("handler_route_already_registered")
+        self._handlers[key] = handler
 
     def put_resource(self, context: LegalContext, *, resource_id: str, value: Any) -> None:
         resource_id = resource_id.strip() if isinstance(resource_id, str) else ""
@@ -276,7 +305,8 @@ class LegalService:
                 self._verify_attestation(
                     context, arguments["payload"], requested_route.redaction_attestation
                 )
-            handler = self._handlers.get(tool_name)
+            normalized_provider = _handler_provider(requested_route.kind, requested_route.provider)
+            handler = self._handlers.get((tool_name, requested_route.kind, normalized_provider))
             if handler is None:
                 raise PolicyViolation("tool_handler_unavailable")
         except PolicyViolation as exc:
