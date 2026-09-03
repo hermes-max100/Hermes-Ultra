@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Mapping
 
@@ -10,6 +11,8 @@ from .skill_lifecycle import (
     Provenance,
     SkillCandidate,
 )
+
+_ARD_IDENTIFIER_RE = re.compile(r"^urn:air:[a-zA-Z0-9.-]+(?::[a-zA-Z0-9._-]+)+$")
 
 
 class ArdCatalogError(ValueError):
@@ -53,8 +56,8 @@ class ArdCatalogLoader:
             display_name = raw.get("displayName")
             media_type = raw.get("type")
             capabilities = raw.get("capabilities", [])
-            if not isinstance(identifier, str) or not identifier:
-                raise ArdCatalogError("ARD entry identifier is required")
+            if not isinstance(identifier, str) or not _ARD_IDENTIFIER_RE.fullmatch(identifier):
+                raise ArdCatalogError("ARD entry identifier must be a valid urn:air resource identifier")
             if not isinstance(display_name, str) or not display_name:
                 raise ArdCatalogError("ARD entry displayName is required")
             if not isinstance(media_type, str) or not media_type:
