@@ -11,16 +11,21 @@ Technical isolation can support confidentiality and data minimization, but this 
 ## Architecture
 
 ```text
-Hermes / agent host
+Hermes / authenticated agent host
         |
-        +-- MCP v2 ----------------------+
-        |                                |
-        +-- optional FastAPI facade -----+--> LegalService
-                                             |-- LegalPolicy
-                                             |-- matter-isolated resource store
-                                             |-- ProvenanceGuard
-                                             |-- payload-free audit records
-                                             `-- registered legal handlers
+        |  server-owned matter authorizer
+        |  server-owned sensitivity + max egress
+        v
+   MCP v2 / optional FastAPI
+        |
+        v
+   LegalService
+      |-- LegalPolicy
+      |-- matter-isolated resource store
+      |-- ProvenanceGuard
+      |-- HMAC redaction attestations
+      |-- payload-free audit records
+      `-- explicitly registered legal handlers
 ```
 
 The legal core has no required third-party dependency. `mcp` and `fastapi` are optional transport extras. Every transport calls `LegalService.execute`; transports never receive direct handler access.
@@ -46,20 +51,28 @@ The private server advertises these governed entrypoints:
 
 A tool that has no registered first-party handler fails closed with `tool_handler_unavailable`. This prevents a declared capability from silently falling through to a general broker.
 
+## Trusted transport controls
+
+The MCP model/client and HTTP request body are **not** allowed to select either the sensitivity class or maximum egress mode. Those controls are fixed when the MCP server / FastAPI router is constructed.
+
+Every transport call also runs a deployment-supplied `matter_authorizer(matter_id)` before creating a `LegalContext`. An unauthorized matter fails before service dispatch and produces no service audit event.
+
+For a multi-user deployment, the matter authorizer must be bound to the authenticated principal (for example through a per-principal server instance or an authenticated request context). A function that merely checks whether a matter ID exists is not sufficient authorization.
+
 ## Routing policy
 
-Default policy is `external_access=DENY`.
+Default maximum egress is `external_access=DENY`.
 
 | Route | Default | Additional requirement |
 | --- | --- | --- |
 | `LOCAL` | allow | tool must permit local route |
-| `OFFICIAL_LEGAL_API` | deny | request must use `ALLOWLIST`; provider must be explicitly configured; tool must permit this route |
-| `APPROVED_MODEL` | deny | request must use `ALLOWLIST`; provider explicitly configured; payload must be produced by the redaction gate; tool must permit model route |
+| `OFFICIAL_LEGAL_API` | deny | server must enable `ALLOWLIST`; provider must be explicitly configured; tool must permit this route |
+| `APPROVED_MODEL` | deny | server must enable `ALLOWLIST`; provider explicitly configured; exact outbound payload must carry a valid matter-bound redaction attestation; tool must permit model route |
 | `MONID` | deny | categorical |
 | `PUBLIC_MCP` | deny | categorical |
 | `UNKNOWN` | deny | categorical |
 
-No provider names are shipped in an allowlist. Deployment must configure each approved provider explicitly.
+No provider names are shipped in an allowlist. Deployment must configure each approved provider explicitly. User-supplied endpoint overrides are not part of the route contract; provider handlers must use deployment-owned endpoint configuration.
 
 Current route capability matrix:
 
@@ -71,7 +84,9 @@ Current route capability matrix:
 
 Every request requires a `matter_id`. Stored resources and provenance sources are bound to exactly one matter. A cross-matter read raises `MatterIsolationViolation`; reusing a source/resource identifier from another matter is denied.
 
-This is an application-level isolation layer. Persistence adapters must retain the same matter key and should use separate encryption/access-control scopes where the deployment supports them.
+Matter isolation is separate from matter authorization: the transport first establishes that the caller is authorized for the requested matter, then the core prevents resources/sources from crossing matter boundaries.
+
+Persistence adapters must retain the same matter key and should use separate encryption/access-control scopes where the deployment supports them.
 
 ## Provenance invariants
 
@@ -85,16 +100,24 @@ Hermes Legal enforces:
 
 Evidence sources require a SHA-256 digest and locator.
 
-## External-model redaction
+## External-model redaction and attestation
 
-`redact_for_external_model` recursively replaces explicitly named fields with `[REDACTED]`.
+`redact_for_external_model` recursively replaces explicitly named fields with `[REDACTED]` and then creates an HMAC-SHA256 attestation over:
+
+- the active `matter_id`; and
+- the SHA-256 digest of the exact canonical sanitized payload.
 
 The redaction gate fails closed when:
 
-- no redaction keys are supplied; or
-- none of the supplied targets exist in the payload.
+- no redaction keys are supplied;
+- none of the supplied targets exist in the payload; or
+- the outbound payload is not JSON-safe.
 
-Only the returned redacted envelope may satisfy `payload_redacted=true` for an approved-model route. This field-level mechanism is a minimum boundary, not a substitute for a full DLP classifier; provider-bound handlers should add document-specific DLP before production externalization.
+An approved-model route must supply that attestation with the **exact sanitized payload** under `arguments.payload`. Hermes recomputes the digest and HMAC before dispatch. A forged token, modified payload, or reuse under another matter is denied.
+
+The HMAC key is generated per `LegalService` instance by default. Multi-worker/restart-stable deployments must inject the same protected key into every intended legal-service replica; it must not be exposed to MCP/HTTP callers or handlers that do not need it.
+
+Field-level redaction is a minimum boundary, not a substitute for a full DLP classifier. Provider-bound handlers should add document-specific DLP before production externalization.
 
 ## Audit
 
@@ -107,19 +130,23 @@ Only the returned redacted envelope may satisfy `payload_redacted=true` for an a
 - outcome (`DENY`, `ERROR`, `EXECUTED`)
 - stable reason
 
-Arguments, document contents, prompts, credentials, and retrieved legal text are deliberately excluded.
+Arguments, document contents, prompts, credentials, exception details, and retrieved legal text are deliberately excluded.
+
+For async handlers, `EXECUTED` is written only after the awaited handler completes. A raised exception becomes `ERROR`; returning a coroutine is not treated as proof of success.
 
 Durable/HMAC-backed persistence should be attached to Hermes's existing evidence ledger at deployment. The current in-process list is the transport-neutral audit contract, not the final durable ledger.
 
 ## MCP
 
-The MCP adapter targets the official MCP Python SDK v2 (`mcp>=2,<3`) and registers every private legal tool on one `MCPServer`. MCP defaults each call to `LEGAL_PRIVILEGED`, `external_access=DENY`, and `route_kind=LOCAL`.
+The MCP adapter targets the official MCP Python SDK v2 (`mcp>=2,<3`) and registers every private legal tool on one `MCPServer`.
 
-The official SDK's in-process `Client(server)` path is used by CI to test actual protocol registration and tool dispatch rather than testing only local Python functions.
+The server constructor requires a trusted matter authorizer. It fixes sensitivity and maximum external access outside the tool schema, so an agent cannot request `ALLOWLIST` or downgrade `LEGAL_PRIVILEGED` in a tool call. The official SDK's in-process `Client(server)` path is used by CI to test actual protocol registration, tool schema, dispatch, and denials.
 
 ## FastAPI
 
-`create_fastapi_router()` is an optional REST facade over `LegalService`. It is not a policy authority. It returns stable denial reasons and does not echo privileged request payloads into errors.
+`create_fastapi_router()` is an optional REST facade over `LegalService`. It requires the same trusted matter-authorizer and server-owned sensitivity/egress configuration. The request body cannot override those controls. It returns stable denial reasons and does not echo privileged request payloads into errors.
+
+FastAPI is a transport, not the legal security boundary.
 
 ## Deployment requirements
 
@@ -132,14 +159,16 @@ Legal runtime
   -> deny everything else
 ```
 
-Do not treat the current Python allowlist as proof of network isolation. Network enforcement belongs in the existing Hermes containment/egress layer.
+Do not treat the Python allowlists as proof of network isolation. Network enforcement belongs in the existing Hermes containment/egress layer.
 
 Recommended production controls:
 
-- bind legal service to a private interface or authenticated internal network;
+- bind the legal service to a private/authenticated interface;
+- bind the matter authorizer to the authenticated principal;
 - use the existing containment gateway for an explicit legal egress allowlist;
 - keep Monid/general MCP endpoints out of that allowlist;
 - use scoped capability-brokered credentials, never standing shared credentials;
+- keep the redaction HMAC key in a protected deployment secret and consistent across intended replicas;
 - encrypt durable matter storage and evidence at rest;
 - disable payload logging in reverse proxies/APM for legal routes;
 - attach audit/provenance events to the existing HMAC/evidence ledger;
@@ -183,4 +212,4 @@ service.register_handler("document_reader", document_reader_handler)
 service.register_handler("legal_retrieval", official_legal_retrieval_handler)
 ```
 
-A handler receives the already-created `LegalContext` plus a copied argument mapping. Routing authorization happens before dispatch. Provider handlers must not create their own fallback to Monid, public MCP, arbitrary URLs, or another general-purpose broker.
+A handler receives the already-authorized `LegalContext` plus a copied argument mapping. Routing authorization happens before dispatch. Provider handlers must not create their own fallback to Monid, public MCP, arbitrary URLs, or another general-purpose broker.
