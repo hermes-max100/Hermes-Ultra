@@ -105,4 +105,8 @@ def test_transport_can_execute_local_handler_inside_authorized_matter() -> None:
             matter_authorizer=ALLOW_M1,
         )
     )
-    assert result == {"text": "private"}
+    assert result == {
+        "payload": {"text": "private"},
+        "assertion": "NONE",
+        "evidence": None,
+    }
