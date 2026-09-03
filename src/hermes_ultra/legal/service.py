@@ -14,10 +14,13 @@ from typing import Any
 from .policy import LegalPolicy
 from .provenance import ProvenanceGuard
 from .types import (
+    AssertionKind,
     AuditRecord,
     LegalContext,
+    LegalToolResult,
     MatterIsolationViolation,
     PolicyViolation,
+    ProvenanceViolation,
     RedactedPayload,
     RouteKind,
     RouteRequest,
@@ -42,6 +45,17 @@ LEGAL_TOOL_ROUTES: dict[str, frozenset[RouteKind]] = {
     "perseus_recall": frozenset({RouteKind.LOCAL}),
 }
 
+_CLAIM_BOOL_KEYS = {
+    "verified",
+    "is_verified",
+    "success",
+    "succeeded",
+    "fact_verified",
+    "citation_verified",
+}
+_CLAIM_STATUS_KEYS = {"status", "state", "result_status", "verification_status"}
+_CLAIM_STATUS_VALUES = {"VERIFIED", "SUCCESS", "SUCCEEDED"}
+
 
 def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (str, bool, int)):
@@ -64,6 +78,21 @@ def _payload_digest(payload: Any) -> str:
         _json_safe(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
+
+
+def _reject_unproven_claim_markers(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for raw_key, item in value.items():
+            key = str(raw_key).strip().casefold().replace("-", "_").replace(" ", "_")
+            if key in _CLAIM_BOOL_KEYS and item is True:
+                raise ProvenanceViolation("formal_claim_requires_legal_tool_result")
+            if key in _CLAIM_STATUS_KEYS and isinstance(item, str) and item.strip().upper() in _CLAIM_STATUS_VALUES:
+                raise ProvenanceViolation("formal_claim_requires_legal_tool_result")
+            _reject_unproven_claim_markers(item)
+        return
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            _reject_unproven_claim_markers(item)
 
 
 class LegalService:
@@ -191,6 +220,37 @@ class LegalService:
             context, arguments["payload"], redact_keys={str(key) for key in raw_keys}
         )
 
+    def _validate_handler_result(self, context: LegalContext, tool_name: str, value: Any) -> Any:
+        if not isinstance(value, LegalToolResult):
+            _reject_unproven_claim_markers(value)
+            return value
+        if value.assertion is AssertionKind.NONE:
+            if value.evidence is not None:
+                raise ProvenanceViolation("unverified_result_cannot_attach_evidence")
+            _reject_unproven_claim_markers(value.payload)
+            return value
+        if value.evidence is None:
+            raise ProvenanceViolation("formal_claim_requires_evidence_bundle")
+        bundle = self.provenance.validate_bundle(context, value.evidence, operation=tool_name)
+        if value.assertion is AssertionKind.VERIFIED_CITATION and not bundle.authority_ids:
+            raise ProvenanceViolation("verified_citation_requires_authority")
+        return value
+
+    def _finalize_result(
+        self,
+        context: LegalContext,
+        tool_name: str,
+        route: RouteRequest,
+        value: Any,
+    ) -> Any:
+        try:
+            validated = self._validate_handler_result(context, tool_name, value)
+        except ProvenanceViolation:
+            self._record(context, tool_name, route, "DENY", "unproven_handler_claim")
+            raise
+        self._record(context, tool_name, route, "EXECUTED", "authorized")
+        return validated
+
     def execute(
         self,
         context: LegalContext,
@@ -234,8 +294,6 @@ class LegalService:
                 except Exception:
                     self._record(context, tool_name, requested_route, "ERROR", "handler_error")
                     raise
-                self._record(context, tool_name, requested_route, "EXECUTED", "authorized")
-                return value
+                return self._finalize_result(context, tool_name, requested_route, value)
             return finalize()
-        self._record(context, tool_name, requested_route, "EXECUTED", "authorized")
-        return result
+        return self._finalize_result(context, tool_name, requested_route, result)
