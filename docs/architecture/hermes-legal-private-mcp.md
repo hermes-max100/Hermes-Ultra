@@ -21,11 +21,12 @@ Hermes / authenticated agent host
         v
    LegalService
       |-- LegalPolicy
+      |-- route/provider-bound handlers
       |-- matter-isolated resource store
       |-- ProvenanceGuard
       |-- HMAC redaction attestations
-      |-- payload-free audit records
-      `-- explicitly registered legal handlers
+      |-- typed LegalToolResult envelope
+      `-- payload-free audit records
 ```
 
 The legal core has no required third-party dependency. `mcp` and `fastapi` are optional transport extras. Every transport calls `LegalService.execute`; transports never receive direct handler access.
@@ -49,7 +50,7 @@ The private server advertises these governed entrypoints:
 - `perseus_remember`
 - `perseus_recall`
 
-A tool that has no registered first-party handler fails closed with `tool_handler_unavailable`. This prevents a declared capability from silently falling through to a general broker.
+A tool that has no handler registered for the exact authorized route/provider fails closed with `tool_handler_unavailable`. A provider implementation therefore cannot be reached through a local authorization merely because it implements the same tool name.
 
 ## Trusted transport controls
 
@@ -65,9 +66,9 @@ Default maximum egress is `external_access=DENY`.
 
 | Route | Default | Additional requirement |
 | --- | --- | --- |
-| `LOCAL` | allow | tool must permit local route |
-| `OFFICIAL_LEGAL_API` | deny | server must enable `ALLOWLIST`; provider must be explicitly configured; tool must permit this route |
-| `APPROVED_MODEL` | deny | server must enable `ALLOWLIST`; provider explicitly configured; exact outbound payload must carry a valid matter-bound redaction attestation; tool must permit model route |
+| `LOCAL` | allow | tool must permit local route and have a local handler |
+| `OFFICIAL_LEGAL_API` | deny | server must enable `ALLOWLIST`; provider explicitly configured; tool and handler must be bound to that route/provider |
+| `APPROVED_MODEL` | deny | server must enable `ALLOWLIST`; provider explicitly configured; exact outbound payload must carry a valid matter-bound redaction attestation; handler must be bound to that route/provider |
 | `MONID` | deny | categorical |
 | `PUBLIC_MCP` | deny | categorical |
 | `UNKNOWN` | deny | categorical |
@@ -88,21 +89,34 @@ Matter isolation is separate from matter authorization: the transport first esta
 
 Persistence adapters must retain the same matter key and should use separate encryption/access-control scopes where the deployment supports them.
 
-## Provenance invariants
+## Typed result and provenance contract
 
-Hermes Legal enforces:
+Every successful handler return is normalized into a `LegalToolResult`:
 
-1. A fact cannot be marked verified without at least one registered matter-bound source.
-2. A citation cannot be marked verified without at least one matter-bound source classified as `AUTHORITY`.
-3. A success claim cannot be emitted without a non-empty evidence bundle.
-4. Source IDs cannot cross matter boundaries.
-5. Source redefinition is rejected unless the complete source record is identical.
+```text
+LegalToolResult
+  payload   = arbitrary result/source data
+  assertion = NONE | SUCCESS | VERIFIED_FACT | VERIFIED_CITATION
+  evidence  = EvidenceBundle | null
+```
+
+Raw handler values are automatically wrapped as `assertion=NONE`. This is deliberate: source material may legitimately contain fields such as `status: SUCCESS`, `verified: true`, or `success: true`; those are treated as document/provider data, not as Hermes assertions.
+
+Formal Hermes claims require the typed envelope:
+
+1. `SUCCESS`, `VERIFIED_FACT`, and `VERIFIED_CITATION` require a non-empty, matter-bound, verified `EvidenceBundle`.
+2. `VERIFIED_CITATION` requires authority-class evidence.
+3. The evidence bundle operation must match the tool that actually executed.
+4. A local route may not claim external disclosure.
+5. An official legal API route must record external disclosure and may not claim a model route.
+6. An approved-model route must record external disclosure and its `model_route` must match the authorized provider.
+7. Cross-matter evidence rejection is audited as a denial.
 
 Evidence sources require a SHA-256 digest and locator.
 
 ## External-model redaction and attestation
 
-`redact_for_external_model` recursively replaces explicitly named fields with `[REDACTED]` and then creates an HMAC-SHA256 attestation over:
+`redact_for_external_model` recursively replaces explicitly named fields with `[REDACTED]` and creates an HMAC-SHA256 attestation over:
 
 - the active `matter_id`; and
 - the SHA-256 digest of the exact canonical sanitized payload.
@@ -113,11 +127,17 @@ The redaction gate fails closed when:
 - none of the supplied targets exist in the payload; or
 - the outbound payload is not JSON-safe.
 
-An approved-model route must supply that attestation with the **exact sanitized payload** under `arguments.payload`. Hermes recomputes the digest and HMAC before dispatch. A forged token, modified payload, or reuse under another matter is denied.
+For `APPROVED_MODEL`, the handler receives exactly one argument field: `arguments.payload`. Sibling fields such as `prompt`, `instructions`, or `context` are rejected. The supplied attestation must validate against that exact sanitized payload and matter before the model-bound handler is selected. This prevents a valid redacted payload from being paired with unattested privileged text elsewhere in the request.
 
 The HMAC key is generated per `LegalService` instance by default. Multi-worker/restart-stable deployments must inject the same protected key into every intended legal-service replica; it must not be exposed to MCP/HTTP callers or handlers that do not need it.
 
 Field-level redaction is a minimum boundary, not a substitute for a full DLP classifier. Provider-bound handlers should add document-specific DLP before production externalization.
+
+## Transport serialization
+
+Transport output preserves the outer `LegalToolResult` envelope. Mapping keys must already be strings; non-string keys are rejected instead of being stringified and potentially collided. Sets/frozensets are rejected because unordered legal output is not deterministic. Lists and tuples serialize as ordered arrays.
+
+These rules prevent silent structured-result corruption at the MCP/FastAPI boundary.
 
 ## Audit
 
@@ -132,7 +152,7 @@ Field-level redaction is a minimum boundary, not a substitute for a full DLP cla
 
 Arguments, document contents, prompts, credentials, exception details, and retrieved legal text are deliberately excluded.
 
-For async handlers, `EXECUTED` is written only after the awaited handler completes. A raised exception becomes `ERROR`; returning a coroutine is not treated as proof of success.
+For async handlers, `EXECUTED` is written only after the awaited handler completes. A raised exception becomes `ERROR`; returning a coroutine is not treated as proof of success. Cross-matter result-evidence attempts are recorded as `DENY` without including the evidence contents.
 
 Durable/HMAC-backed persistence should be attached to Hermes's existing evidence ledger at deployment. The current in-process list is the transport-neutral audit contract, not the final durable ledger.
 
@@ -205,11 +225,21 @@ CI runs the legal suite on Python 3.10 and 3.12.
 
 ## Handler contract
 
-Provider or feature implementations are registered explicitly:
+Handlers are registered to the exact route they are allowed to implement. Local is the default:
 
 ```python
 service.register_handler("document_reader", document_reader_handler)
-service.register_handler("legal_retrieval", official_legal_retrieval_handler)
 ```
 
-A handler receives the already-authorized `LegalContext` plus a copied argument mapping. Routing authorization happens before dispatch. Provider handlers must not create their own fallback to Monid, public MCP, arbitrary URLs, or another general-purpose broker.
+An external implementation must name both route and provider:
+
+```python
+service.register_handler(
+    "legal_retrieval",
+    official_legal_retrieval_handler,
+    route_kind=RouteKind.OFFICIAL_LEGAL_API,
+    provider="deployment-provider-id",
+)
+```
+
+`LegalService.execute` authorizes the route first and then selects only the handler registered for that same `(tool, route_kind, provider)` tuple. Provider handlers must not create their own fallback to Monid, public MCP, arbitrary URLs, or another general-purpose broker.
