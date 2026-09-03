@@ -37,15 +37,15 @@ class ProvenanceGuard:
         if not _SHA256_RE.fullmatch(digest):
             raise ProvenanceViolation("invalid_source_sha256")
         existing = self._sources.get(source_id)
+        candidate = EvidenceSource(source_id, context.matter_id, kind, locator, digest)
         if existing is not None:
             if existing.matter_id != context.matter_id:
                 raise MatterIsolationViolation("source_id_owned_by_other_matter")
-            if existing != EvidenceSource(source_id, context.matter_id, kind, locator, digest):
+            if existing != candidate:
                 raise ProvenanceViolation("source_id_redefinition_forbidden")
             return existing
-        source = EvidenceSource(source_id, context.matter_id, kind, locator, digest)
-        self._sources[source_id] = source
-        return source
+        self._sources[source_id] = candidate
+        return candidate
 
     def _resolve(self, context: LegalContext, source_id: str) -> EvidenceSource:
         source = self._sources.get(source_id)
@@ -72,6 +72,22 @@ class ProvenanceGuard:
         if any(source.kind is not SourceKind.AUTHORITY for source in sources):
             raise ProvenanceViolation("citation_source_is_not_authority")
         return sources
+
+    def validate_bundle(self, context: LegalContext, bundle: EvidenceBundle, *, operation: str) -> EvidenceBundle:
+        if not isinstance(bundle, EvidenceBundle):
+            raise ProvenanceViolation("evidence_bundle_required")
+        if bundle.matter_id != context.matter_id:
+            raise MatterIsolationViolation("cross_matter_evidence_bundle")
+        if bundle.operation != operation:
+            raise ProvenanceViolation("evidence_operation_mismatch")
+        if bundle.verified is not True:
+            raise ProvenanceViolation("evidence_bundle_not_verified")
+        if not bundle.source_ids:
+            raise ProvenanceViolation("success_requires_evidence_bundle")
+        self.verify_fact(context, source_ids=bundle.source_ids)
+        if bundle.authority_ids:
+            self.verify_citation(context, authority_source_ids=bundle.authority_ids)
+        return bundle
 
     def claim_success(
         self,
