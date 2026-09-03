@@ -1,10 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+from dataclasses import dataclass
 
 import pytest
 
-from hermes_ultra.legal import ExternalAccess, LegalContext, LegalPolicy, LegalService, PolicyViolation, RouteKind, RouteRequest
+from hermes_ultra.legal import (
+    AssertionKind,
+    ExternalAccess,
+    LegalContext,
+    LegalPolicy,
+    LegalService,
+    LegalToolResult,
+    MatterIsolationViolation,
+    PolicyViolation,
+    ProvenanceViolation,
+    RouteKind,
+    RouteRequest,
+    SourceKind,
+)
 from hermes_ultra.legal.transport import to_wire
 
 
@@ -55,6 +70,36 @@ def test_model_route_rejects_forged_mismatched_and_cross_matter_attestations() -
         service.execute(ctx("OTHER-MATTER"), "guarded_draft", {"payload": redacted.payload}, route=route)
 
 
+def test_model_route_rejects_unattested_argument_siblings() -> None:
+    called: list[bool] = []
+    service = LegalService(
+        policy=LegalPolicy(approved_model_providers=frozenset({"model"})),
+        redaction_key=b"r" * 32,
+    )
+    service.register_handler(
+        "guarded_draft",
+        lambda _ctx, _args: called.append(True),
+        route_kind=RouteKind.APPROVED_MODEL,
+        provider="model",
+    )
+    redacted = service.redact_for_external_model(
+        ctx(), {"client": "Secret", "task": "draft"}, redact_keys={"client"}
+    )
+    route = RouteRequest(
+        kind=RouteKind.APPROVED_MODEL,
+        provider="model",
+        redaction_attestation=redacted.attestation,
+    )
+    with pytest.raises(PolicyViolation, match="external_model_arguments_must_be_attested_payload_only"):
+        service.execute(
+            ctx(),
+            "guarded_draft",
+            {"payload": redacted.payload, "prompt": "UNREDACTED-PRIVILEGED-TEXT"},
+            route=route,
+        )
+    assert called == []
+
+
 def test_external_handler_cannot_be_dispatched_through_local_route() -> None:
     service = LegalService(
         policy=LegalPolicy(official_legal_providers=frozenset({"official-court"}))
@@ -69,12 +114,14 @@ def test_external_handler_cannot_be_dispatched_through_local_route() -> None:
     with pytest.raises(PolicyViolation, match="tool_handler_unavailable"):
         service.execute(ctx(), "legal_retrieval", {"query": "x"})
 
-    assert service.execute(
+    result = service.execute(
         ctx(),
         "legal_retrieval",
         {"query": "x"},
         route=RouteRequest(kind=RouteKind.OFFICIAL_LEGAL_API, provider="official-court"),
-    ) == {"source": "external"}
+    )
+    assert result.assertion is AssertionKind.NONE
+    assert result.payload == {"source": "external"}
 
 
 def test_route_bound_handler_registration_requires_allowed_route_and_provider() -> None:
@@ -92,6 +139,108 @@ def test_route_bound_handler_registration_requires_allowed_route_and_provider() 
             lambda _ctx, args: args,
             route_kind=RouteKind.OFFICIAL_LEGAL_API,
         )
+
+
+def test_raw_document_claim_words_remain_unverified_payload_data() -> None:
+    service = LegalService()
+    source_data = {"status": "SUCCESS", "verified": True, "text": "quoted record content"}
+    service.register_handler("document_reader", lambda _ctx, _args: source_data)
+    result = service.execute(ctx(), "document_reader", {})
+    assert isinstance(result, LegalToolResult)
+    assert result.assertion is AssertionKind.NONE
+    assert result.evidence is None
+    assert result.payload == source_data
+    wire = to_wire(result)
+    assert wire["assertion"] == "NONE"
+    assert wire["payload"] == source_data
+
+
+def test_arbitrary_dataclass_claim_words_are_nested_under_unverified_envelope() -> None:
+    @dataclass(frozen=True)
+    class ProviderRecord:
+        success: bool
+        text: str
+
+    service = LegalService()
+    service.register_handler(
+        "document_reader", lambda _ctx, _args: ProviderRecord(success=True, text="source data")
+    )
+    result = service.execute(ctx(), "document_reader", {})
+    assert result.assertion is AssertionKind.NONE
+    wire = to_wire(result)
+    assert wire == {
+        "payload": {"success": True, "text": "source data"},
+        "assertion": "NONE",
+        "evidence": None,
+    }
+
+
+def test_external_formal_result_must_bind_evidence_to_actual_route() -> None:
+    service = LegalService(
+        policy=LegalPolicy(approved_model_providers=frozenset({"model"})),
+        redaction_key=b"r" * 32,
+    )
+    digest = hashlib.sha256(b"record").hexdigest()
+    service.provenance.add_source(
+        ctx(), source_id="ev", kind=SourceKind.RECORD, locator="record:1", sha256=digest
+    )
+    bundle_holder = {
+        "bundle": service.provenance.claim_success(
+            ctx(), operation="guarded_draft", source_ids=["ev"]
+        )
+    }
+    service.register_handler(
+        "guarded_draft",
+        lambda _ctx, _args: LegalToolResult(
+            payload={"draft": "x"}, assertion=AssertionKind.SUCCESS, evidence=bundle_holder["bundle"]
+        ),
+        route_kind=RouteKind.APPROVED_MODEL,
+        provider="model",
+    )
+    redacted = service.redact_for_external_model(
+        ctx(), {"client": "Secret", "task": "draft"}, redact_keys={"client"}
+    )
+    route = RouteRequest(
+        kind=RouteKind.APPROVED_MODEL,
+        provider="model",
+        redaction_attestation=redacted.attestation,
+    )
+
+    with pytest.raises(ProvenanceViolation, match="external_disclosure_mismatch"):
+        service.execute(ctx(), "guarded_draft", {"payload": redacted.payload}, route=route)
+
+    bundle_holder["bundle"] = service.provenance.claim_success(
+        ctx(),
+        operation="guarded_draft",
+        source_ids=["ev"],
+        external_disclosure=True,
+        model_route="model",
+    )
+    result = service.execute(ctx(), "guarded_draft", {"payload": redacted.payload}, route=route)
+    assert result.assertion is AssertionKind.SUCCESS
+    assert result.evidence is bundle_holder["bundle"]
+
+
+def test_cross_matter_evidence_rejection_is_audited() -> None:
+    service = LegalService()
+    other = ctx("OTHER-MATTER")
+    digest = hashlib.sha256(b"other-record").hexdigest()
+    service.provenance.add_source(
+        other, source_id="other-ev", kind=SourceKind.RECORD, locator="record:2", sha256=digest
+    )
+    other_bundle = service.provenance.claim_success(
+        other, operation="document_reader", source_ids=["other-ev"]
+    )
+    service.register_handler(
+        "document_reader",
+        lambda _ctx, _args: LegalToolResult(
+            payload={"text": "x"}, assertion=AssertionKind.SUCCESS, evidence=other_bundle
+        ),
+    )
+    with pytest.raises(MatterIsolationViolation, match="cross_matter_evidence_bundle"):
+        service.execute(ctx(), "document_reader", {})
+    assert service.audit_records[-1].outcome == "DENY"
+    assert service.audit_records[-1].reason == "cross_matter_handler_evidence"
 
 
 def test_wire_mapping_rejects_non_string_keys_instead_of_colliding() -> None:
@@ -126,7 +275,9 @@ def test_audit_records_success_without_arguments() -> None:
     service = LegalService()
     service.register_handler("document_reader", lambda _ctx, _args: {"ok": True})
     secret = "PRIVATE-CONTENT"
-    assert service.execute(ctx(), "document_reader", {"text": secret}) == {"ok": True}
+    result = service.execute(ctx(), "document_reader", {"text": secret})
+    assert result.assertion is AssertionKind.NONE
+    assert result.payload == {"ok": True}
     record = service.audit_records[-1]
     assert record.outcome == "EXECUTED"
     assert record.route_kind is RouteKind.LOCAL
@@ -143,7 +294,9 @@ def test_async_handler_is_not_audited_success_until_await_completes() -> None:
     service.register_handler("document_reader", handler)
     pending = service.execute(ctx(), "document_reader", {})
     assert service.audit_records == ()
-    assert asyncio.run(pending) == {"ok": True}
+    result = asyncio.run(pending)
+    assert result.assertion is AssertionKind.NONE
+    assert result.payload == {"ok": True}
     assert service.audit_records[-1].outcome == "EXECUTED"
 
 
