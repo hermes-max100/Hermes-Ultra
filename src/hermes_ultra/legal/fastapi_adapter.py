@@ -32,8 +32,7 @@ def create_fastapi_router(
     async def legal_health() -> dict[str, str]:
         return {"status": "ok", "boundary": "hermes-legal-private"}
 
-    @router.post("/tools/{tool_name}")
-    async def execute_legal_tool(tool_name: str, request: Request) -> Any:
+    async def execute_legal_tool(tool_name: str, request: Any) -> Any:
         try:
             try:
                 body = await request.json()
@@ -73,5 +72,11 @@ def create_fastapi_router(
             raise HTTPException(status_code=500, detail="legal_tool_execution_failed") from None
         except (LegalBoundaryError, ValueError) as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from None
+
+    # FastAPI is an optional dependency imported inside this factory. With
+    # postponed annotations enabled, bind the concrete Request class before
+    # registration so FastAPI treats it as transport state, never as a body model.
+    execute_legal_tool.__annotations__["request"] = Request
+    router.add_api_route("/tools/{tool_name}", execute_legal_tool, methods=["POST"])
 
     return router
