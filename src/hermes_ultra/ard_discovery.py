@@ -65,6 +65,10 @@ class ArdCatalogLoader:
             if not isinstance(capabilities, list) or any(not isinstance(item, str) for item in capabilities):
                 raise ArdCatalogError("ARD entry capabilities must be an array of strings")
 
+            has_url = "url" in raw
+            has_data = "data" in raw
+            if has_url == has_data:
+                raise ArdCatalogError("ARD entry must provide exactly one of url or data")
             url = raw.get("url")
             data = raw.get("data")
             entries.append(
