@@ -3,15 +3,21 @@ from __future__ import annotations
 from typing import Any
 
 from .service import LegalService
-from .transport import invoke_transport
-from .types import LegalBoundaryError
+from .transport import MatterAuthorizer, invoke_transport
+from .types import ExternalAccess, LegalBoundaryError, Sensitivity
 
 
-def create_fastapi_router(service: LegalService | None = None) -> Any:
+def create_fastapi_router(
+    service: LegalService | None = None,
+    *,
+    matter_authorizer: MatterAuthorizer,
+    sensitivity: Sensitivity = Sensitivity.LEGAL_PRIVILEGED,
+    external_access: ExternalAccess = ExternalAccess.DENY,
+) -> Any:
     """Create an optional REST facade over the same governed legal core.
 
-    FastAPI is a transport only; it never receives direct handler access and
-    therefore cannot bypass LegalService authorization.
+    Matter authorization and maximum egress are deployment-owned; request bodies
+    cannot escalate either setting.
     """
     try:
         from fastapi import APIRouter, HTTPException
@@ -39,15 +45,18 @@ def create_fastapi_router(service: LegalService | None = None) -> Any:
                 tool_name,
                 matter_id=matter_id,
                 arguments=arguments,
-                sensitivity=str(body.get("sensitivity", "LEGAL_PRIVILEGED")),
-                external_access=str(body.get("external_access", "DENY")),
+                matter_authorizer=matter_authorizer,
+                sensitivity=sensitivity,
+                external_access=external_access,
                 route_kind=str(body.get("route_kind", "LOCAL")),
                 provider=body.get("provider") if isinstance(body.get("provider"), str) else None,
-                endpoint=body.get("endpoint") if isinstance(body.get("endpoint"), str) else None,
-                payload_redacted=body.get("payload_redacted") is True,
+                redaction_attestation=(
+                    body.get("redaction_attestation")
+                    if isinstance(body.get("redaction_attestation"), str)
+                    else None
+                ),
             )
         except (LegalBoundaryError, ValueError) as exc:
-            # Return the stable policy reason only. Never echo arguments or privileged payloads.
             raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     return router
