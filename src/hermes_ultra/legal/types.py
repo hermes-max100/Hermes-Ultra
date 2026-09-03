@@ -100,3 +100,13 @@ class EvidenceBundle:
     external_disclosure: bool
     model_route: str | None
     verified: bool
+
+
+@dataclass(frozen=True)
+class AuditRecord:
+    sequence: int
+    matter_id: str
+    tool_name: str
+    route_kind: RouteKind
+    outcome: str
+    reason: str
