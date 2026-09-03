@@ -4,12 +4,14 @@ from .policy import LegalPolicy
 from .provenance import ProvenanceGuard
 from .service import LEGAL_TOOL_ROUTES, LegalService
 from .types import (
+    AssertionKind,
     AuditRecord,
     EvidenceBundle,
     EvidenceSource,
     ExternalAccess,
     LegalBoundaryError,
     LegalContext,
+    LegalToolResult,
     MatterIsolationViolation,
     PolicyDecision,
     PolicyViolation,
@@ -22,6 +24,7 @@ from .types import (
 )
 
 __all__ = [
+    "AssertionKind",
     "AuditRecord",
     "EvidenceBundle",
     "EvidenceSource",
@@ -31,6 +34,7 @@ __all__ = [
     "LegalContext",
     "LegalPolicy",
     "LegalService",
+    "LegalToolResult",
     "MatterIsolationViolation",
     "PolicyDecision",
     "PolicyViolation",
