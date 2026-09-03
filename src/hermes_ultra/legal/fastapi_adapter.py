@@ -17,10 +17,11 @@ def create_fastapi_router(
     """Create an optional REST facade over the same governed legal core.
 
     Matter authorization and maximum egress are deployment-owned; request bodies
-    cannot escalate either setting.
+    cannot escalate either setting. Request JSON is parsed inside the boundary so
+    framework validation cannot echo privileged input in a default 422 response.
     """
     try:
-        from fastapi import APIRouter, HTTPException
+        from fastapi import APIRouter, HTTPException, Request
     except ImportError as exc:  # pragma: no cover - optional runtime package
         raise RuntimeError("Hermes Legal API requires the optional 'fastapi' dependency") from exc
 
@@ -32,14 +33,26 @@ def create_fastapi_router(
         return {"status": "ok", "boundary": "hermes-legal-private"}
 
     @router.post("/tools/{tool_name}")
-    async def execute_legal_tool(tool_name: str, body: dict[str, Any]) -> Any:
+    async def execute_legal_tool(tool_name: str, request: Request) -> Any:
         try:
+            try:
+                body = await request.json()
+            except Exception:
+                raise ValueError("invalid_json_body") from None
+            if not isinstance(body, dict):
+                raise ValueError("body_must_be_object")
+
             matter_id = body.get("matter_id")
             arguments = body.get("arguments", {})
             if not isinstance(matter_id, str):
                 raise ValueError("matter_id_required")
             if not isinstance(arguments, dict):
                 raise ValueError("arguments_must_be_object")
+
+            route_value = body.get("route_kind", "LOCAL")
+            if not isinstance(route_value, str):
+                raise ValueError("route_kind_must_be_string")
+
             return await invoke_transport(
                 legal_service,
                 tool_name,
@@ -48,7 +61,7 @@ def create_fastapi_router(
                 matter_authorizer=matter_authorizer,
                 sensitivity=sensitivity,
                 external_access=external_access,
-                route_kind=str(body.get("route_kind", "LOCAL")),
+                route_kind=route_value,
                 provider=body.get("provider") if isinstance(body.get("provider"), str) else None,
                 redaction_attestation=(
                     body.get("redaction_attestation")
@@ -56,7 +69,7 @@ def create_fastapi_router(
                     else None
                 ),
             )
-        except LegalExecutionError as exc:
+        except LegalExecutionError:
             raise HTTPException(status_code=500, detail="legal_tool_execution_failed") from None
         except (LegalBoundaryError, ValueError) as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from None
