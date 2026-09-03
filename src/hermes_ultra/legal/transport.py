@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import math
 from collections.abc import Callable
 from dataclasses import asdict, is_dataclass
 from enum import Enum
@@ -9,7 +10,9 @@ from typing import Any
 from .service import LegalService
 from .types import (
     ExternalAccess,
+    LegalBoundaryError,
     LegalContext,
+    LegalExecutionError,
     MatterIsolationViolation,
     PolicyViolation,
     RouteKind,
@@ -21,6 +24,12 @@ MatterAuthorizer = Callable[[str], bool]
 
 
 def to_wire(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise PolicyViolation("wire_float_must_be_finite")
+        return value
     if isinstance(value, Enum):
         return value.value
     if is_dataclass(value) and not isinstance(value, type):
@@ -33,7 +42,7 @@ def to_wire(value: Any) -> Any:
         raise PolicyViolation("wire_collection_must_be_ordered")
     if isinstance(value, (list, tuple)):
         return [to_wire(item) for item in value]
-    return value
+    raise PolicyViolation("wire_value_not_serializable")
 
 
 def _route_kind(value: str) -> RouteKind:
@@ -76,7 +85,15 @@ async def invoke_transport(
         provider=provider,
         redaction_attestation=redaction_attestation,
     )
-    result = service.execute(context, tool_name, arguments, route=route)
-    if inspect.isawaitable(result):
-        result = await result
-    return to_wire(result)
+    try:
+        result = service.execute(context, tool_name, arguments, route=route)
+        if inspect.isawaitable(result):
+            result = await result
+        return to_wire(result)
+    except LegalBoundaryError:
+        raise
+    except Exception:
+        # Handler/provider exceptions may include privileged content. Never expose
+        # their text across MCP/HTTP; LegalService has already recorded a
+        # payload-free ERROR audit entry.
+        raise LegalExecutionError("legal_tool_execution_failed") from None
