@@ -26,8 +26,12 @@ def to_wire(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
         return to_wire(asdict(value))
     if isinstance(value, dict):
-        return {str(key): to_wire(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
+        if any(not isinstance(key, str) for key in value):
+            raise PolicyViolation("wire_mapping_requires_string_keys")
+        return {key: to_wire(item) for key, item in value.items()}
+    if isinstance(value, (set, frozenset)):
+        raise PolicyViolation("wire_collection_must_be_ordered")
+    if isinstance(value, (list, tuple)):
         return [to_wire(item) for item in value]
     return value
 
