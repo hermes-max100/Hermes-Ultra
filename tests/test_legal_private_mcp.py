@@ -160,7 +160,12 @@ def test_redaction_is_recursive_and_attestation_binds_exact_payload() -> None:
     assert redacted.redacted is True
     assert redacted.attestation.startswith("hrp1.")
 
-    service.register_handler("guarded_draft", lambda _ctx, args: args["payload"])
+    service.register_handler(
+        "guarded_draft",
+        lambda _ctx, args: args["payload"],
+        route_kind=RouteKind.APPROVED_MODEL,
+        provider="approved-model",
+    )
     result = service.execute(
         ctx,
         "guarded_draft",
