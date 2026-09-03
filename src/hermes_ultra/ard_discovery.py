@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Mapping
+from urllib.parse import urlsplit
 
 from .skill_lifecycle import (
     AuthorityProfile,
@@ -17,6 +18,20 @@ _ARD_IDENTIFIER_RE = re.compile(r"^urn:air:[a-zA-Z0-9.-]+(?::[a-zA-Z0-9._-]+)+$"
 
 class ArdCatalogError(ValueError):
     pass
+
+
+def _is_absolute_uri(value: str) -> bool:
+    if any(character.isspace() for character in value):
+        return False
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return False
+    if not parsed.scheme:
+        return False
+    if parsed.scheme.lower() in {"http", "https"} and not parsed.netloc:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -71,8 +86,10 @@ class ArdCatalogLoader:
                 raise ArdCatalogError("ARD entry must provide exactly one of url or data")
             url = raw.get("url")
             data = raw.get("data")
-            if has_url and (not isinstance(url, str) or not url):
-                raise ArdCatalogError("ARD entry url must be a nonempty URI string")
+            if has_url and (
+                not isinstance(url, str) or not url or not _is_absolute_uri(url)
+            ):
+                raise ArdCatalogError("ARD entry url must be an absolute URI string")
             if has_data and not isinstance(data, Mapping):
                 raise ArdCatalogError("ARD entry data must be an object")
 
