@@ -11,6 +11,9 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+legal-mcp = ["mcp>=2,<3"]
+legal-api = ["fastapi>=0.115,<1"]
+legal = ["mcp>=2,<3", "fastapi>=0.115,<1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
