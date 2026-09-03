@@ -10,6 +10,7 @@ from hermes_ultra.legal import (
     AssertionKind,
     ExternalAccess,
     LegalContext,
+    LegalExecutionError,
     LegalPolicy,
     LegalService,
     LegalToolResult,
@@ -18,13 +19,28 @@ from hermes_ultra.legal import (
     ProvenanceViolation,
     RouteKind,
     RouteRequest,
+    Sensitivity,
     SourceKind,
 )
-from hermes_ultra.legal.transport import to_wire
+from hermes_ultra.legal.transport import invoke_transport, to_wire
 
 
 def ctx(matter_id: str = "SECURITY-MATTER") -> LegalContext:
     return LegalContext(matter_id=matter_id, external_access=ExternalAccess.ALLOWLIST)
+
+
+def test_context_runtime_types_cannot_bypass_policy_identity_checks() -> None:
+    with pytest.raises(PolicyViolation, match="invalid_external_access"):
+        LegalContext(matter_id="M", external_access="DENY")  # type: ignore[arg-type]
+    with pytest.raises(PolicyViolation, match="invalid_sensitivity"):
+        LegalContext(matter_id="M", sensitivity="LEGAL_PRIVILEGED")  # type: ignore[arg-type]
+    with pytest.raises(PolicyViolation, match="invalid_route_kind"):
+        RouteRequest(kind="LOCAL")  # type: ignore[arg-type]
+
+
+def test_legal_tool_result_rejects_untyped_assertion_values() -> None:
+    with pytest.raises(ProvenanceViolation, match="invalid_assertion_kind"):
+        LegalToolResult(payload={}, assertion="SUCCESS")  # type: ignore[arg-type]
 
 
 def test_redaction_cannot_attest_empty_or_missing_targets() -> None:
@@ -248,9 +264,38 @@ def test_wire_mapping_rejects_non_string_keys_instead_of_colliding() -> None:
         to_wire({1: "page one", "1": "citation"})
 
 
-def test_wire_rejects_unordered_sets_for_deterministic_legal_results() -> None:
+def test_wire_rejects_unordered_sets_unsupported_objects_and_nonfinite_floats() -> None:
     with pytest.raises(PolicyViolation, match="wire_collection_must_be_ordered"):
         to_wire({"citations": {"A", "B"}})
+    with pytest.raises(PolicyViolation, match="wire_value_not_serializable"):
+        to_wire({"value": object()})
+    with pytest.raises(PolicyViolation, match="wire_float_must_be_finite"):
+        to_wire({"value": float("nan")})
+
+
+def test_transport_sanitizes_handler_exception_details() -> None:
+    service = LegalService()
+    secret = "PRIVILEGED-HANDLER-DETAIL"
+
+    def handler(_ctx, _args):
+        raise RuntimeError(secret)
+
+    service.register_handler("document_reader", handler)
+    with pytest.raises(LegalExecutionError, match="legal_tool_execution_failed") as caught:
+        asyncio.run(
+            invoke_transport(
+                service,
+                "document_reader",
+                matter_id="M",
+                arguments={},
+                matter_authorizer=lambda matter_id: matter_id == "M",
+                sensitivity=Sensitivity.LEGAL_PRIVILEGED,
+                external_access=ExternalAccess.DENY,
+            )
+        )
+    assert secret not in str(caught.value)
+    assert service.audit_records[-1].outcome == "ERROR"
+    assert secret not in repr(service.audit_records[-1])
 
 
 def test_audit_records_policy_denial_without_payload() -> None:
