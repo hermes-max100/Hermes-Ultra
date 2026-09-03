@@ -71,6 +71,11 @@ class ArdCatalogLoader:
                 raise ArdCatalogError("ARD entry must provide exactly one of url or data")
             url = raw.get("url")
             data = raw.get("data")
+            if has_url and (not isinstance(url, str) or not url):
+                raise ArdCatalogError("ARD entry url must be a nonempty URI string")
+            if has_data and not isinstance(data, Mapping):
+                raise ArdCatalogError("ARD entry data must be an object")
+
             entries.append(
                 ArdCatalogEntry(
                     identifier=identifier,
