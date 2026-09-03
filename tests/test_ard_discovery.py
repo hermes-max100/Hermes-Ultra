@@ -54,3 +54,21 @@ def test_ard_catalog_rejects_non_air_resource_identifier() -> None:
                 ]
             }
         )
+
+
+@pytest.mark.parametrize(
+    "delivery",
+    [
+        {},
+        {"url": "https://example.com/debugger.zip", "data": {"name": "debugger"}},
+    ],
+)
+def test_ard_catalog_requires_exactly_one_delivery_form(delivery: dict[str, object]) -> None:
+    entry = {
+        "identifier": "urn:air:example.com:skills:debugger",
+        "displayName": "Portable Debugger",
+        "type": "application/agent-skills+zip",
+        **delivery,
+    }
+    with pytest.raises(ArdCatalogError, match="exactly one"):
+        ArdCatalogLoader().load({"entries": [entry]})
