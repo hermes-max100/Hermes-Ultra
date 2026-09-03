@@ -64,8 +64,7 @@ class LegalContext:
 class RouteRequest:
     kind: RouteKind
     provider: str | None = None
-    endpoint: str | None = None
-    payload_redacted: bool = False
+    redaction_attestation: str | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +79,7 @@ class RedactedPayload:
     payload: Any
     redacted: bool
     redacted_keys: tuple[str, ...]
+    attestation: str
 
 
 @dataclass(frozen=True)
