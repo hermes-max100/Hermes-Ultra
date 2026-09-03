@@ -78,3 +78,33 @@ def create_mcp_server(
             )
         )
     return server
+
+
+def create_mcp_http_app(
+    service: LegalService | None = None,
+    *,
+    matter_authorizer: MatterAuthorizer,
+    sensitivity: Sensitivity = Sensitivity.LEGAL_PRIVILEGED,
+    external_access: ExternalAccess = ExternalAccess.DENY,
+    host: str = "127.0.0.1",
+    transport_security: Any | None = None,
+) -> Any:
+    """Build the private Legal MCP Streamable HTTP app with no protocol sessions.
+
+    MCP 2026-07-28 requests are sessionless by protocol. ``stateless_http=True``
+    additionally prevents the SDK's legacy compatibility leg from issuing or
+    retaining ``Mcp-Session-Id`` state. JSON responses avoid a request-scoped SSE
+    back-channel, matching Hermes's response-carried approval model.
+    """
+    server = create_mcp_server(
+        service,
+        matter_authorizer=matter_authorizer,
+        sensitivity=sensitivity,
+        external_access=external_access,
+    )
+    return server.streamable_http_app(
+        host=host,
+        stateless_http=True,
+        json_response=True,
+        transport_security=transport_security,
+    )
