@@ -53,10 +53,21 @@ HERMES ULTRA
 ├── Experimental Context
 │   └── Graft benchmark + reversible promotion
 │
+├── Voice Revenue Recovery
+│   ├── deterministic call state and disposition policy
+│   ├── consent-aware staged follow-up
+│   ├── Economic Ledger outcome attribution
+│   └── provider replay and promotion gates
+│
 └── Evidence / Autonomy Contracts
 ```
 
 Hermes remains the orchestration and routing authority. None of the integrated upstream capabilities may replace the existing model router or invent new approval policy.
+
+The voice foundation keeps telephony, speech, and realtime-model providers behind
+stable contracts while Hermes owns qualification, recovery eligibility, evidence,
+and completed-outcome economics. See
+[`docs/architecture/voice-revenue-recovery.md`](docs/architecture/voice-revenue-recovery.md).
 
 ## Capability + Context Orchestrator
 
