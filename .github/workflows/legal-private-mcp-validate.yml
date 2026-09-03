@@ -1,0 +1,51 @@
+name: Legal Private MCP Validate
+
+on:
+  push:
+    branches: [main, "ai/hermes-legal-private-mcp"]
+    paths:
+      - "src/hermes_ultra/legal/**"
+      - "tests/test_legal_private_*.py"
+      - "tests/test_legal_mcp_sdk.py"
+      - "config/bot-mode-policy.json"
+      - "docs/architecture/hermes-legal-private-mcp.md"
+      - "pyproject.toml"
+      - ".github/workflows/legal-private-mcp-validate.yml"
+  pull_request:
+    paths:
+      - "src/hermes_ultra/legal/**"
+      - "tests/test_legal_private_*.py"
+      - "tests/test_legal_mcp_sdk.py"
+      - "config/bot-mode-policy.json"
+      - "docs/architecture/hermes-legal-private-mcp.md"
+      - "pyproject.toml"
+      - ".github/workflows/legal-private-mcp-validate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  legal-private-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install legal test dependencies
+        run: python -m pip install -e '.[test,legal]'
+      - name: Compile legal package
+        run: python -m compileall -q src/hermes_ultra/legal
+      - name: Run legal boundary tests
+        run: >-
+          python -m pytest -q
+          tests/test_legal_private_mcp.py
+          tests/test_legal_private_integration.py
+          tests/test_legal_private_security_regressions.py
+          tests/test_legal_mcp_sdk.py
+          tests/test_bot_mode_governance.py

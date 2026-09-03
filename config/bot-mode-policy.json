@@ -28,13 +28,8 @@
       "credential_mode": "capability_brokered",
       "shared_credentials": false,
       "externalization_authority": false,
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL"
-      ],
-      "allowed_entrypoints": [
-        "src/system/agent-reach.sh"
-      ],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL"],
+      "allowed_entrypoints": ["src/system/agent-reach.sh"],
       "active": true
     },
     {
@@ -46,39 +41,35 @@
       "credential_mode": "capability_brokered",
       "shared_credentials": false,
       "externalization_authority": false,
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL",
-        "CONFIDENTIAL",
-        "SECURITY_SENSITIVE"
-      ],
-      "allowed_entrypoints": [
-        "guarded_patch",
-        "tests",
-        "static_analysis"
-      ],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "SECURITY_SENSITIVE"],
+      "allowed_entrypoints": ["guarded_patch", "tests", "static_analysis"],
       "active": true
     },
     {
       "id": "legal",
       "profile": "legal",
       "title": "Legal",
-      "description": "Source-grounded legal analysis and drafting specialist.",
-      "role": "Perform jurisdiction-aware legal research, citation validation, and guarded drafting while preserving privilege boundaries and required review.",
+      "description": "Private, matter-isolated, source-grounded legal analysis and drafting specialist.",
+      "role": "Operate only through the first-party Hermes Legal boundary. Preserve matter isolation and provenance, fail closed on unapproved external routes, and require evidence before verified or successful claims.",
       "credential_mode": "capability_brokered",
       "shared_credentials": false,
       "externalization_authority": false,
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL",
-        "CONFIDENTIAL",
-        "LEGAL_PRIVILEGED"
-      ],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "LEGAL_PRIVILEGED"],
       "allowed_entrypoints": [
+        "document_reader",
         "legal_retrieval",
         "citation_validator",
-        "document_reader",
-        "guarded_draft"
+        "guarded_draft",
+        "case_record_search",
+        "timeline_builder",
+        "exhibit_indexer",
+        "record_fact_extractor",
+        "authority_checker",
+        "redact_for_external_model",
+        "compare_filings",
+        "record_citation_resolver",
+        "perseus_remember",
+        "perseus_recall"
       ],
       "active": true
     },
@@ -91,17 +82,8 @@
       "credential_mode": "capability_brokered",
       "shared_credentials": false,
       "externalization_authority": false,
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL",
-        "CONFIDENTIAL",
-        "FINANCIAL"
-      ],
-      "allowed_entrypoints": [
-        "revenue-ledger",
-        "opportunity-engine",
-        "local-service-funnel"
-      ],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "FINANCIAL"],
+      "allowed_entrypoints": ["revenue-ledger", "opportunity-engine", "local-service-funnel"],
       "active": true
     },
     {
@@ -113,11 +95,7 @@
       "credential_mode": "capability_brokered",
       "shared_credentials": false,
       "externalization_authority": false,
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL",
-        "CONFIDENTIAL"
-      ],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL", "CONFIDENTIAL"],
       "allowed_entrypoints": [
         "virtual-creator-trend-scanner",
         "virtual-creator-content-planner",
@@ -131,16 +109,8 @@
     {
       "id": "hermes-council",
       "title": "Hermes Council",
-      "members": [
-        "research",
-        "legal",
-        "revenue",
-        "coding"
-      ],
-      "allowed_data_classes": [
-        "PUBLIC",
-        "INTERNAL"
-      ],
+      "members": ["research", "legal", "revenue", "coding"],
+      "allowed_data_classes": ["PUBLIC", "INTERNAL"],
       "min_members": 2,
       "max_members": 6,
       "max_rounds": 3,
