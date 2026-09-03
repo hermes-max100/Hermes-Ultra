@@ -4,6 +4,7 @@ from .policy import LegalPolicy
 from .provenance import ProvenanceGuard
 from .service import LEGAL_TOOL_ROUTES, LegalService
 from .types import (
+    AuditRecord,
     EvidenceBundle,
     EvidenceSource,
     ExternalAccess,
@@ -21,6 +22,7 @@ from .types import (
 )
 
 __all__ = [
+    "AuditRecord",
     "EvidenceBundle",
     "EvidenceSource",
     "ExternalAccess",
