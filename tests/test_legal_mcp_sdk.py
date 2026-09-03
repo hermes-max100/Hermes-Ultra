@@ -104,3 +104,11 @@ def test_legal_http_app_is_stateless_for_modern_and_legacy_clients(monkeypatch) 
     assert calls["json_response"] is True
     assert calls["host"] == "127.0.0.1"
     assert "event_store" not in calls
+
+
+def test_legal_http_app_requires_explicit_transport_security_off_loopback() -> None:
+    with pytest.raises(ValueError, match="transport_security"):
+        create_mcp_http_app(
+            matter_authorizer=AUTHORIZE,
+            host="legal.internal",
+        )
