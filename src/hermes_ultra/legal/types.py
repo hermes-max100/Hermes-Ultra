@@ -47,6 +47,13 @@ class SourceKind(str, Enum):
     GENERATED = "GENERATED"
 
 
+class AssertionKind(str, Enum):
+    NONE = "NONE"
+    SUCCESS = "SUCCESS"
+    VERIFIED_FACT = "VERIFIED_FACT"
+    VERIFIED_CITATION = "VERIFIED_CITATION"
+
+
 @dataclass(frozen=True)
 class LegalContext:
     matter_id: str
@@ -100,6 +107,20 @@ class EvidenceBundle:
     external_disclosure: bool
     model_route: str | None
     verified: bool
+
+
+@dataclass(frozen=True)
+class LegalToolResult:
+    """Typed legal result for any formal SUCCESS/VERIFIED assertion.
+
+    Plain handler values are permitted only as unverified data. Formal claims must
+    use this type and carry a matter-bound EvidenceBundle that LegalService
+    revalidates before returning the result across a transport boundary.
+    """
+
+    payload: Any
+    assertion: AssertionKind = AssertionKind.NONE
+    evidence: EvidenceBundle | None = None
 
 
 @dataclass(frozen=True)
