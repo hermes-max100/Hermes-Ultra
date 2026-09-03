@@ -9,7 +9,8 @@ mcp = pytest.importorskip("mcp")
 from mcp import Client  # noqa: E402
 
 from hermes_ultra.legal import LegalService  # noqa: E402
-from hermes_ultra.legal.mcp_server import create_mcp_server  # noqa: E402
+from hermes_ultra.legal import mcp_server as legal_mcp_server  # noqa: E402
+from hermes_ultra.legal.mcp_server import create_mcp_http_app, create_mcp_server  # noqa: E402
 
 AUTHORIZE = lambda matter_id: matter_id == "MCP-MATTER"
 
@@ -80,3 +81,26 @@ def test_mcp_v2_denies_unauthorized_matter_before_service_dispatch() -> None:
             assert service.audit_records == ()
 
     asyncio.run(scenario())
+
+
+def test_legal_http_app_is_stateless_for_modern_and_legacy_clients(monkeypatch) -> None:
+    calls: dict[str, object] = {}
+    sentinel = object()
+
+    class FakeServer:
+        def streamable_http_app(self, **kwargs):
+            calls.update(kwargs)
+            return sentinel
+
+    monkeypatch.setattr(legal_mcp_server, "create_mcp_server", lambda *args, **kwargs: FakeServer())
+
+    app = create_mcp_http_app(
+        matter_authorizer=AUTHORIZE,
+        host="127.0.0.1",
+    )
+
+    assert app is sentinel
+    assert calls["stateless_http"] is True
+    assert calls["json_response"] is True
+    assert calls["host"] == "127.0.0.1"
+    assert "event_store" not in calls
