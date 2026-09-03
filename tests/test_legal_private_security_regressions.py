@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from hermes_ultra.legal import ExternalAccess, LegalContext, LegalPolicy, LegalService, PolicyViolation, RouteKind, RouteRequest
+from hermes_ultra.legal.transport import to_wire
 
 
 def ctx(matter_id: str = "SECURITY-MATTER") -> LegalContext:
@@ -24,7 +25,12 @@ def test_model_route_rejects_forged_mismatched_and_cross_matter_attestations() -
         policy=LegalPolicy(approved_model_providers=frozenset({"model"})),
         redaction_key=b"r" * 32,
     )
-    service.register_handler("guarded_draft", lambda _ctx, args: args["payload"])
+    service.register_handler(
+        "guarded_draft",
+        lambda _ctx, args: args["payload"],
+        route_kind=RouteKind.APPROVED_MODEL,
+        provider="model",
+    )
     redacted = service.redact_for_external_model(
         ctx(), {"client": "Secret", "safe": "A"}, redact_keys={"client"}
     )
@@ -47,6 +53,55 @@ def test_model_route_rejects_forged_mismatched_and_cross_matter_attestations() -
 
     with pytest.raises(PolicyViolation, match="invalid_redaction_attestation"):
         service.execute(ctx("OTHER-MATTER"), "guarded_draft", {"payload": redacted.payload}, route=route)
+
+
+def test_external_handler_cannot_be_dispatched_through_local_route() -> None:
+    service = LegalService(
+        policy=LegalPolicy(official_legal_providers=frozenset({"official-court"}))
+    )
+    service.register_handler(
+        "legal_retrieval",
+        lambda _ctx, _args: {"source": "external"},
+        route_kind=RouteKind.OFFICIAL_LEGAL_API,
+        provider="official-court",
+    )
+
+    with pytest.raises(PolicyViolation, match="tool_handler_unavailable"):
+        service.execute(ctx(), "legal_retrieval", {"query": "x"})
+
+    assert service.execute(
+        ctx(),
+        "legal_retrieval",
+        {"query": "x"},
+        route=RouteRequest(kind=RouteKind.OFFICIAL_LEGAL_API, provider="official-court"),
+    ) == {"source": "external"}
+
+
+def test_route_bound_handler_registration_requires_allowed_route_and_provider() -> None:
+    service = LegalService()
+    with pytest.raises(PolicyViolation, match="handler_route_forbidden"):
+        service.register_handler(
+            "document_reader",
+            lambda _ctx, args: args,
+            route_kind=RouteKind.OFFICIAL_LEGAL_API,
+            provider="official-court",
+        )
+    with pytest.raises(PolicyViolation, match="external_handler_provider_required"):
+        service.register_handler(
+            "legal_retrieval",
+            lambda _ctx, args: args,
+            route_kind=RouteKind.OFFICIAL_LEGAL_API,
+        )
+
+
+def test_wire_mapping_rejects_non_string_keys_instead_of_colliding() -> None:
+    with pytest.raises(PolicyViolation, match="wire_mapping_requires_string_keys"):
+        to_wire({1: "page one", "1": "citation"})
+
+
+def test_wire_rejects_unordered_sets_for_deterministic_legal_results() -> None:
+    with pytest.raises(PolicyViolation, match="wire_collection_must_be_ordered"):
+        to_wire({"citations": {"A", "B"}})
 
 
 def test_audit_records_policy_denial_without_payload() -> None:
