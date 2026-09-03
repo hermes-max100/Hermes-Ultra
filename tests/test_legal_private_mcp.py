@@ -5,6 +5,7 @@ import hashlib
 import pytest
 
 from hermes_ultra.legal import (
+    AssertionKind,
     ExternalAccess,
     LegalContext,
     LegalPolicy,
@@ -176,7 +177,8 @@ def test_redaction_is_recursive_and_attestation_binds_exact_payload() -> None:
             redaction_attestation=redacted.attestation,
         ),
     )
-    assert result == redacted.payload
+    assert result.assertion is AssertionKind.NONE
+    assert result.payload == redacted.payload
 
 
 def test_all_legal_tools_are_registered_and_missing_handlers_fail_closed() -> None:
@@ -218,4 +220,5 @@ def test_local_registered_handler_executes_inside_matter_context() -> None:
     service = LegalService()
     service.register_handler("document_reader", lambda ctx, args: {"matter": ctx.matter_id, **args})
     result = service.execute(context(), "document_reader", {"doc": "A"})
-    assert result == {"matter": "MATTER-1", "doc": "A"}
+    assert result.assertion is AssertionKind.NONE
+    assert result.payload == {"matter": "MATTER-1", "doc": "A"}
