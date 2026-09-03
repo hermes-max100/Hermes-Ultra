@@ -54,22 +54,30 @@ def test_official_provider_must_be_explicitly_allowlisted() -> None:
         )
 
 
-def test_external_model_requires_allowlist_and_redacted_payload() -> None:
+def test_external_model_requires_allowlist_and_redaction_attestation() -> None:
     policy = LegalPolicy(approved_model_providers=frozenset({"approved-model"}))
     ctx = context()
-    with pytest.raises(PolicyViolation, match="external_model_payload_not_redacted"):
+    with pytest.raises(PolicyViolation, match="external_model_redaction_attestation_required"):
         policy.authorize(
             ctx,
-            RouteRequest(kind=RouteKind.APPROVED_MODEL, provider="approved-model", payload_redacted=False),
+            RouteRequest(kind=RouteKind.APPROVED_MODEL, provider="approved-model"),
         )
     with pytest.raises(PolicyViolation, match="provider_not_allowlisted"):
         policy.authorize(
             ctx,
-            RouteRequest(kind=RouteKind.APPROVED_MODEL, provider="unapproved", payload_redacted=True),
+            RouteRequest(
+                kind=RouteKind.APPROVED_MODEL,
+                provider="unapproved",
+                redaction_attestation="not-trusted-by-service",
+            ),
         )
     assert policy.authorize(
         ctx,
-        RouteRequest(kind=RouteKind.APPROVED_MODEL, provider="approved-model", payload_redacted=True),
+        RouteRequest(
+            kind=RouteKind.APPROVED_MODEL,
+            provider="approved-model",
+            redaction_attestation="service-will-verify-this",
+        ),
     ).allowed
 
 
@@ -136,9 +144,9 @@ def test_success_claim_requires_nonempty_evidence_bundle() -> None:
     assert bundle.source_ids == ("ev-1",)
 
 
-def test_redaction_is_recursive_and_external_route_only_accepts_redacted_envelope() -> None:
+def test_redaction_is_recursive_and_attestation_binds_exact_payload() -> None:
     policy = LegalPolicy(approved_model_providers=frozenset({"approved-model"}))
-    service = LegalService(policy=policy)
+    service = LegalService(policy=policy, redaction_key=b"k" * 32)
     ctx = context()
     redacted = service.redact_for_external_model(
         ctx,
@@ -150,14 +158,20 @@ def test_redaction_is_recursive_and_external_route_only_accepts_redacted_envelop
         "nested": {"token": "[REDACTED]", "safe": "keep"},
     }
     assert redacted.redacted is True
-    assert service.policy.authorize(
+    assert redacted.attestation.startswith("hrp1.")
+
+    service.register_handler("guarded_draft", lambda _ctx, args: args["payload"])
+    result = service.execute(
         ctx,
-        RouteRequest(
+        "guarded_draft",
+        {"payload": redacted.payload},
+        route=RouteRequest(
             kind=RouteKind.APPROVED_MODEL,
             provider="approved-model",
-            payload_redacted=redacted.redacted,
+            redaction_attestation=redacted.attestation,
         ),
-    ).allowed
+    )
+    assert result == redacted.payload
 
 
 def test_all_legal_tools_are_registered_and_missing_handlers_fail_closed() -> None:
