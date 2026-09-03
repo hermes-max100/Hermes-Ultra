@@ -46,17 +46,6 @@ LEGAL_TOOL_ROUTES: dict[str, frozenset[RouteKind]] = {
     "perseus_recall": frozenset({RouteKind.LOCAL}),
 }
 
-_CLAIM_BOOL_KEYS = {
-    "verified",
-    "is_verified",
-    "success",
-    "succeeded",
-    "fact_verified",
-    "citation_verified",
-}
-_CLAIM_STATUS_KEYS = {"status", "state", "result_status", "verification_status"}
-_CLAIM_STATUS_VALUES = {"VERIFIED", "SUCCESS", "SUCCEEDED"}
-
 
 def _json_safe(value: Any) -> Any:
     if value is None or isinstance(value, (str, bool, int)):
@@ -79,21 +68,6 @@ def _payload_digest(payload: Any) -> str:
         _json_safe(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
     ).encode("utf-8")
     return hashlib.sha256(canonical).hexdigest()
-
-
-def _reject_unproven_claim_markers(value: Any) -> None:
-    if isinstance(value, Mapping):
-        for raw_key, item in value.items():
-            key = str(raw_key).strip().casefold().replace("-", "_").replace(" ", "_")
-            if key in _CLAIM_BOOL_KEYS and item is True:
-                raise ProvenanceViolation("formal_claim_requires_legal_tool_result")
-            if key in _CLAIM_STATUS_KEYS and isinstance(item, str) and item.strip().upper() in _CLAIM_STATUS_VALUES:
-                raise ProvenanceViolation("formal_claim_requires_legal_tool_result")
-            _reject_unproven_claim_markers(item)
-        return
-    if isinstance(value, (list, tuple, set, frozenset)):
-        for item in value:
-            _reject_unproven_claim_markers(item)
 
 
 def _handler_provider(route_kind: RouteKind, provider: str | None) -> str | None:
@@ -249,21 +223,49 @@ class LegalService:
             context, arguments["payload"], redact_keys={str(key) for key in raw_keys}
         )
 
-    def _validate_handler_result(self, context: LegalContext, tool_name: str, value: Any) -> Any:
-        if not isinstance(value, LegalToolResult):
-            _reject_unproven_claim_markers(value)
+    def _normalize_handler_result(self, value: Any) -> LegalToolResult:
+        if isinstance(value, LegalToolResult):
             return value
-        if value.assertion is AssertionKind.NONE:
-            if value.evidence is not None:
+        return LegalToolResult(payload=value, assertion=AssertionKind.NONE, evidence=None)
+
+    def _validate_handler_result(
+        self,
+        context: LegalContext,
+        tool_name: str,
+        route: RouteRequest,
+        value: Any,
+    ) -> LegalToolResult:
+        result = self._normalize_handler_result(value)
+        if result.assertion is AssertionKind.NONE:
+            if result.evidence is not None:
                 raise ProvenanceViolation("unverified_result_cannot_attach_evidence")
-            _reject_unproven_claim_markers(value.payload)
-            return value
-        if value.evidence is None:
+            return result
+        if result.evidence is None:
             raise ProvenanceViolation("formal_claim_requires_evidence_bundle")
-        bundle = self.provenance.validate_bundle(context, value.evidence, operation=tool_name)
-        if value.assertion is AssertionKind.VERIFIED_CITATION and not bundle.authority_ids:
+
+        bundle = self.provenance.validate_bundle(context, result.evidence, operation=tool_name)
+        if result.assertion is AssertionKind.VERIFIED_CITATION and not bundle.authority_ids:
             raise ProvenanceViolation("verified_citation_requires_authority")
-        return value
+
+        if route.kind is RouteKind.LOCAL:
+            if bundle.external_disclosure:
+                raise ProvenanceViolation("external_disclosure_mismatch")
+            if bundle.model_route is not None:
+                raise ProvenanceViolation("model_route_mismatch")
+        elif route.kind is RouteKind.OFFICIAL_LEGAL_API:
+            if not bundle.external_disclosure:
+                raise ProvenanceViolation("external_disclosure_mismatch")
+            if bundle.model_route is not None:
+                raise ProvenanceViolation("model_route_mismatch")
+        elif route.kind is RouteKind.APPROVED_MODEL:
+            if not bundle.external_disclosure:
+                raise ProvenanceViolation("external_disclosure_mismatch")
+            if bundle.model_route != route.provider:
+                raise ProvenanceViolation("model_route_mismatch")
+        else:
+            raise ProvenanceViolation("evidence_route_mismatch")
+
+        return result
 
     def _finalize_result(
         self,
@@ -271,9 +273,12 @@ class LegalService:
         tool_name: str,
         route: RouteRequest,
         value: Any,
-    ) -> Any:
+    ) -> LegalToolResult:
         try:
-            validated = self._validate_handler_result(context, tool_name, value)
+            validated = self._validate_handler_result(context, tool_name, route, value)
+        except MatterIsolationViolation:
+            self._record(context, tool_name, route, "DENY", "cross_matter_handler_evidence")
+            raise
         except ProvenanceViolation:
             self._record(context, tool_name, route, "DENY", "unproven_handler_claim")
             raise
@@ -300,8 +305,8 @@ class LegalService:
             if requested_route.kind not in LEGAL_TOOL_ROUTES[tool_name]:
                 raise PolicyViolation("tool_route_forbidden")
             if requested_route.kind is RouteKind.APPROVED_MODEL:
-                if "payload" not in arguments:
-                    raise PolicyViolation("external_model_payload_required")
+                if set(arguments) != {"payload"}:
+                    raise PolicyViolation("external_model_arguments_must_be_attested_payload_only")
                 self._verify_attestation(
                     context, arguments["payload"], requested_route.redaction_attestation
                 )
@@ -318,7 +323,7 @@ class LegalService:
             self._record(context, tool_name, requested_route, "ERROR", "handler_error")
             raise
         if inspect.isawaitable(result):
-            async def finalize() -> Any:
+            async def finalize() -> LegalToolResult:
                 try:
                     value = await result
                 except Exception:
