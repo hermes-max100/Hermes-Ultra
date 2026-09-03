@@ -7,12 +7,7 @@ from .types import ExternalAccess, LegalContext, PolicyDecision, PolicyViolation
 
 @dataclass(frozen=True)
 class LegalPolicy:
-    """Application-level legal egress policy.
-
-    This is deliberately default-deny. Network-layer allowlisting is still required
-    at deployment; this object is the in-process authorization gate every transport
-    and handler must traverse.
-    """
+    """Default-deny in-process egress policy for the private legal boundary."""
 
     official_legal_providers: frozenset[str] = field(default_factory=frozenset)
     approved_model_providers: frozenset[str] = field(default_factory=frozenset)
@@ -39,8 +34,8 @@ class LegalPolicy:
         if route.kind is RouteKind.APPROVED_MODEL:
             if provider not in self.approved_model_providers:
                 raise PolicyViolation("provider_not_allowlisted")
-            if not route.payload_redacted:
-                raise PolicyViolation("external_model_payload_not_redacted")
-            return PolicyDecision(True, "approved_model_redacted_payload", route)
+            if not isinstance(route.redaction_attestation, str) or not route.redaction_attestation:
+                raise PolicyViolation("external_model_redaction_attestation_required")
+            return PolicyDecision(True, "approved_model_requires_verified_attestation", route)
 
         raise PolicyViolation("route_kind_forbidden")
