@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
+from ..economic.contracts import TreasuryBucket, as_decimal
 from ..economic.ledger import EconomicLedger
 from ..evidence import EvidenceEnvelope, EvidenceRecorder
 from .model import CallContext, CallFacts, DispositionKind, VoiceDisposition
@@ -128,6 +130,121 @@ class VoiceRevenueRuntime:
                 "tenant_id": context.tenant_id,
                 "booking_reference": booking_reference.strip(),
                 "recovery_attempt": plan.attempt,
+            }
+        )
+        envelope.finish(status="success")
+        return self.evidence.record(envelope)
+
+    def record_completed_job(
+        self,
+        context: CallContext,
+        *,
+        booking_reference: str,
+        job_reference: str,
+        attributed_revenue: Decimal | int | str,
+        revenue_bucket: TreasuryBucket = TreasuryBucket.OPERATIONS,
+    ) -> dict[str, object]:
+        """Record a verified closed job and its attributable revenue exactly once.
+
+        This completes the voice funnel without changing economic metric formulas.
+        A closed job must trace to a previously recorded appointment for the same
+        tenant and call. Replays with identical evidence are idempotent; conflicting
+        revenue replays fail closed instead of silently rewriting economic history.
+        """
+        if self.ledger is None:
+            raise RuntimeError("an economic ledger is required for outcome attribution")
+        booking = booking_reference.strip()
+        job = job_reference.strip()
+        if not booking or not job:
+            raise ValueError("booking_reference and job_reference are required")
+        revenue = as_decimal(attributed_revenue)
+        if revenue <= 0:
+            raise ValueError("attributed_revenue must be positive")
+
+        appointments = [
+            entry
+            for entry in self.ledger.entries()
+            if entry.run_id == context.run_id
+            and entry.strategy_id == self.strategy_id
+            and entry.kind == "business_outcome"
+            and entry.status == "appointment_booked"
+            and entry.metadata.get("call_id") == context.call_id
+            and entry.metadata.get("tenant_id") == context.tenant_id
+        ]
+        if not appointments:
+            raise PermissionError("a verified appointment is required before job completion")
+        explicit_booking_refs = {
+            str(entry.metadata.get("booking_reference"))
+            for entry in appointments
+            if entry.metadata.get("booking_reference") is not None
+        }
+        if explicit_booking_refs and booking not in explicit_booking_refs:
+            raise PermissionError("booking_reference does not match the recorded appointment")
+
+        completion_key = f"voice:{context.call_id}:job:{job}:completed"
+        revenue_key = f"voice:{context.call_id}:job:{job}:revenue"
+        prior_completion = self.ledger.find_event_by_key(
+            f"business_outcome:completed_outcome:{completion_key}"
+        )
+        if prior_completion is not None:
+            if (
+                prior_completion.currency != context.currency
+                or prior_completion.metadata.get("tenant_id") != context.tenant_id
+                or prior_completion.metadata.get("booking_reference") != booking
+                or prior_completion.metadata.get("job_reference") != job
+            ):
+                raise ValueError("conflicting completed-job idempotent retry")
+        prior_revenue = self.ledger.find_event_by_key(f"revenue:{revenue_key}")
+        if prior_revenue is not None and (
+            prior_revenue.amount != revenue
+            or prior_revenue.currency != context.currency
+            or prior_revenue.metadata.get("tenant_id") != context.tenant_id
+        ):
+            raise ValueError("conflicting revenue idempotent retry")
+
+        self.ledger.record_business_outcome(
+            run_id=context.run_id,
+            strategy_id=self.strategy_id,
+            outcome_type="completed_outcome",
+            currency=context.currency,
+            metadata={
+                "call_id": context.call_id,
+                "tenant_id": context.tenant_id,
+                "booking_reference": booking,
+                "job_reference": job,
+            },
+            idempotency_key=completion_key,
+        )
+        self.ledger.record_revenue(
+            run_id=context.run_id,
+            strategy_id=self.strategy_id,
+            bucket=TreasuryBucket(revenue_bucket),
+            amount=revenue,
+            currency=context.currency,
+            metadata={
+                "call_id": context.call_id,
+                "tenant_id": context.tenant_id,
+                "booking_reference": booking,
+                "job_reference": job,
+                "attribution": "voice_completed_job",
+            },
+            idempotency_key=revenue_key,
+        )
+
+        envelope = EvidenceEnvelope.new(
+            task_id=context.call_id,
+            capability="voice-completed-outcome-attribution",
+            run_id=context.run_id,
+        )
+        envelope.artifacts.append(
+            {
+                "call_id": context.call_id,
+                "tenant_id": context.tenant_id,
+                "booking_reference": booking,
+                "job_reference": job,
+                "attributed_revenue": str(revenue),
+                "currency": context.currency,
+                "revenue_bucket": TreasuryBucket(revenue_bucket).value,
             }
         )
         envelope.finish(status="success")
