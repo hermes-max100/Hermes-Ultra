@@ -92,3 +92,19 @@ def test_ard_catalog_rejects_malformed_delivery_values(
     }
     with pytest.raises(ArdCatalogError, match=message):
         ArdCatalogLoader().load({"entries": [entry]})
+
+
+def test_ard_catalog_rejects_relative_url_reference() -> None:
+    with pytest.raises(ArdCatalogError, match="URI"):
+        ArdCatalogLoader().load(
+            {
+                "entries": [
+                    {
+                        "identifier": "urn:air:example.com:skills:debugger",
+                        "displayName": "Portable Debugger",
+                        "type": "application/agent-skills+zip",
+                        "url": "artifacts/debugger.zip",
+                    }
+                ]
+            }
+        )
