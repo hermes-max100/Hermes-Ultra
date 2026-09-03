@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import hmac
+import inspect
+import json
+import math
+import secrets
+import threading
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -36,15 +43,43 @@ LEGAL_TOOL_ROUTES: dict[str, frozenset[RouteKind]] = {
 }
 
 
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise PolicyViolation("external_payload_not_json_serializable")
+        return value
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise PolicyViolation("external_payload_requires_string_keys")
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    raise PolicyViolation("external_payload_not_json_serializable")
+
+
+def _payload_digest(payload: Any) -> str:
+    canonical = json.dumps(
+        _json_safe(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 class LegalService:
     """Shared legal core used by MCP, HTTP, CLI, or in-process callers."""
 
-    def __init__(self, *, policy: LegalPolicy | None = None) -> None:
+    def __init__(self, *, policy: LegalPolicy | None = None, redaction_key: bytes | None = None) -> None:
         self.policy = policy or LegalPolicy()
         self.provenance = ProvenanceGuard()
         self._resources: dict[str, tuple[str, Any]] = {}
         self._handlers: dict[str, Handler] = {"redact_for_external_model": self._redaction_handler}
         self._audit: list[AuditRecord] = []
+        self._audit_lock = threading.Lock()
+        key = redaction_key if redaction_key is not None else secrets.token_bytes(32)
+        if not isinstance(key, bytes) or len(key) < 32:
+            raise PolicyViolation("redaction_key_must_be_at_least_32_bytes")
+        self._redaction_key = key
 
     @property
     def tool_names(self) -> tuple[str, ...]:
@@ -52,12 +87,14 @@ class LegalService:
 
     @property
     def audit_records(self) -> tuple[AuditRecord, ...]:
-        return tuple(self._audit)
+        with self._audit_lock:
+            return tuple(self._audit)
 
     def _record(self, context: LegalContext, tool_name: str, route: RouteRequest, outcome: str, reason: str) -> None:
-        self._audit.append(
-            AuditRecord(len(self._audit) + 1, context.matter_id, tool_name, route.kind, outcome, reason)
-        )
+        with self._audit_lock:
+            self._audit.append(
+                AuditRecord(len(self._audit) + 1, context.matter_id, tool_name, route.kind, outcome, reason)
+            )
 
     def register_handler(self, tool_name: str, handler: Handler) -> None:
         if tool_name not in LEGAL_TOOL_ROUTES:
@@ -84,6 +121,26 @@ class LegalService:
             raise MatterIsolationViolation("cross_matter_resource_access")
         return copy.deepcopy(value)
 
+    def _attestation(self, matter_id: str, payload: Any) -> str:
+        digest = _payload_digest(payload)
+        message = f"{matter_id}\0{digest}".encode("utf-8")
+        signature = hmac.new(self._redaction_key, message, hashlib.sha256).hexdigest()
+        return f"hrp1.{digest}.{signature}"
+
+    def _verify_attestation(self, context: LegalContext, payload: Any, attestation: str | None) -> None:
+        if not isinstance(attestation, str):
+            raise PolicyViolation("invalid_redaction_attestation")
+        parts = attestation.split(".")
+        if len(parts) != 3 or parts[0] != "hrp1":
+            raise PolicyViolation("invalid_redaction_attestation")
+        _, claimed_digest, claimed_signature = parts
+        actual_digest = _payload_digest(payload)
+        if not hmac.compare_digest(claimed_digest, actual_digest):
+            raise PolicyViolation("redaction_attestation_payload_mismatch")
+        expected = self._attestation(context.matter_id, payload).split(".", 2)[2]
+        if not hmac.compare_digest(claimed_signature, expected):
+            raise PolicyViolation("invalid_redaction_attestation")
+
     def redact_for_external_model(
         self,
         context: LegalContext,
@@ -91,7 +148,6 @@ class LegalService:
         *,
         redact_keys: set[str] | frozenset[str],
     ) -> RedactedPayload:
-        del context
         normalized = {str(key).casefold() for key in redact_keys if str(key).strip()}
         if not normalized:
             raise PolicyViolation("redact_keys_required")
@@ -99,24 +155,31 @@ class LegalService:
 
         def walk(value: Any) -> Any:
             if isinstance(value, dict):
-                result: dict[Any, Any] = {}
+                if any(not isinstance(key, str) for key in value):
+                    raise PolicyViolation("external_payload_requires_string_keys")
+                result: dict[str, Any] = {}
                 for key, item in value.items():
-                    if str(key).casefold() in normalized:
+                    if key.casefold() in normalized:
                         result[key] = "[REDACTED]"
-                        touched.add(str(key))
+                        touched.add(key)
                     else:
                         result[key] = walk(item)
                 return result
             if isinstance(value, list):
                 return [walk(item) for item in value]
             if isinstance(value, tuple):
-                return tuple(walk(item) for item in value)
-            return copy.deepcopy(value)
+                return [walk(item) for item in value]
+            return _json_safe(value)
 
         sanitized = walk(payload)
         if not touched:
             raise PolicyViolation("redaction_target_not_found")
-        return RedactedPayload(sanitized, True, tuple(sorted(touched)))
+        return RedactedPayload(
+            payload=sanitized,
+            redacted=True,
+            redacted_keys=tuple(sorted(touched)),
+            attestation=self._attestation(context.matter_id, sanitized),
+        )
 
     def _redaction_handler(self, context: LegalContext, arguments: Mapping[str, Any]) -> RedactedPayload:
         if "payload" not in arguments:
@@ -147,6 +210,12 @@ class LegalService:
             self.policy.authorize(context, requested_route)
             if requested_route.kind not in LEGAL_TOOL_ROUTES[tool_name]:
                 raise PolicyViolation("tool_route_forbidden")
+            if requested_route.kind is RouteKind.APPROVED_MODEL:
+                if "payload" not in arguments:
+                    raise PolicyViolation("external_model_payload_required")
+                self._verify_attestation(
+                    context, arguments["payload"], requested_route.redaction_attestation
+                )
             handler = self._handlers.get(tool_name)
             if handler is None:
                 raise PolicyViolation("tool_handler_unavailable")
@@ -158,5 +227,15 @@ class LegalService:
         except Exception:
             self._record(context, tool_name, requested_route, "ERROR", "handler_error")
             raise
+        if inspect.isawaitable(result):
+            async def finalize() -> Any:
+                try:
+                    value = await result
+                except Exception:
+                    self._record(context, tool_name, requested_route, "ERROR", "handler_error")
+                    raise
+                self._record(context, tool_name, requested_route, "EXECUTED", "authorized")
+                return value
+            return finalize()
         self._record(context, tool_name, requested_route, "EXECUTED", "authorized")
         return result
