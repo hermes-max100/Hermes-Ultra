@@ -147,9 +147,9 @@ class VoiceRevenueRuntime:
         """Record a verified closed job and its attributable revenue exactly once.
 
         This completes the voice funnel without changing economic metric formulas.
-        A closed job must trace to a previously recorded appointment for the call.
-        Replays with identical evidence are idempotent; conflicting revenue replays
-        fail closed instead of silently rewriting economic history.
+        A closed job must trace to a previously recorded appointment for the same
+        tenant and call. Replays with identical evidence are idempotent; conflicting
+        revenue replays fail closed instead of silently rewriting economic history.
         """
         if self.ledger is None:
             raise RuntimeError("an economic ledger is required for outcome attribution")
@@ -169,6 +169,7 @@ class VoiceRevenueRuntime:
             and entry.kind == "business_outcome"
             and entry.status == "appointment_booked"
             and entry.metadata.get("call_id") == context.call_id
+            and entry.metadata.get("tenant_id") == context.tenant_id
         ]
         if not appointments:
             raise PermissionError("a verified appointment is required before job completion")
@@ -188,13 +189,16 @@ class VoiceRevenueRuntime:
         if prior_completion is not None:
             if (
                 prior_completion.currency != context.currency
+                or prior_completion.metadata.get("tenant_id") != context.tenant_id
                 or prior_completion.metadata.get("booking_reference") != booking
                 or prior_completion.metadata.get("job_reference") != job
             ):
                 raise ValueError("conflicting completed-job idempotent retry")
         prior_revenue = self.ledger.find_event_by_key(f"revenue:{revenue_key}")
         if prior_revenue is not None and (
-            prior_revenue.amount != revenue or prior_revenue.currency != context.currency
+            prior_revenue.amount != revenue
+            or prior_revenue.currency != context.currency
+            or prior_revenue.metadata.get("tenant_id") != context.tenant_id
         ):
             raise ValueError("conflicting revenue idempotent retry")
 
