@@ -17,8 +17,10 @@ from .types import (
     AssertionKind,
     AuditRecord,
     LegalContext,
+    LegalExecutionError,
     LegalToolResult,
     MatterIsolationViolation,
+    PolicyDecision,
     PolicyViolation,
     ProvenanceViolation,
     RedactedPayload,
@@ -88,6 +90,7 @@ class LegalService:
         self.policy = policy or LegalPolicy()
         self.provenance = ProvenanceGuard()
         self._resources: dict[str, tuple[str, Any]] = {}
+        self._resource_lock = threading.RLock()
         self._handlers: dict[HandlerKey, Handler] = {
             ("redact_for_external_model", RouteKind.LOCAL, None): self._redaction_handler
         }
@@ -112,6 +115,19 @@ class LegalService:
             self._audit.append(
                 AuditRecord(len(self._audit) + 1, context.matter_id, tool_name, route.kind, outcome, reason)
             )
+
+    def record_transport_success(self, context: LegalContext, tool_name: str, route: RouteRequest) -> None:
+        self._record(context, tool_name, route, "EXECUTED", "authorized")
+
+    def record_transport_error(
+        self,
+        context: LegalContext,
+        tool_name: str,
+        route: RouteRequest,
+        *,
+        reason: str,
+    ) -> None:
+        self._record(context, tool_name, route, "ERROR", reason)
 
     def register_handler(
         self,
@@ -139,19 +155,22 @@ class LegalService:
         resource_id = resource_id.strip() if isinstance(resource_id, str) else ""
         if not resource_id:
             raise PolicyViolation("invalid_resource_id")
-        existing = self._resources.get(resource_id)
-        if existing is not None and existing[0] != context.matter_id:
-            raise MatterIsolationViolation("resource_id_owned_by_other_matter")
-        self._resources[resource_id] = (context.matter_id, copy.deepcopy(value))
+        value_snapshot = copy.deepcopy(value)
+        with self._resource_lock:
+            existing = self._resources.get(resource_id)
+            if existing is not None and existing[0] != context.matter_id:
+                raise MatterIsolationViolation("resource_id_owned_by_other_matter")
+            self._resources[resource_id] = (context.matter_id, value_snapshot)
 
     def get_resource(self, context: LegalContext, resource_id: str) -> Any:
-        stored = self._resources.get(resource_id)
-        if stored is None:
-            raise KeyError(resource_id)
-        matter_id, value = stored
-        if matter_id != context.matter_id:
-            raise MatterIsolationViolation("cross_matter_resource_access")
-        return copy.deepcopy(value)
+        with self._resource_lock:
+            stored = self._resources.get(resource_id)
+            if stored is None:
+                raise KeyError(resource_id)
+            matter_id, value = stored
+            if matter_id != context.matter_id:
+                raise MatterIsolationViolation("cross_matter_resource_access")
+            return copy.deepcopy(value)
 
     def _attestation(self, matter_id: str, payload: Any) -> str:
         digest = _payload_digest(payload)
@@ -273,6 +292,8 @@ class LegalService:
         tool_name: str,
         route: RouteRequest,
         value: Any,
+        *,
+        defer_success_audit: bool,
     ) -> LegalToolResult:
         try:
             validated = self._validate_handler_result(context, tool_name, route, value)
@@ -282,7 +303,8 @@ class LegalService:
         except ProvenanceViolation:
             self._record(context, tool_name, route, "DENY", "unproven_handler_claim")
             raise
-        self._record(context, tool_name, route, "EXECUTED", "authorized")
+        if not defer_success_audit:
+            self._record(context, tool_name, route, "EXECUTED", "authorized")
         return validated
 
     def execute(
@@ -292,8 +314,18 @@ class LegalService:
         arguments: Mapping[str, Any],
         *,
         route: RouteRequest | None = None,
+        defer_success_audit: bool = False,
     ) -> Any:
-        requested_route = route or RouteRequest(kind=RouteKind.LOCAL)
+        if route is None:
+            requested_route = RouteRequest(kind=RouteKind.LOCAL)
+        elif isinstance(route, RouteRequest):
+            requested_route = route
+        else:
+            fallback_route = RouteRequest(kind=RouteKind.UNKNOWN)
+            if isinstance(context, LegalContext):
+                self._record(context, tool_name, fallback_route, "DENY", "route_request_required")
+            raise PolicyViolation("route_request_required")
+
         if tool_name not in LEGAL_TOOL_ROUTES:
             self._record(context, tool_name, requested_route, "DENY", "unknown_legal_tool")
             raise PolicyViolation("unknown_legal_tool")
@@ -301,14 +333,26 @@ class LegalService:
             self._record(context, tool_name, requested_route, "DENY", "tool_arguments_must_be_mapping")
             raise PolicyViolation("tool_arguments_must_be_mapping")
         try:
-            self.policy.authorize(context, requested_route)
+            argument_snapshot = copy.deepcopy(dict(arguments))
+        except Exception:
+            self._record(context, tool_name, requested_route, "DENY", "tool_arguments_snapshot_failed")
+            raise PolicyViolation("tool_arguments_snapshot_failed") from None
+
+        try:
+            decision = self.policy.authorize(context, requested_route)
+            if not isinstance(decision, PolicyDecision):
+                raise PolicyViolation("invalid_policy_decision")
+            if decision.allowed is not True:
+                raise PolicyViolation("policy_denied")
+            if decision.route != requested_route:
+                raise PolicyViolation("policy_route_mismatch")
             if requested_route.kind not in LEGAL_TOOL_ROUTES[tool_name]:
                 raise PolicyViolation("tool_route_forbidden")
             if requested_route.kind is RouteKind.APPROVED_MODEL:
-                if set(arguments) != {"payload"}:
+                if set(argument_snapshot) != {"payload"}:
                     raise PolicyViolation("external_model_arguments_must_be_attested_payload_only")
                 self._verify_attestation(
-                    context, arguments["payload"], requested_route.redaction_attestation
+                    context, argument_snapshot["payload"], requested_route.redaction_attestation
                 )
             normalized_provider = _handler_provider(requested_route.kind, requested_route.provider)
             handler = self._handlers.get((tool_name, requested_route.kind, normalized_provider))
@@ -317,18 +361,34 @@ class LegalService:
         except PolicyViolation as exc:
             self._record(context, tool_name, requested_route, "DENY", str(exc))
             raise
+
         try:
-            result = handler(context, copy.deepcopy(dict(arguments)))
+            result = handler(context, copy.deepcopy(argument_snapshot))
         except Exception:
             self._record(context, tool_name, requested_route, "ERROR", "handler_error")
-            raise
+            raise LegalExecutionError("legal_tool_execution_failed") from None
+
         if inspect.isawaitable(result):
             async def finalize() -> LegalToolResult:
                 try:
                     value = await result
                 except Exception:
                     self._record(context, tool_name, requested_route, "ERROR", "handler_error")
-                    raise
-                return self._finalize_result(context, tool_name, requested_route, value)
+                    raise LegalExecutionError("legal_tool_execution_failed") from None
+                return self._finalize_result(
+                    context,
+                    tool_name,
+                    requested_route,
+                    value,
+                    defer_success_audit=defer_success_audit,
+                )
+
             return finalize()
-        return self._finalize_result(context, tool_name, requested_route, result)
+
+        return self._finalize_result(
+            context,
+            tool_name,
+            requested_route,
+            result,
+            defer_success_audit=defer_success_audit,
+        )
