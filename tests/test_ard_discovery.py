@@ -72,3 +72,23 @@ def test_ard_catalog_requires_exactly_one_delivery_form(delivery: dict[str, obje
     }
     with pytest.raises(ArdCatalogError, match="exactly one"):
         ArdCatalogLoader().load({"entries": [entry]})
+
+
+@pytest.mark.parametrize(
+    ("delivery", "message"),
+    [
+        ({"url": 42}, "url"),
+        ({"data": "not-an-object"}, "data"),
+    ],
+)
+def test_ard_catalog_rejects_malformed_delivery_values(
+    delivery: dict[str, object], message: str
+) -> None:
+    entry = {
+        "identifier": "urn:air:example.com:skills:debugger",
+        "displayName": "Portable Debugger",
+        "type": "application/agent-skills+zip",
+        **delivery,
+    }
+    with pytest.raises(ArdCatalogError, match=message):
+        ArdCatalogLoader().load({"entries": [entry]})
