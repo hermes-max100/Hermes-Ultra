@@ -8,6 +8,7 @@ on:
       - "tests/test_legal_private_*.py"
       - "tests/test_legal_mcp_sdk.py"
       - "config/bot-mode-policy.json"
+      - "docs/architecture/hermes-legal-private-mcp.md"
       - "pyproject.toml"
       - ".github/workflows/legal-private-mcp-validate.yml"
   pull_request:
@@ -16,6 +17,7 @@ on:
       - "tests/test_legal_private_*.py"
       - "tests/test_legal_mcp_sdk.py"
       - "config/bot-mode-policy.json"
+      - "docs/architecture/hermes-legal-private-mcp.md"
       - "pyproject.toml"
       - ".github/workflows/legal-private-mcp-validate.yml"
 
