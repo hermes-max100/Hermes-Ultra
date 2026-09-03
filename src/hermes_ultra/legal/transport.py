@@ -86,14 +86,28 @@ async def invoke_transport(
         redaction_attestation=redaction_attestation,
     )
     try:
-        result = service.execute(context, tool_name, arguments, route=route)
+        result = service.execute(
+            context,
+            tool_name,
+            arguments,
+            route=route,
+            defer_success_audit=True,
+        )
         if inspect.isawaitable(result):
             result = await result
-        return to_wire(result)
+        try:
+            wire_result = to_wire(result)
+        except Exception:
+            service.record_transport_error(
+                context,
+                tool_name,
+                route,
+                reason="result_serialization_error",
+            )
+            raise LegalExecutionError("legal_tool_execution_failed") from None
+        service.record_transport_success(context, tool_name, route)
+        return wire_result
     except LegalBoundaryError:
         raise
     except Exception:
-        # Handler/provider exceptions may include privileged content. Never expose
-        # their text across MCP/HTTP; LegalService has already recorded a
-        # payload-free ERROR audit entry.
         raise LegalExecutionError("legal_tool_execution_failed") from None

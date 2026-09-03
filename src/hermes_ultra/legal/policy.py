@@ -7,7 +7,7 @@ from .types import ExternalAccess, LegalContext, PolicyDecision, PolicyViolation
 
 
 def _validate_provider_set(value: Any, label: str) -> frozenset[str]:
-    if not isinstance(value, frozenset):
+    if type(value) is not frozenset:
         raise PolicyViolation(f"{label}_must_be_frozenset")
     for provider in value:
         if not isinstance(provider, str) or not provider or provider != provider.strip() or len(provider) > 256:
