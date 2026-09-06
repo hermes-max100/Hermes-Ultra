@@ -59,10 +59,13 @@ def home_services_offers(
                 "qualify",
                 "book",
                 "transfer",
+                "contextual_warm_transfer",
+                "human_acceptance_confirmation",
+                "failed_transfer_recovery",
+                "transfer_receipts",
                 "recover_incomplete_calls",
                 "crm_evidence",
                 "outcome_attribution",
             ),
         ),
     )
-

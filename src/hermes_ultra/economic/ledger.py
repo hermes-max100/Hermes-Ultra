@@ -13,7 +13,12 @@ from .contracts import TransactionEnvelope, TreasuryBucket, as_decimal, utc_now
 
 
 BUSINESS_OUTCOME_TYPES = frozenset(
-    {"qualified_lead", "appointment_booked", "completed_outcome"}
+    {
+        "qualified_lead",
+        "appointment_booked",
+        "completed_outcome",
+        "warm_transfer_accepted",
+    }
 )
 
 

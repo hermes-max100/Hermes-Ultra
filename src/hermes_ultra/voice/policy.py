@@ -23,12 +23,12 @@ class VoicePolicyEngine:
             )
         if facts.emergency_detected:
             return VoiceDisposition(
-                DispositionKind.HANDOFF_REQUIRED,
+                self._handoff_kind(),
                 ("emergency_detected",),
             )
         if facts.handoff_requested:
             return VoiceDisposition(
-                DispositionKind.HANDOFF_REQUIRED,
+                self._handoff_kind(),
                 ("caller_requested_handoff",),
             )
         if facts.requested_service and facts.requested_service not in self.config.allowed_services:
@@ -73,6 +73,14 @@ class VoicePolicyEngine:
             tuple((*missing, *blockers)),
         )
 
+    def _handoff_kind(self) -> DispositionKind:
+        if (
+            self.config.package is VoicePackage.REVENUE_RECOVERY
+            and self.config.warm_transfer_target_reference
+        ):
+            return DispositionKind.WARM_TRANSFER_REQUIRED
+        return DispositionKind.HANDOFF_REQUIRED
+
     def _recovery_blockers(self, facts: CallFacts) -> tuple[str, ...]:
         blockers = []
         if self.config.package is not VoicePackage.REVENUE_RECOVERY:
@@ -88,4 +96,3 @@ class VoicePolicyEngine:
         if facts.recovery_attempts >= self.config.max_recovery_attempts:
             blockers.append("recovery_attempt_limit_reached")
         return tuple(blockers)
-

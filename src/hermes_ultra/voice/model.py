@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
 from types import MappingProxyType
 from typing import Mapping
@@ -25,6 +26,9 @@ class VoiceCallState(str, Enum):
     BOOKING = "booking"
     BOOKED = "booked"
     HANDOFF = "handoff"
+    TRANSFER_CONNECTING = "transfer_connecting"
+    TRANSFER_ACCEPTED = "transfer_accepted"
+    TRANSFER_FAILED = "transfer_failed"
     INCOMPLETE = "incomplete"
     BLOCKED = "blocked"
     ENDED = "ended"
@@ -33,6 +37,7 @@ class VoiceCallState(str, Enum):
 class DispositionKind(str, Enum):
     BOOKED = "booked"
     HANDOFF_REQUIRED = "handoff_required"
+    WARM_TRANSFER_REQUIRED = "warm_transfer_required"
     INCOMPLETE_BUT_RECOVERABLE = "incomplete_but_recoverable"
     INCOMPLETE_NOT_RECOVERABLE = "incomplete_not_recoverable"
     OUT_OF_AREA = "out_of_area"
@@ -71,6 +76,8 @@ class CallFacts:
     contact_channels: frozenset[ContactChannel] = frozenset()
     do_not_contact: bool = False
     recovery_attempts: int = 0
+    actions_attempted: tuple[str, ...] = ()
+    requested_next_step: str | None = None
 
     def __post_init__(self) -> None:
         if self.recovery_attempts < 0:
@@ -83,6 +90,10 @@ class CallFacts:
             object.__setattr__(self, "postal_code", self.postal_code.strip().upper())
         if self.contact_reference is not None:
             object.__setattr__(self, "contact_reference", self.contact_reference.strip())
+        actions = tuple(item.strip() for item in self.actions_attempted if item.strip())
+        object.__setattr__(self, "actions_attempted", actions)
+        if self.requested_next_step is not None:
+            object.__setattr__(self, "requested_next_step", self.requested_next_step.strip())
 
 
 @dataclass(frozen=True)
@@ -96,6 +107,10 @@ class VoicePolicyConfig:
     )
     max_recovery_attempts: int = 2
     recovery_window_hours: int = 24
+    warm_transfer_target_reference: str | None = None
+    warm_transfer_acceptance_timeout_seconds: int = 30
+    secondary_languages: tuple[str, ...] = ("es",)
+    minimum_end_of_turn_confidence: Decimal = Decimal("0.65")
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "package", VoicePackage(self.package))
@@ -112,9 +127,25 @@ class VoicePolicyConfig:
             raise ValueError("max_recovery_attempts must be between 1 and 5")
         if not 1 <= self.recovery_window_hours <= 168:
             raise ValueError("recovery_window_hours must be between 1 and 168")
+        if not 5 <= self.warm_transfer_acceptance_timeout_seconds <= 300:
+            raise ValueError("warm transfer timeout must be between 5 and 300 seconds")
+        target = self.warm_transfer_target_reference
+        if target is not None:
+            target = target.strip()
+            if not target:
+                target = None
+        languages = tuple(
+            dict.fromkeys(item.strip().lower() for item in self.secondary_languages if item.strip())
+        )
+        confidence = Decimal(str(self.minimum_end_of_turn_confidence))
+        if not Decimal("0") <= confidence <= Decimal("1"):
+            raise ValueError("minimum_end_of_turn_confidence must be between 0 and 1")
         object.__setattr__(self, "supported_postal_codes", postal_codes)
         object.__setattr__(self, "allowed_services", services)
         object.__setattr__(self, "recovery_channels", channels)
+        object.__setattr__(self, "warm_transfer_target_reference", target)
+        object.__setattr__(self, "secondary_languages", languages)
+        object.__setattr__(self, "minimum_end_of_turn_confidence", confidence)
 
 
 @dataclass(frozen=True)
@@ -122,4 +153,3 @@ class VoiceDisposition:
     kind: DispositionKind
     reasons: tuple[str, ...]
     recovery_allowed: bool = False
-
