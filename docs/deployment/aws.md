@@ -76,3 +76,37 @@ bash scripts/configure-tailscale-hermes.sh
 ```
 
 The production bootstrap performs this sequence automatically. It proxies the localhost-only Hermes gateway at `http://127.0.0.1:9119` to the tailnet over HTTPS/WSS without adding public security-group ingress.
+
+## Tailscale production deployment
+
+Routine releases deploy through the private tailnet, not the EC2 public address.
+The manual `tailscale-production-deploy` GitHub workflow builds the pinned release,
+joins the tailnet as an ephemeral `tag:hermes-ci` node, verifies the production
+peer, transfers the archive through Tailscale SSH, invokes the transactional
+installer, and verifies Hermes, Relay, and Tailscale Serve before reporting success.
+
+One-time tailnet setup:
+
+1. Apply `config/tailscale-production-policy.json` in the Tailscale access-control
+   editor, merging its tag owners, grants, and SSH rule with any existing policy.
+2. Create an OAuth client with writable `auth_keys` scope restricted to
+   `tag:hermes-ci`.
+3. Store its values in the GitHub `production` environment as
+   `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET`; require a deployment reviewer.
+4. Generate the server enrollment key for `tag:hermes-prod` and store it as the
+   `/hermes-max/runtime/TAILSCALE_AUTH_KEY` SecureString before first boot.
+
+The workflow is manual-only and serialized. It opens no AWS security-group port.
+The server tag can receive only SSH from the ephemeral CI tag and private HTTPS
+from tailnet members under the supplied policy.
+
+An already authenticated operator workstation can deploy the same artifact with:
+
+```bash
+bash scripts/deploy-cloud-release-tailscale.sh \
+  hermes-max dist-production/hermes-max-cloud-<build>.tar.gz ubuntu
+```
+
+The script rejects unverified archives, offline tailnets, unreachable peers,
+failed health checks, and missing service receipts. Failed installation remains
+subject to the existing transactional rollback behavior.

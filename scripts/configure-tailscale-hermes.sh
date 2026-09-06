@@ -10,6 +10,8 @@ python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get
 echo 'TAILSCALE_AUTH=PASS'
 TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n1)"
 [[ -n "$TAILSCALE_IP" ]] || { echo 'TAILSCALE_IP=FAIL' >&2; exit 1; }
+tailscale set --ssh
+echo 'TAILSCALE_SSH=PASS'
 if [[ "${HERMES_ORCA_DISABLE:-0}" != 1 ]]; then
   [[ -f "$ORCA_INSTALLER" ]] || { echo 'ORCA_INSTALLER=FAIL missing installer' >&2; exit 1; }
   ORCA_PAIRING_ADDRESS="$TAILSCALE_IP" bash "$ORCA_INSTALLER"

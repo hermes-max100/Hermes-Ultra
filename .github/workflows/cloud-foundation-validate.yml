@@ -71,6 +71,7 @@ jobs:
           bash tests/test_bootstrap_hermes_orca_client.sh
           bash tests/test_orca_service_identity_contract.sh
           bash tests/test_aws_runtime_secrets.sh
+          bash tests/test_tailscale_production_deploy.sh
           bash tests/test_secret_scan_production.sh
           python3 -m unittest tests.test_orca_execution_backend tests.test_orca_release_integration
           python3 -m unittest tests.test_hermes_relay_provenance tests.test_hermes_relay_desktop_pin -v
