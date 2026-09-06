@@ -50,9 +50,9 @@ Copy the printed `release_object_key` and `release_sha256` into `terraform.tfvar
 
 ## Bootstrap guarantee
 
-The host downloads exactly one release, verifies its SHA256 and internal manifest, installs it under `/opt/hermes-max/releases/<digest>`, atomically switches `/opt/hermes-max/current`, runs the existing restore checks, and enables a foundation-verification systemd service. A release that fails verification does not become current.
+The host downloads exactly one release, verifies its SHA256 and internal manifest before executing release code, joins the private tailnet, installs Orca, and delegates activation to the transactional local installer. That installer creates versioned Hermes and release roots, atomically switches the active links, activates Relay, and verifies all three services. A release that fails any integrity or health check does not become current.
 
-Runtime secret files are deliberately excluded from release bundles. Load them separately through the guarded Hermes runtime env path or an approved secret-delivery mechanism.
+Runtime secret files are deliberately excluded from release bundles. Store provider keys and a reusable, scoped `TAILSCALE_AUTH_KEY` as SecureString parameters under `/hermes-max/runtime/`. First boot loads them through the instance role; the Tailscale key is consumed and removed from the persisted runtime environment before Hermes starts.
 
 ## Security
 
@@ -69,10 +69,10 @@ Before any live provisioning, run the read-only production preflight:
 bash scripts/aws-production-preflight.sh
 ```
 
-For the private mobile path, enroll the host in Tailscale separately, then configure Hermes Serve only after `tailscale status --json` reports the node online:
+For a manual or recovery install, enroll the host in Tailscale and configure Hermes Serve only after `tailscale status --json` reports the node online:
 
 ```bash
 bash scripts/configure-tailscale-hermes.sh
 ```
 
-This proxies the localhost-only Hermes gateway at `http://127.0.0.1:9119` to the tailnet over HTTPS/WSS without adding public security-group ingress.
+The production bootstrap performs this sequence automatically. It proxies the localhost-only Hermes gateway at `http://127.0.0.1:9119` to the tailnet over HTTPS/WSS without adding public security-group ingress.

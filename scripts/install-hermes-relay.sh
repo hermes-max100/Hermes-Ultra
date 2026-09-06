@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ "$MODE" =~ ^(prepare|activate|reconcile|deactivate-code-only)$ ]] || { usage; exit 2; }
 [[ -n "$RELEASE_ROOT" && -n "$RUNTIME_PYTHON" && -n "$HERMES_HOME" ]] || { usage; exit 2; }
-VENDOR="$RELEASE_ROOT/vendor/hermes-relay/server-v1.10.0"
+VENDOR="$RELEASE_ROOT/vendor/hermes-relay/server-v1.11.1"
 PLUGIN="$VENDOR/source/plugin"
 UPSTREAM="$RELEASE_ROOT/config/hermes-relay-upstream.json"
 SCAN_BASELINE="$RELEASE_ROOT/config/hermes-relay-scan-baseline.json"
@@ -26,7 +26,7 @@ HERMES_BIN="${HERMES_RELAY_HERMES_BIN:-$(dirname "$RUNTIME_PYTHON")/hermes}"
 require_relay_evidence(){
   for f in "$UPSTREAM" "$VENDOR/SOURCE_TAG" "$VENDOR/SOURCE_COMMIT" "$VENDOR/SOURCE_PROVENANCE.json" \
     "$VENDOR/SOURCE_MANIFEST.sha256" "$VENDOR/uv.lock" "$VENDOR/requirements-hermes-relay.lock.txt" \
-    "$VENDOR/DEPENDENCY_LOCK_PROVENANCE.json" "$VENDOR/hermes_relay-1.10.0-py3-none-any.whl" "$VENDOR/LICENSE" \
+    "$VENDOR/DEPENDENCY_LOCK_PROVENANCE.json" "$VENDOR/hermes_relay-1.11.1-py3-none-any.whl" "$VENDOR/LICENSE" \
     "$PLUGIN/plugin.yaml" "$SCAN_BASELINE" "$SCAN_BASELINE_VERIFIER"; do
     [[ -f "$f" ]] || { echo "required Relay evidence missing: $f" >&2; return 1; }
   done
@@ -36,7 +36,7 @@ import hashlib,json,pathlib,re,sys
 up=pathlib.Path(sys.argv[1]); root=pathlib.Path(sys.argv[2]); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 data=json.loads(up.read_text()); server=data.get('server',{})
 prov=json.loads((root/'SOURCE_PROVENANCE.json').read_text()); dep=json.loads((root/'DEPENDENCY_LOCK_PROVENANCE.json').read_text())
-expect={'tag':'server-v1.10.0','version':'1.10.0','artifact':'hermes_relay-1.10.0-py3-none-any.whl'}
+expect={'tag':'server-v1.11.1','version':'1.11.1','artifact':'hermes_relay-1.11.1-py3-none-any.whl'}
 for key,val in expect.items():
     if str(server.get(key,''))!=val: raise SystemExit('Relay upstream '+key+' mismatch')
 if (root/'SOURCE_TAG').read_text().strip()!=server.get('tag'): raise SystemExit('Relay source tag mismatch')
@@ -69,7 +69,7 @@ scan_verdict(){
 from pathlib import Path
 import json,sys
 from tools.plugin_guard import PLUGIN_SCANNER_VERSION, scan_plugin
-r=scan_plugin(Path(sys.argv[1]), source='Codename-11/hermes-relay@server-v1.10.0')
+r=scan_plugin(Path(sys.argv[1]), source='Codename-11/hermes-relay@server-v1.11.1')
 fields=('severity','pattern_id','category','file','line','match','description')
 findings=[{key:getattr(f,key) for key in fields} for f in r.findings]
 Path(sys.argv[2]).write_text(json.dumps({
@@ -89,7 +89,7 @@ PYSCAN
   if python3 "$SCAN_BASELINE_VERIFIER" \
       --scan-result "$scan_json" --baseline "$SCAN_BASELINE" \
       --source-commit-file "$VENDOR/SOURCE_COMMIT" --plugin-root "$PLUGIN" \
-      --source 'Codename-11/hermes-relay' --tag 'server-v1.10.0' >&2; then
+      --source 'Codename-11/hermes-relay' --tag 'server-v1.11.1' >&2; then
     rm -f "$scan_json"
     printf 'reviewed-safe\n'
     return
@@ -121,7 +121,7 @@ prepare(){
   local ip verdict; ip="$(tailnet_ip)"; verdict="$(scan_verdict)"
   [[ "$verdict" == safe || "$verdict" == reviewed-safe ]] || { echo "Relay plugin scan rejected: $verdict" >&2; return 1; }
   PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 "$RUNTIME_PYTHON" -m pip install --require-hashes -r "$VENDOR/requirements-hermes-relay.lock.txt"
-  printf 'HERMES_RELAY_PREPARE=PASS host=%s version=1.10.0\n' "$ip"
+  printf 'HERMES_RELAY_PREPARE=PASS host=%s version=1.11.1\n' "$ip"
 }
 restore_snapshot(){
   local snap="$1" old_link="$2" old_enabled="$3" old_active="$4"
@@ -197,7 +197,7 @@ UNIT
     return 1
   fi
   rm -rf "$snap"
-  printf 'HERMES_RELAY_ACTIVATE=PASS host=%s version=1.10.0\n' "$ip"
+  printf 'HERMES_RELAY_ACTIVATE=PASS host=%s version=1.11.1\n' "$ip"
 }
 
 case "$MODE" in

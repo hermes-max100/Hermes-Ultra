@@ -9,7 +9,7 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping
 
-PINNED_RELAY_SERVER_VERSION = "1.10.0"
+PINNED_RELAY_SERVER_VERSION = "1.11.1"
 COMPLETION_SCHEMA = "hermes-relay-completion-receipt-v1"
 SUCCESS_STREAM_EVENTS = {"assistant.completed", "run.completed", "done"}
 SENSITIVE_KEYS = {

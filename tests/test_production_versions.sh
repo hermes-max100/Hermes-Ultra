@@ -6,12 +6,12 @@ PIN="$ROOT_DIR/config/production-versions.json"
 python3 - "$PIN" <<'PY'
 import json, re, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))
-assert p['hermes_agent']['tag']=='v2026.8.19'
-assert p['hermes_agent']['version']=='0.20.5'
-assert p['hermes_relay_android']['tag']=='android-v1.13.2'
-assert p['hermes_relay_android']['version']=='1.13.2'
-assert p['hermes_agent']['url']=='https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.19'
-assert p['hermes_relay_android']['url']=='https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.13.2'
+assert p['hermes_agent']['tag']=='v2026.8.31'
+assert p['hermes_agent']['version']=='0.21.0'
+assert p['hermes_relay_android']['tag']=='android-v1.15.1'
+assert p['hermes_relay_android']['version']=='1.15.1'
+assert p['hermes_agent']['url']=='https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31'
+assert p['hermes_relay_android']['url']=='https://github.com/Codename-11/hermes-relay/releases/tag/android-v1.15.1'
 assert p['orca_runtime']['tag']=='v1.4.190'
 assert p['orca_runtime']['version']=='1.4.190'
 assert p['orca_runtime']['asset']=='orca-linux.AppImage'

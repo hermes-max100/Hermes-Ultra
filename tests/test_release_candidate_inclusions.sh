@@ -19,7 +19,7 @@ python3 - "$ROOT/config/production-versions.json" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1]))
 assert p['node_runtime']['minimum_major']==22
-assert p['hermes_relay_android']['version']=='1.13.2'
+assert p['hermes_relay_android']['version']=='1.15.1'
 PY
 grep -q "find .*\\*.pyc" "$ROOT/scripts/build-cloud-release.sh" || { echo 'release does not purge .pyc files' >&2; exit 1; }
 grep -q 'install-hermes-relay.sh' "$ROOT/scripts/install-cloud-release-local.sh" || { echo 'cloud installer does not integrate Relay' >&2; exit 1; }

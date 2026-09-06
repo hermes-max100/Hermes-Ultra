@@ -41,11 +41,11 @@ if [[ "${HERMES_PRODUCTION_BUILD:-0}" == "1" ]]; then
   [[ -n "${HERMES_RELAY_SOURCE_DIR:-}" ]] || { echo 'HERMES_RELAY_SOURCE_DIR is required for production builds' >&2; exit 1; }
   [[ -n "${HERMES_RELAY_SERVER_WHEEL:-}" ]] || { echo 'HERMES_RELAY_SERVER_WHEEL is required for production builds' >&2; exit 1; }
   mkdir -p "$STAGE/vendor/hermes-agent" "$STAGE/vendor/hermes-relay"
-  HERMES_EXPORT_DEPENDENCY_LOCKS=1 bash "$ROOT_DIR/scripts/stage-hermes-agent-source.sh" "$HERMES_AGENT_SOURCE_DIR" "$STAGE/vendor/hermes-agent/0.20.5"
+  HERMES_EXPORT_DEPENDENCY_LOCKS=1 bash "$ROOT_DIR/scripts/stage-hermes-agent-source.sh" "$HERMES_AGENT_SOURCE_DIR" "$STAGE/vendor/hermes-agent/0.21.0"
   bash "$ROOT_DIR/scripts/stage-hermes-relay-source.sh" \
     "$HERMES_RELAY_SOURCE_DIR" \
     "$HERMES_RELAY_SERVER_WHEEL" \
-    "$STAGE/vendor/hermes-relay/server-v1.10.0"
+    "$STAGE/vendor/hermes-relay/server-v1.11.1"
 fi
 
 chmod +x "$STAGE"/scripts/*.sh "$STAGE"/src/system/*.sh "$STAGE"/tests/*.sh

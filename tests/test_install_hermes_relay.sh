@@ -36,25 +36,25 @@ chmod +x "$BIN"/*
 
 make_release() {
   local root="$1"
-  local vendor="$root/vendor/hermes-relay/server-v1.10.0"
+  local vendor="$root/vendor/hermes-relay/server-v1.11.1"
   mkdir -p "$root/config" "$root/scripts" "$vendor/source/plugin" "$vendor/source/plugin/relay"
   cp "$ROOT_DIR/config/hermes-relay-scan-baseline.json" "$root/config/hermes-relay-scan-baseline.json"
   cp "$ROOT_DIR/scripts/verify-hermes-relay-scan-baseline.py" "$root/scripts/verify-hermes-relay-scan-baseline.py"
-  printf 'name: hermes-relay\nmanifest_version: 1\nversion: 1.10.0\n' > "$vendor/source/plugin/plugin.yaml"
+  printf 'name: hermes-relay\nmanifest_version: 1\nversion: 1.11.1\n' > "$vendor/source/plugin/plugin.yaml"
   printf 'runtime\n' > "$vendor/source/plugin/relay/server.py"
   printf 'version = 1\n' > "$vendor/uv.lock"
   printf 'demo==1.0 --hash=sha256:%064d\n' 0 > "$vendor/requirements-hermes-relay.lock.txt"
-  printf 'wheel-fixture\n' > "$vendor/hermes_relay-1.10.0-py3-none-any.whl"
+  printf 'wheel-fixture\n' > "$vendor/hermes_relay-1.11.1-py3-none-any.whl"
   printf 'MIT\n' > "$vendor/LICENSE"
   local commit='0123456789abcdef0123456789abcdef01234567'
-  local wheel_sha; wheel_sha="$(sha256sum "$vendor/hermes_relay-1.10.0-py3-none-any.whl" | awk '{print $1}')"
+  local wheel_sha; wheel_sha="$(sha256sum "$vendor/hermes_relay-1.11.1-py3-none-any.whl" | awk '{print $1}')"
   printf '%s\n' "$commit" > "$vendor/SOURCE_COMMIT"
-  printf 'server-v1.10.0\n' > "$vendor/SOURCE_TAG"
+  printf 'server-v1.11.1\n' > "$vendor/SOURCE_TAG"
   python3 - "$vendor" <<'PY'
 import hashlib,json,pathlib,sys
 r=pathlib.Path(sys.argv[1]); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 (r/'DEPENDENCY_LOCK_PROVENANCE.json').write_text(json.dumps({
- 'mode':'uv-export-frozen-validated-no-project','project_version':'1.10.0','lock_project_version':'1.6.4','root_version_mismatch':True,'dependency_metadata_match':True,'uv_version':'uv test',
+ 'mode':'uv-export-frozen-validated-no-project','project_version':'1.11.1','lock_project_version':'1.6.4','root_version_mismatch':True,'dependency_metadata_match':True,'uv_version':'uv test',
  'uv_lock_sha256':sha(r/'uv.lock'),
  'runtime_requirements_sha256':sha(r/'requirements-hermes-relay.lock.txt')},sort_keys=True)+'\n')
 PY
@@ -63,12 +63,12 @@ PY
   python3 - "$vendor/SOURCE_PROVENANCE.json" "$commit" "$tree_sha" "$wheel_sha" <<'PY'
 import json,pathlib,sys
 out,commit,tree,wheel=sys.argv[1:]
-pathlib.Path(out).write_text(json.dumps({'source_commit':commit,'source_tag':'server-v1.10.0','version':'1.10.0','artifact':'hermes_relay-1.10.0-py3-none-any.whl','artifact_sha256':wheel,'tree_sha256':tree},sort_keys=True)+'\n')
+pathlib.Path(out).write_text(json.dumps({'source_commit':commit,'source_tag':'server-v1.11.1','version':'1.11.1','artifact':'hermes_relay-1.11.1-py3-none-any.whl','artifact_sha256':wheel,'tree_sha256':tree},sort_keys=True)+'\n')
 PY
   python3 - "$root/config/hermes-relay-upstream.json" "$commit" "$wheel_sha" <<'PY'
 import json,pathlib,sys
 out,commit,wheel=sys.argv[1:]
-pathlib.Path(out).write_text(json.dumps({'schema_version':1,'server':{'tag':'server-v1.10.0','version':'1.10.0','commit':commit,'artifact':'hermes_relay-1.10.0-py3-none-any.whl','artifact_sha256':wheel,'license':'MIT'}},sort_keys=True)+'\n')
+pathlib.Path(out).write_text(json.dumps({'schema_version':1,'server':{'tag':'server-v1.11.1','version':'1.11.1','commit':commit,'artifact':'hermes_relay-1.11.1-py3-none-any.whl','artifact_sha256':wheel,'license':'MIT'}},sort_keys=True)+'\n')
 PY
 }
 
@@ -106,7 +106,7 @@ fi
 
 : > "$LOG"
 PATH="$BIN:$PATH" FAKE_COMMAND_LOG="$LOG" HERMES_RELAY_HERMES_BIN="$BIN/hermes" HERMES_RELAY_TEST_HEALTH=ok bash "$SCRIPT" activate "${COMMON[@]}" | grep -q 'HERMES_RELAY_ACTIVATE=PASS'
-[[ "$(readlink "$HERMES_HOME/plugins/hermes-relay")" == "$RELEASE/vendor/hermes-relay/server-v1.10.0/source/plugin" ]]
+[[ "$(readlink "$HERMES_HOME/plugins/hermes-relay")" == "$RELEASE/vendor/hermes-relay/server-v1.11.1/source/plugin" ]]
 UNIT="$SYSTEMD_DIR/hermes-relay.service"
 grep -q '^User=hermes$' "$UNIT"
 grep -q '^Group=hermes$' "$UNIT"
@@ -134,7 +134,7 @@ grep -qx durable-plugin-data "$HERMES_HOME/plugin-data/hermes-relay/state"
 grep -qx signing-id "$HERMES_HOME/relay-signing-identity"
 
 # Tampered evidence must fail before any activation mutation.
-printf 'tamper\n' >> "$RELEASE/vendor/hermes-relay/server-v1.10.0/source/plugin/relay/server.py"
+printf 'tamper\n' >> "$RELEASE/vendor/hermes-relay/server-v1.11.1/source/plugin/relay/server.py"
 if PATH="$BIN:$PATH" FAKE_COMMAND_LOG="$LOG" HERMES_RELAY_TEST_SCAN_VERDICT=safe bash "$SCRIPT" prepare "${COMMON[@]}" >/dev/null 2>&1; then
   echo 'tampered Relay evidence accepted' >&2; exit 1
 fi

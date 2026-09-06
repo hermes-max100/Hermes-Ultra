@@ -18,8 +18,10 @@ grep -q 's3:GetObject' "$AWS"
 grep -q 'enable_ec2_compute' "$VARS"
 grep -q 'default     = \[\]' "$VARS"
 grep -q 'sha256sum -c' "$BOOT"
-grep -q 'restore-vps-transfer.sh' "$BOOT"
-grep -q 'vendor/hermes-agent/0.20.5' "$BOOT" || { echo 'bootstrap does not use pinned Hermes Agent 0.20.5' >&2; exit 1; }
+grep -q 'install-cloud-release-local.sh' "$BOOT" || { echo 'bootstrap does not delegate to the transactional release installer' >&2; exit 1; }
+grep -q 'restore-vps-transfer.sh' "$INSTALLER" || { echo 'transactional installer does not restore the release foundation' >&2; exit 1; }
+grep -q 'TAILSCALE_AUTH_KEY' "$BOOT" || { echo 'bootstrap does not authenticate the private tailnet' >&2; exit 1; }
+grep -q 'install-orca-runtime.sh' "$BOOT" || { echo 'bootstrap does not install Orca before Hermes activation' >&2; exit 1; }
 grep -Eq 'nodejs.*npm|npm.*nodejs' "$BOOT" || { echo 'bootstrap does not provision Node/npm' >&2; exit 1; }
 grep -q 'ensure-node-runtime.sh' "$INSTALLER" || { echo 'local installer does not own Node runtime' >&2; exit 1; }
 grep -q 'sync-mcp-provider-registry.sh' "$INSTALLER" || { echo 'local installer does not apply MCP registry' >&2; exit 1; }
