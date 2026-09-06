@@ -28,6 +28,8 @@ elif [[ "$1 $2" == 'ip -4' ]]; then
   echo '100.64.0.10'
 elif [[ "$1" == serve ]]; then
   printf '%s\n' "$*" > "${FAKE_TS_LOG:?}"
+elif [[ "$1 $2" == 'set --ssh' ]]; then
+  printf '%s\n' "$*" > "${FAKE_TS_SSH_LOG:?}"
 else
   exit 2
 fi
@@ -51,8 +53,9 @@ if PATH="$BIN:$PATH" FAKE_AWS_AUTH=bad bash "$ROOT_DIR/scripts/aws-production-pr
 grep -q '^AWS_AUTH=FAIL$' "$TMP/auth.out"
 if PATH="$BIN:$PATH" FAKE_TS_STATE=NeedsLogin FAKE_TS_LOG="$TMP/ts.log" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null 2>&1; then echo 'logged-out Tailscale accepted' >&2; exit 1; fi
 [[ ! -f "$TMP/orca.log" ]]
-PATH="$BIN:$PATH" FAKE_TS_LOG="$TMP/ts.log" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null
+PATH="$BIN:$PATH" FAKE_TS_LOG="$TMP/ts.log" FAKE_TS_SSH_LOG="$TMP/ts-ssh.log" ORCA_INSTALLER="$BIN/orca-installer" FAKE_ORCA_LOG="$TMP/orca.log" bash "$ROOT_DIR/scripts/configure-tailscale-hermes.sh" >/dev/null
 grep -q '^serve --bg --yes http://127.0.0.1:9119$' "$TMP/ts.log"
+grep -q '^set --ssh$' "$TMP/ts-ssh.log"
 grep -q '^address=100.64.0.10$' "$TMP/orca.log"
 ! grep -qi funnel "$ROOT_DIR/scripts/configure-tailscale-hermes.sh"
 echo 'AWS production preflight tests passed'

@@ -1,0 +1,26 @@
+{
+  "tagOwners": {
+    "tag:hermes-ci": ["autogroup:admin"],
+    "tag:hermes-prod": ["autogroup:admin"]
+  },
+  "grants": [
+    {
+      "src": ["tag:hermes-ci"],
+      "dst": ["tag:hermes-prod"],
+      "ip": ["tcp:22"]
+    },
+    {
+      "src": ["autogroup:member"],
+      "dst": ["tag:hermes-prod"],
+      "ip": ["tcp:443"]
+    }
+  ],
+  "ssh": [
+    {
+      "action": "accept",
+      "src": ["tag:hermes-ci"],
+      "dst": ["tag:hermes-prod"],
+      "users": ["ubuntu"]
+    }
+  ]
+}

@@ -71,7 +71,8 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
 PY
 )"
 [[ -n "$TAILSCALE_AUTH_KEY" ]] || { echo 'TAILSCALE_AUTH_KEY missing from SSM runtime parameters' >&2; exit 1; }
-tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --hostname=hermes-max --accept-dns=true
+tailscale up --auth-key="$TAILSCALE_AUTH_KEY" --hostname=hermes-max \
+  --accept-dns=true --advertise-tags=tag:hermes-prod --ssh
 unset TAILSCALE_AUTH_KEY
 python3 - /var/lib/hermes/.config/hermes/runtime.env <<'PY'
 import pathlib, sys

@@ -1,0 +1,109 @@
+name: tailscale-production-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_host:
+        description: Tailscale MagicDNS name of the production node
+        required: true
+        default: hermes-max
+        type: string
+      target_user:
+        description: Existing sudo-capable Linux account
+        required: true
+        default: ubuntu
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hermes-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: production
+    steps:
+      - name: Checkout canonical Hermes Ultra
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+
+      - name: Checkout pinned Hermes Agent 0.21.0
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 29112bef099274229cadff79cdff7bf7b99c4b77
+          path: vendor-src/hermes-agent
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout pinned Hermes Relay 1.11.1
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: Codename-11/hermes-relay
+          ref: f4b366389ba8081136e81ca1b76deb31ef844cce
+          path: vendor-src/hermes-relay
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Fetch and verify pinned Relay wheel
+        run: |
+          mkdir -p vendor-src/hermes-relay-artifacts
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            'https://github.com/Codename-11/hermes-relay/releases/download/server-v1.11.1/hermes_relay-1.11.1-py3-none-any.whl' \
+            -o vendor-src/hermes-relay-artifacts/hermes_relay-1.11.1-py3-none-any.whl
+          echo '251342d4ddd9d0e55563f9185850764cf5f43200d54c120c6719329f311e76a0  vendor-src/hermes-relay-artifacts/hermes_relay-1.11.1-py3-none-any.whl' | sha256sum -c -
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned dependency exporter
+        run: python -m pip install --disable-pip-version-check 'uv==0.12.7'
+
+      - name: Build and verify production release
+        env:
+          HERMES_PRODUCTION_BUILD: '1'
+          HERMES_AGENT_SOURCE_DIR: ${{ github.workspace }}/vendor-src/hermes-agent
+          HERMES_RELAY_SOURCE_DIR: ${{ github.workspace }}/vendor-src/hermes-relay
+          HERMES_RELAY_SERVER_WHEEL: ${{ github.workspace }}/vendor-src/hermes-relay-artifacts/hermes_relay-1.11.1-py3-none-any.whl
+          HERMES_DIST_DIR: ${{ github.workspace }}/dist-production
+          SOURCE_DATE_EPOCH: 20260906T020000Z
+        run: |
+          bash scripts/build-cloud-release.sh
+          ( cd dist-production && sha256sum -c *.sha256 )
+
+      - name: Join tailnet as an ephemeral deployment node
+        uses: tailscale/github-action@d1b6cd204f8dceda5b3eaad7f1f767be390056cd # v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:hermes-ci
+          version: 1.94.2
+          ping: ${{ inputs.target_host }}
+
+      - name: Deploy transactionally through Tailscale SSH
+        env:
+          TARGET_HOST: ${{ inputs.target_host }}
+          TARGET_USER: ${{ inputs.target_user }}
+        run: |
+          archive="$(find dist-production -maxdepth 1 -name 'hermes-max-cloud-*.tar.gz' -print -quit)"
+          test -n "$archive"
+          bash scripts/deploy-cloud-release-tailscale.sh "$TARGET_HOST" "$archive" "$TARGET_USER"
+
+      - name: Preserve deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hermes-tailscale-deploy-${{ github.run_id }}
+          path: |
+            dist-production/*.sha256
+            dist-production/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
