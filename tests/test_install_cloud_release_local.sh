@@ -6,10 +6,10 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 make_release() {
   local dir="$1" marker="$2" archive="$3"
-  mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.20.5" \
-    "$dir/hermes-max/vendor/hermes-relay/server-v1.10.0" \
+  mkdir -p "$dir/hermes-max/scripts" "$dir/hermes-max/vendor/hermes-agent/0.21.0" \
+    "$dir/hermes-max/vendor/hermes-relay/server-v1.11.1" \
     "$dir/hermes-max/.agents/skills/design-engineer" "$dir/hermes-max/.agents/skills/web-design-guidelines"
-  printf 'relay-fixture\n' > "$dir/hermes-max/vendor/hermes-relay/server-v1.10.0/fixture"
+  printf 'relay-fixture\n' > "$dir/hermes-max/vendor/hermes-relay/server-v1.11.1/fixture"
   printf '{"schema_version":1}\n' > "$dir/hermes-max/skills-lock.json"
   printf '{"spdxVersion":"SPDX-2.3"}\n' > "$dir/hermes-max/SBOM.spdx.json"
   printf '{"source_commit":"test-%s"}\n' "$marker" > "$dir/hermes-max/RELEASE_PROVENANCE.json"
@@ -19,13 +19,13 @@ make_release() {
   printf '{"schema_version":1,"marker":"%s"}\n' "$marker" > "$dir/hermes-max/.agents/skills/design-engineer/acceptance.json"
   printf '{"schema_version":1,"marker":"%s"}\n' "$marker" > "$dir/hermes-max/.agents/skills/design-engineer/sources.json"
   printf -- '---\nname: web-design-guidelines\ndescription: test %s\n---\n# Web Guidelines %s\n' "$marker" "$marker" > "$dir/hermes-max/.agents/skills/web-design-guidelines/SKILL.md"
-  printf 'v2026.8.19\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_TAG"
-  printf '0123456789abcdef0123456789abcdef01234567\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_COMMIT"
-  printf '{"source_tag":"v2026.8.19","version":"0.20.5"}\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/SOURCE_PROVENANCE.json"
-  printf 'demo==1.0 --hash=sha256:%064d\n' 0 > "$dir/hermes-max/vendor/hermes-agent/0.20.5/requirements-hermes-all.lock.txt"
-  printf 'setuptools==83.0.0 --hash=sha256:%064d\n' 1 > "$dir/hermes-max/vendor/hermes-agent/0.20.5/requirements-hermes-build.lock.txt"
-  printf 'version = 1\n' > "$dir/hermes-max/vendor/hermes-agent/0.20.5/uv.lock"
-  python3 - "$dir/hermes-max/vendor/hermes-agent/0.20.5" <<'PYDEP'
+  printf 'v2026.8.31\n' > "$dir/hermes-max/vendor/hermes-agent/0.21.0/SOURCE_TAG"
+  printf '0123456789abcdef0123456789abcdef01234567\n' > "$dir/hermes-max/vendor/hermes-agent/0.21.0/SOURCE_COMMIT"
+  printf '{"source_tag":"v2026.8.31","version":"0.21.0"}\n' > "$dir/hermes-max/vendor/hermes-agent/0.21.0/SOURCE_PROVENANCE.json"
+  printf 'demo==1.0 --hash=sha256:%064d\n' 0 > "$dir/hermes-max/vendor/hermes-agent/0.21.0/requirements-hermes-all.lock.txt"
+  printf 'setuptools==83.0.0 --hash=sha256:%064d\n' 1 > "$dir/hermes-max/vendor/hermes-agent/0.21.0/requirements-hermes-build.lock.txt"
+  printf 'version = 1\n' > "$dir/hermes-max/vendor/hermes-agent/0.21.0/uv.lock"
+  python3 - "$dir/hermes-max/vendor/hermes-agent/0.21.0" <<'PYDEP'
 import hashlib,json,pathlib,sys
 r=pathlib.Path(sys.argv[1]); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 (r/'DEPENDENCY_LOCK_PROVENANCE.json').write_text(json.dumps({
@@ -34,7 +34,7 @@ r=pathlib.Path(sys.argv[1]); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdig
  'runtime_requirements_sha256':sha(r/'requirements-hermes-all.lock.txt'),
  'build_requirements_sha256':sha(r/'requirements-hermes-build.lock.txt')}, sort_keys=True)+'\n')
 PYDEP
-  (cd "$dir/hermes-max/vendor/hermes-agent/0.20.5" && find . -type f ! -name SOURCE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > SOURCE_MANIFEST.sha256)
+  (cd "$dir/hermes-max/vendor/hermes-agent/0.21.0" && find . -type f ! -name SOURCE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > SOURCE_MANIFEST.sha256)
   (cd "$dir/hermes-max" && find . -type f ! -name CLOUD_RELEASE_MANIFEST.sha256 -print0 | sort -z | xargs -0 sha256sum > CLOUD_RELEASE_MANIFEST.sha256)
   tar -C "$dir" -czf "$archive" hermes-max
 }

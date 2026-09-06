@@ -24,7 +24,7 @@ class RelayAdapterTests(unittest.TestCase):
     def setUp(self):
         self.mod = load_module()
 
-    def auth_ok(self, *, version="1.10.0", expires_at=None, grants=None):
+    def auth_ok(self, *, version="1.11.1", expires_at=None, grants=None):
         return {
             "type": "auth.ok",
             "payload": {
@@ -39,7 +39,7 @@ class RelayAdapterTests(unittest.TestCase):
 
     def test_auth_ok_is_version_pinned_and_does_not_store_raw_token(self):
         state = self.mod.RelaySessionState.from_auth_ok(self.auth_ok())
-        self.assertEqual(state.server_version, "1.10.0")
+        self.assertEqual(state.server_version, "1.11.1")
         self.assertTrue(state.token_sha256.startswith("sha256:"))
         self.assertNotIn("relay-secret-token", repr(state))
         with self.assertRaisesRegex(self.mod.RelayProtocolError, "server version"):

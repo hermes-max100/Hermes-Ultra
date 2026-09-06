@@ -9,9 +9,9 @@ mkdir -p "$SRC/hermes_cli" "$SRC/logs" "$SRC/__pycache__" "$SRC/venv/bin" "$SRC/
 cat > "$SRC/pyproject.toml" <<'PYPROJECT'
 [project]
 name = "hermes-agent"
-version = "0.20.5"
+version = "0.21.0"
 PYPROJECT
-printf '__version__ = "0.20.5"\n__release_date__ = "2026.8.18"\n' > "$SRC/hermes_cli/__init__.py"
+printf '__version__ = "0.21.0"\n__release_date__ = "2026.8.31"\n' > "$SRC/hermes_cli/__init__.py"
 printf '#!/usr/bin/env bash\necho setup\n' > "$SRC/setup-hermes.sh"
 printf 'safe\n' > "$SRC/runtime.py"
 printf 'secret\n' > "$SRC/auth.json"
@@ -46,7 +46,7 @@ git -C "$SRC" config user.email test@example.invalid
 git -C "$SRC" config user.name test
 git -C "$SRC" add .
 git -C "$SRC" commit -qm initial
-git -C "$SRC" tag v2026.8.19
+git -C "$SRC" tag v2026.8.31
 [[ -x "$SCRIPT" ]] || { echo 'stage script missing' >&2; exit 1; }
 HERMES_EXPORT_DEPENDENCY_LOCKS=1 HERMES_UV_BIN="$FAKE_UV" bash "$SCRIPT" "$SRC" "$DEST"
 [[ -f "$DEST/runtime.py" && -f "$DEST/setup-hermes.sh" ]] || { echo 'runtime files missing' >&2; exit 1; }
@@ -60,14 +60,14 @@ python3 - "$DEST/SOURCE_PROVENANCE.json" "$COMMIT" <<'PY'
 import json, pathlib, sys
 p=json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert p['source_commit']==sys.argv[2]
-assert p['source_tag']=='v2026.8.19'
-assert p['version']=='0.20.5'
+assert p['source_tag']=='v2026.8.31'
+assert p['version']=='0.21.0'
 assert len(p['tree_sha256'])==64
 PY
 printf 'dirty\n' >> "$SRC/runtime.py"
 if bash "$SCRIPT" "$SRC" "$TMP/dirty" >/dev/null 2>&1; then echo 'dirty source accepted' >&2; exit 1; fi
 git -C "$SRC" reset --hard -q HEAD
-sed -i 's/0.20.5/0.20.3/' "$SRC/pyproject.toml" "$SRC/hermes_cli/__init__.py"
+sed -i 's/0.21.0/0.20.3/' "$SRC/pyproject.toml" "$SRC/hermes_cli/__init__.py"
 git -C "$SRC" add . && git -C "$SRC" commit -qm mismatch
 if bash "$SCRIPT" "$SRC" "$TMP/wrong-version" >/dev/null 2>&1; then echo 'wrong version accepted' >&2; exit 1; fi
 echo 'Hermes source staging tests passed'

@@ -51,7 +51,16 @@ class VoiceCallStateMachine:
             {VoiceCallState.BOOKED, VoiceCallState.INCOMPLETE, VoiceCallState.HANDOFF}
         ),
         VoiceCallState.BOOKED: frozenset({VoiceCallState.ENDED}),
-        VoiceCallState.HANDOFF: frozenset({VoiceCallState.ENDED}),
+        VoiceCallState.HANDOFF: frozenset(
+            {VoiceCallState.TRANSFER_CONNECTING, VoiceCallState.ENDED}
+        ),
+        VoiceCallState.TRANSFER_CONNECTING: frozenset(
+            {VoiceCallState.TRANSFER_ACCEPTED, VoiceCallState.TRANSFER_FAILED}
+        ),
+        VoiceCallState.TRANSFER_ACCEPTED: frozenset({VoiceCallState.ENDED}),
+        VoiceCallState.TRANSFER_FAILED: frozenset(
+            {VoiceCallState.INCOMPLETE, VoiceCallState.ENDED}
+        ),
         VoiceCallState.INCOMPLETE: frozenset({VoiceCallState.ENDED}),
         VoiceCallState.BLOCKED: frozenset({VoiceCallState.ENDED}),
         VoiceCallState.ENDED: frozenset(),
@@ -91,4 +100,3 @@ class VoiceCallStateMachine:
             if replayed != receipt:
                 raise InvalidVoiceTransition("transition receipt changed during replay")
         return machine
-

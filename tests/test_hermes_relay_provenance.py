@@ -10,23 +10,23 @@ def load_json(path: str):
 
 
 class RelayProvenanceTests(unittest.TestCase):
-    def test_android_pin_is_1_13_2(self):
+    def test_android_pin_is_current(self):
         versions = load_json("config/production-versions.json")
         relay = versions["hermes_relay_android"]
-        self.assertEqual(relay["tag"], "android-v1.13.2")
-        self.assertEqual(relay["version"], "1.13.2")
-        self.assertEqual(versions["frozen_at"], "2026-08-31")
+        self.assertEqual(relay["tag"], "android-v1.15.1")
+        self.assertEqual(relay["version"], "1.15.1")
+        self.assertEqual(versions["frozen_at"], "2026-09-05")
 
     def test_components_are_independently_pinned(self):
         manifest = load_json("config/hermes-relay-upstream.json")
         self.assertEqual(manifest["schema_version"], 1)
         self.assertEqual(
             manifest["android"]["commit"],
-            "a5cc0104bfbda8542667ab50eb70ab02b02a47e5",
+            "75feb55adfa898af118c078f8d1cf9a72b99682b",
         )
         self.assertEqual(
             manifest["server"]["commit"],
-            "08545ed32db07609c14730a7fc02cdd758f12434",
+            "f4b366389ba8081136e81ca1b76deb31ef844cce",
         )
         self.assertEqual(
             manifest["desktop"]["commit"],
@@ -39,8 +39,8 @@ class RelayProvenanceTests(unittest.TestCase):
     def test_artifacts_and_licenses_are_exact(self):
         manifest = load_json("config/hermes-relay-upstream.json")
         expected = {
-            "android": "ee301ab1cdcaa9255b1c81899ee0719ed842603f2b6e05ce9dd1a8861df6391d",
-            "server": "26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663",
+            "android": "1d45261f48184225a070a7d05ae6ed4e44b2b9ae6e8d1e3fbe941fe9097d84d3",
+            "server": "251342d4ddd9d0e55563f9185850764cf5f43200d54c120c6719329f311e76a0",
             "desktop": "2ff381b9a7d501146d77b44cb25d6d4c987c677c3b550cad6f1b766c08631110",
         }
         for component, digest in expected.items():

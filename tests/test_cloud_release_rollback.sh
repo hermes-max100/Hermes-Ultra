@@ -35,7 +35,7 @@ echo 'cloud release rollback tests passed'
 # Relay rollback reconciliation: target with Relay uses reconcile; pre-Relay target deactivates code only.
 TMP2="$(mktemp -d)"
 INSTALL2="$TMP2/install"; VAR2="$TMP2/var/lib/hermes"; SYSD2="$TMP2/systemd"
-mkdir -p "$INSTALL2/releases/with-relay/scripts" "$INSTALL2/releases/with-relay/vendor/hermes-relay/server-v1.10.0" "$INSTALL2/releases/pre-relay" "$VAR2/.hermes/plugin-data/hermes-relay" "$SYSD2"
+mkdir -p "$INSTALL2/releases/with-relay/scripts" "$INSTALL2/releases/with-relay/vendor/hermes-relay/server-v1.11.1" "$INSTALL2/releases/pre-relay" "$VAR2/.hermes/plugin-data/hermes-relay" "$SYSD2"
 printf 'R\n' > "$INSTALL2/releases/with-relay/VERSION"
 printf 'P\n' > "$INSTALL2/releases/pre-relay/VERSION"
 printf 'payload\n' > "$INSTALL2/releases/with-relay/vendor-marker"

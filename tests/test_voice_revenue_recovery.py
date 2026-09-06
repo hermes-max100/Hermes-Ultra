@@ -10,6 +10,12 @@ from hermes_ultra.voice import (
     CallFacts,
     ContactChannel,
     DispositionKind,
+    FieldActionKind,
+    FieldActionReceipt,
+    FieldActionRequest,
+    FieldVoiceCommand,
+    FieldVoicePlanner,
+    FieldVoicePlanStatus,
     InvalidVoiceTransition,
     VoiceBenchmarkObservation,
     VoiceCallState,
@@ -20,6 +26,7 @@ from hermes_ultra.voice import (
     VoiceReleaseGate,
     VoiceRevenueRuntime,
     VoiceTransitionReceipt,
+    WarmTransferStatus,
     aggregate_voice_benchmark,
     home_services_offers,
 )
@@ -103,6 +110,22 @@ def test_transition_replay_rejects_tampered_sequence():
         VoiceCallStateMachine.replay((receipt,))
 
 
+def test_warm_transfer_state_requires_acceptance_or_failure_receipt():
+    machine = VoiceCallStateMachine()
+    machine.transition(VoiceCallState.CONNECTED, reason="call answered")
+    machine.transition(VoiceCallState.DISCLOSED, reason="disclosure complete")
+    machine.transition(VoiceCallState.HANDOFF, reason="urgent human handoff")
+    machine.transition(VoiceCallState.TRANSFER_CONNECTING, reason="human ringing")
+    machine.transition(VoiceCallState.TRANSFER_ACCEPTED, reason="dispatcher accepted")
+    machine.transition(VoiceCallState.ENDED, reason="AI disconnected after acceptance")
+
+    assert VoiceCallStateMachine.replay(machine.receipts).state is VoiceCallState.ENDED
+    with pytest.raises(InvalidVoiceTransition):
+        VoiceCallStateMachine(VoiceCallState.TRANSFER_CONNECTING).transition(
+            VoiceCallState.ENDED, reason="unsafe disconnect"
+        )
+
+
 def test_policy_routes_emergencies_before_recovery():
     result = VoicePolicyEngine(recovery_config()).evaluate(
         recoverable_facts(emergency_detected=True)
@@ -110,6 +133,20 @@ def test_policy_routes_emergencies_before_recovery():
 
     assert result.kind is DispositionKind.HANDOFF_REQUIRED
     assert result.recovery_allowed is False
+
+
+def test_revenue_recovery_routes_configured_handoff_to_warm_transfer():
+    config = recovery_config(warm_transfer_target_reference="dispatch-queue")
+
+    result = VoicePolicyEngine(config).evaluate(
+        recoverable_facts(
+            emergency_detected=True,
+            actions_attempted=("qualified urgency", "checked service area"),
+            requested_next_step="dispatch an on-call technician",
+        )
+    )
+
+    assert result.kind is DispositionKind.WARM_TRANSFER_REQUIRED
 
 
 def test_policy_fails_closed_without_disclosure_or_qualification():
@@ -171,6 +208,116 @@ def test_runtime_stages_recovery_and_records_no_false_appointment(tmp_path):
     ]
     assert [entry.status for entry in metrics_entries] == ["qualified_lead"]
     assert result.evidence["artifacts"][0]["recovery_staged"] is True
+
+
+def test_runtime_stages_contextual_warm_transfer_without_exposing_contact(tmp_path):
+    recorder = EvidenceRecorder()
+    config = recovery_config(warm_transfer_target_reference="dispatch-queue")
+    facts = recoverable_facts(
+        emergency_detected=True,
+        contact_reference="session_id=private-contact",
+        actions_attempted=("qualified urgency",),
+        requested_next_step="dispatch technician",
+    )
+    with EconomicLedger(tmp_path / "economic.sqlite3") as ledger:
+        result = VoiceRevenueRuntime(
+            policy=VoicePolicyEngine(config),
+            evidence=recorder,
+            ledger=ledger,
+        ).finalize_call(context(), facts)
+
+    assert result.warm_transfer_plan is not None
+    assert [step.kind.value for step in result.warm_transfer_plan.steps] == [
+        "initiate_warm_transfer",
+        "await_human_acceptance",
+    ]
+    assert "private-contact" not in repr(result.evidence)
+    packet = result.evidence["artifacts"][0]["warm_transfer_packet"]
+    assert packet["has_contact_reference"] is True
+    assert "contact_reference" not in packet
+
+
+def test_warm_transfer_acceptance_requires_human_and_records_outcome(tmp_path):
+    recorder = EvidenceRecorder()
+    config = recovery_config(warm_transfer_target_reference="dispatch-queue")
+    facts = recoverable_facts(emergency_detected=True)
+    with EconomicLedger(tmp_path / "economic.sqlite3") as ledger:
+        runtime = VoiceRevenueRuntime(
+            policy=VoicePolicyEngine(config),
+            evidence=recorder,
+            ledger=ledger,
+        )
+        call = runtime.finalize_call(context(), facts)
+        assert call.warm_transfer_plan is not None
+        with pytest.raises(ValueError, match="human_reference"):
+            runtime.record_warm_transfer_result(
+                context(), call.warm_transfer_plan, facts, accepted=True
+            )
+        transferred = runtime.record_warm_transfer_result(
+            context(),
+            call.warm_transfer_plan,
+            facts,
+            accepted=True,
+            human_reference="dispatcher-7",
+        )
+        outcomes = [entry.status for entry in ledger.entries()]
+
+    assert transferred.receipt.status is WarmTransferStatus.ACCEPTED
+    assert transferred.failed_transfer_recovery_plan is None
+    assert "warm_transfer_accepted" in outcomes
+
+
+def test_failed_warm_transfer_stages_consent_aware_recovery(tmp_path):
+    recorder = EvidenceRecorder()
+    config = recovery_config(warm_transfer_target_reference="dispatch-queue")
+    facts = recoverable_facts(handoff_requested=True)
+    start = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    with EconomicLedger(tmp_path / "economic.sqlite3") as ledger:
+        runtime = VoiceRevenueRuntime(
+            policy=VoicePolicyEngine(config),
+            evidence=recorder,
+            ledger=ledger,
+        )
+        disposition = runtime.policy.evaluate(facts)
+        plan = runtime.warm_transfer.build(context(), facts, disposition, now=start)
+        failed = runtime.record_warm_transfer_result(
+            context(),
+            plan,
+            facts,
+            accepted=False,
+            failure_reason="no human accepted",
+            now=start,
+        )
+
+    assert failed.receipt.status is WarmTransferStatus.FAILED
+    assert failed.failed_transfer_recovery_plan is not None
+    assert failed.failed_transfer_recovery_plan.source == "failed_warm_transfer"
+    assert failed.evidence["artifacts"][0]["failed_transfer_recovery_staged"] is True
+
+
+def test_failed_warm_transfer_never_recovers_without_consent(tmp_path):
+    recorder = EvidenceRecorder()
+    config = recovery_config(warm_transfer_target_reference="dispatch-queue")
+    facts = recoverable_facts(handoff_requested=True, follow_up_consent=False)
+    start = datetime(2026, 9, 5, tzinfo=timezone.utc)
+    with EconomicLedger(tmp_path / "economic.sqlite3") as ledger:
+        runtime = VoiceRevenueRuntime(
+            policy=VoicePolicyEngine(config),
+            evidence=recorder,
+            ledger=ledger,
+        )
+        disposition = runtime.policy.evaluate(facts)
+        plan = runtime.warm_transfer.build(context(), facts, disposition, now=start)
+        failed = runtime.record_warm_transfer_result(
+            context(),
+            plan,
+            facts,
+            accepted=False,
+            failure_reason="no human accepted",
+            now=start,
+        )
+
+    assert failed.failed_transfer_recovery_plan is None
 
 
 def test_runtime_records_bookings_idempotently(tmp_path):
@@ -262,6 +409,8 @@ def test_package_factory_preserves_prices_and_requires_real_usage_caps():
     assert recovery.monthly_fee == Decimal("749")
     assert receptionist.estimate_monthly_total(600) == Decimal("524.00")
     assert "recover_incomplete_calls" in recovery.capabilities
+    assert "contextual_warm_transfer" in recovery.capabilities
+    assert "contextual_warm_transfer" not in receptionist.capabilities
     with pytest.raises(ValueError):
         home_services_offers(
             receptionist_minutes=0,
@@ -304,6 +453,110 @@ def test_voice_release_gate_rejects_policy_or_quality_regression():
     assert decision.promoted is False
     assert "policy_violation" in decision.reason
     assert "critical_field_regression" in decision.reason
+
+
+def test_voice_release_gate_checks_transfer_acceptance_turn_confidence_and_pii():
+    baseline = aggregate_voice_benchmark(
+        observation(
+            "baseline",
+            f"case-{index}",
+            transfer_attempted=True,
+            transfer_accepted=True,
+            end_of_turn_confidence="0.90",
+        )
+        for index in range(2)
+    )
+    candidate = aggregate_voice_benchmark(
+        observation(
+            "candidate",
+            f"case-{index}",
+            transfer_attempted=True,
+            transfer_accepted=index == 0,
+            end_of_turn_confidence="0.50",
+            pii_redaction_complete=False,
+        )
+        for index in range(2)
+    )
+
+    decision = VoiceReleaseGate(minimum_cases=2).evaluate(baseline, candidate)
+
+    assert decision.promoted is False
+    assert "transfer_acceptance_regression" in decision.reason
+    assert "end_of_turn_confidence_below_limit" in decision.reason
+    assert "pii_redaction_incomplete" in decision.reason
+
+
+def test_field_voice_multi_action_plan_requires_clarification_then_approval():
+    planner = FieldVoicePlanner()
+    ambiguous = FieldVoiceCommand(
+        command_id="command-1",
+        tenant_id="plumber-42",
+        technician_reference="tech-9",
+        job_reference=None,
+        actions=(
+            FieldActionRequest(FieldActionKind.UPDATE_CRM, {"status": "complete"}),
+            FieldActionRequest(
+                FieldActionKind.SEND_CUSTOMER_MESSAGE,
+                {"message_template": "technician_running_late"},
+            ),
+        ),
+    )
+
+    clarification = planner.plan(ambiguous)
+
+    assert clarification.status is FieldVoicePlanStatus.CLARIFICATION_REQUIRED
+    assert clarification.steps == ()
+
+    unapproved = FieldVoiceCommand(
+        command_id="command-1",
+        tenant_id="plumber-42",
+        technician_reference="tech-9",
+        job_reference="job-77",
+        actions=ambiguous.actions,
+    )
+    approval = planner.plan(unapproved)
+    assert approval.status is FieldVoicePlanStatus.APPROVAL_REQUIRED
+    assert approval.steps == ()
+
+    approved = FieldVoiceCommand(
+        command_id="command-1",
+        tenant_id="plumber-42",
+        technician_reference="tech-9",
+        job_reference="job-77",
+        actions=ambiguous.actions,
+        approval_reference="approval-12",
+    )
+    plan = planner.plan(approved)
+    assert plan.status is FieldVoicePlanStatus.STAGED
+    assert [step.kind for step in plan.steps] == [
+        FieldActionKind.UPDATE_CRM,
+        FieldActionKind.SEND_CUSTOMER_MESSAGE,
+    ]
+    assert all(step.approval_reference == "approval-12" for step in plan.steps)
+
+
+def test_review_request_requires_verified_completion_and_payment():
+    command = FieldVoiceCommand(
+        command_id="command-review",
+        tenant_id="plumber-42",
+        technician_reference="tech-9",
+        job_reference="job-77",
+        actions=(FieldActionRequest(FieldActionKind.REQUEST_REVIEW),),
+        approval_reference="approval-13",
+    )
+
+    plan = FieldVoicePlanner().plan(command)
+
+    assert plan.status is FieldVoicePlanStatus.CLARIFICATION_REQUIRED
+    assert "Has job completion been verified?" in plan.clarification_questions
+    assert "Has payment been verified?" in plan.clarification_questions
+
+
+def test_field_action_receipts_require_proof_or_failure_reason():
+    with pytest.raises(ValueError, match="external_reference"):
+        FieldActionReceipt("field:1", succeeded=True)
+    with pytest.raises(ValueError, match="failure_reason"):
+        FieldActionReceipt("field:1", succeeded=False)
 
 
 def test_recovery_plan_has_bounded_timezone_aware_expiry(tmp_path):

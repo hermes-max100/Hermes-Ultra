@@ -15,7 +15,7 @@ if [[ "${FAKE_UNKNOWN:-0}" == 1 ]]; then
 JSON
 else
   cat <<'JSON'
-{"Parameters":[{"Name":"/hermes-max/runtime/NVIDIA_API_KEY","Value":"nvidia-test-secret"},{"Name":"/hermes-max/runtime/OPENROUTER_API_KEY","Value":"openrouter-test-secret"},{"Name":"/hermes-max/runtime/VENICE_API_KEY","Value":"venice-test-secret"},{"Name":"/hermes-max/runtime/GOOGLE_API_KEY","Value":"google-test-secret"}]}
+{"Parameters":[{"Name":"/hermes-max/runtime/NVIDIA_API_KEY","Value":"nvidia-test-secret"},{"Name":"/hermes-max/runtime/OPENROUTER_API_KEY","Value":"openrouter-test-secret"},{"Name":"/hermes-max/runtime/VENICE_API_KEY","Value":"venice-test-secret"},{"Name":"/hermes-max/runtime/GOOGLE_API_KEY","Value":"google-test-secret"},{"Name":"/hermes-max/runtime/TAILSCALE_AUTH_KEY","Value":"tskey-auth-test-secret"}]}
 JSON
 fi
 AWS
@@ -29,8 +29,9 @@ grep -q '^NVIDIA_API_KEY=nvidia-test-secret$' "$OUTFILE"
 grep -q '^OPENROUTER_API_KEY=openrouter-test-secret$' "$OUTFILE"
 grep -q '^VENICE_API_KEY=venice-test-secret$' "$OUTFILE"
 grep -q '^GOOGLE_API_KEY=google-test-secret$' "$OUTFILE"
-! grep -Eq 'nvidia-test-secret|openrouter-test-secret|venice-test-secret|google-test-secret' <<<"$OUTPUT"
-grep -q '^AWS_RUNTIME_SECRETS=PASS count=4$' <<<"$OUTPUT"
+grep -q '^TAILSCALE_AUTH_KEY=tskey-auth-test-secret$' "$OUTFILE"
+! grep -Eq 'nvidia-test-secret|openrouter-test-secret|venice-test-secret|google-test-secret|tskey-auth-test-secret' <<<"$OUTPUT"
+grep -q '^AWS_RUNTIME_SECRETS=PASS count=5$' <<<"$OUTPUT"
 UNKNOWN="$TMP/unknown.env"
 if PATH="$BIN:$PATH" FAKE_UNKNOWN=1 HERMES_RUNTIME_ENV_PATH="$UNKNOWN" bash "$SCRIPT" >"$TMP/unknown.out" 2>&1; then echo 'unknown secret key accepted' >&2; exit 1; fi
 [[ ! -e "$UNKNOWN" ]] || { echo 'unknown-key failure wrote destination' >&2; exit 1; }

@@ -4,9 +4,9 @@ Hermes Relay is an optional private extension to the Hermes-Ultra AWS runtime. T
 
 ## Production pins
 
-- Hermes Agent: `v2026.8.19` / `0.20.5`
-- Relay server/plugin: `server-v1.10.0`
-- Android client: `android-v1.13.2`
+- Hermes Agent: `v2026.8.31` / `0.21.0`
+- Relay server/plugin: `server-v1.11.1`
+- Android client: `android-v1.15.1`
 - Desktop CLI: `desktop-v0.4.0-beta.5` (prerelease)
 - Android sideload APK SHA256: `ee301ab1cdcaa9255b1c81899ee0719ed842603f2b6e05ce9dd1a8861df6391d`
 - Desktop Linux x64 SHA256: `2ff381b9a7d501146d77b44cb25d6d4c987c677c3b550cad6f1b766c08631110`

@@ -44,6 +44,7 @@ class RecoveryPlan:
     expires_at: datetime
     steps: tuple[RecoveryStep, ...]
     staged: bool = True
+    source: str = "incomplete_call"
 
 
 class RecoveryPlanner:
@@ -59,6 +60,7 @@ class RecoveryPlanner:
         disposition: VoiceDisposition,
         *,
         now: datetime | None = None,
+        source: str = "incomplete_call",
     ) -> RecoveryPlan:
         if disposition.kind is not DispositionKind.INCOMPLETE_BUT_RECOVERABLE:
             raise ValueError("recovery plan requires a recoverable disposition")
@@ -116,4 +118,5 @@ class RecoveryPlanner:
             attempt=attempt,
             expires_at=current + timedelta(hours=self.config.recovery_window_hours),
             steps=steps,
+            source=source.strip() or "incomplete_call",
         )

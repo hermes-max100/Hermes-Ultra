@@ -1,20 +1,20 @@
 {
   "schema_version": 1,
   "android": {
-    "tag": "android-v1.13.2",
-    "version": "1.13.2",
-    "commit": "a5cc0104bfbda8542667ab50eb70ab02b02a47e5",
-    "artifact": "hermes-relay-1.13.2-sideload-release.apk",
-    "artifact_sha256": "ee301ab1cdcaa9255b1c81899ee0719ed842603f2b6e05ce9dd1a8861df6391d",
+    "tag": "android-v1.15.1",
+    "version": "1.15.1",
+    "commit": "75feb55adfa898af118c078f8d1cf9a72b99682b",
+    "artifact": "hermes-relay-1.15.1-sideload-release.apk",
+    "artifact_sha256": "1d45261f48184225a070a7d05ae6ed4e44b2b9ae6e8d1e3fbe941fe9097d84d3",
     "source_url": "https://github.com/Codename-11/hermes-relay",
     "license": "MIT"
   },
   "server": {
-    "tag": "server-v1.10.0",
-    "version": "1.10.0",
-    "commit": "08545ed32db07609c14730a7fc02cdd758f12434",
-    "artifact": "hermes_relay-1.10.0-py3-none-any.whl",
-    "artifact_sha256": "26d3e7791cdadcd162157ddd593379b8f872032eb247611336dddf1f180e4663",
+    "tag": "server-v1.11.1",
+    "version": "1.11.1",
+    "commit": "f4b366389ba8081136e81ca1b76deb31ef844cce",
+    "artifact": "hermes_relay-1.11.1-py3-none-any.whl",
+    "artifact_sha256": "251342d4ddd9d0e55563f9185850764cf5f43200d54c120c6719329f311e76a0",
     "source_url": "https://github.com/Codename-11/hermes-relay",
     "license": "MIT"
   },
@@ -28,5 +28,5 @@
     "source_url": "https://github.com/Codename-11/hermes-relay",
     "license": "MIT"
   },
-  "verified_at": "2026-08-28"
+  "verified_at": "2026-09-05"
 }

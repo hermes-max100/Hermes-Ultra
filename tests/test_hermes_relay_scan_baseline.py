@@ -23,7 +23,7 @@ class RelayScanBaselineTests(unittest.TestCase):
         (self.plugin / "relay").mkdir(parents=True)
         (self.plugin / "plugin.yaml").write_text("name: hermes-relay\n")
         (self.plugin / "relay" / "server.py").write_text("print('relay')\n")
-        self.commit = "08545ed32db07609c14730a7fc02cdd758f12434"
+        self.commit = "f4b366389ba8081136e81ca1b76deb31ef844cce"
         self.findings = [{
             "severity": "critical", "pattern_id": "hermes_config_mod",
             "category": "persistence", "file": "relay/config.py", "line": 43,
@@ -51,7 +51,7 @@ class RelayScanBaselineTests(unittest.TestCase):
         self.baseline.write_text(json.dumps({
             "schema_version": 1,
             "source": "Codename-11/hermes-relay",
-            "tag": "server-v1.10.0",
+            "tag": "server-v1.11.1",
             "source_commit": self.commit,
             "plugin_tree_sha256": self._plugin_tree_sha(),
             "scanner_version": "plugin-guard-v1",
@@ -68,7 +68,7 @@ class RelayScanBaselineTests(unittest.TestCase):
             "python3", str(SCRIPT), "--scan-result", str(self.scan),
             "--baseline", str(self.baseline), "--source-commit", commit or self.commit,
             "--plugin-root", str(self.plugin), "--source", "Codename-11/hermes-relay",
-            "--tag", "server-v1.10.0",
+            "--tag", "server-v1.11.1",
         ], text=True, capture_output=True)
 
     def test_exact_reviewed_baseline_is_accepted(self):

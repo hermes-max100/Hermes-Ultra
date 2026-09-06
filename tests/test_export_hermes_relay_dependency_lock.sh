@@ -9,7 +9,7 @@ mkdir -p "$SRC" "$DEST"
 cat > "$SRC/pyproject.toml" <<'PYPROJECT'
 [project]
 name = "hermes-relay"
-version = "1.10.0"
+version = "1.11.1"
 dependencies = ["aiohttp>=3.14.1,<4"]
 PYPROJECT
 cat > "$SRC/uv.lock" <<'LOCK'
@@ -64,7 +64,7 @@ python3 - "$DEST/DEPENDENCY_LOCK_PROVENANCE.json" <<'PY'
 import json, pathlib, sys
 p=json.loads(pathlib.Path(sys.argv[1]).read_text())
 assert p['mode']=='uv-export-frozen-validated-no-project'
-assert p['project_version']=='1.10.0'
+assert p['project_version']=='1.11.1'
 assert p['lock_project_version']=='1.6.4'
 assert p['root_version_mismatch'] is True
 assert p['dependency_metadata_match'] is True

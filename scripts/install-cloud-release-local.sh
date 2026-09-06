@@ -87,18 +87,18 @@ fi
 for f in skills-lock.json CLOUD_RELEASE_MANIFEST.sha256 SBOM.spdx.json RELEASE_PROVENANCE.json; do
   [[ -f "$TMP_TARGET/$f" ]] || { echo "required release evidence missing: $f" >&2; exit 1; }
 done
-VENDORED="$TMP_TARGET/vendor/hermes-agent/0.20.5"
+VENDORED="$TMP_TARGET/vendor/hermes-agent/0.21.0"
 for f in SOURCE_TAG SOURCE_COMMIT SOURCE_PROVENANCE.json SOURCE_MANIFEST.sha256 uv.lock requirements-hermes-all.lock.txt requirements-hermes-build.lock.txt DEPENDENCY_LOCK_PROVENANCE.json; do
   [[ -f "$VENDORED/$f" ]] || { echo "required Hermes evidence missing: $f" >&2; exit 1; }
 done
 ( cd "$TMP_TARGET" && sha256sum -c CLOUD_RELEASE_MANIFEST.sha256 >/dev/null ) || { echo 'internal release manifest verification failed' >&2; exit 1; }
 python3 - "$TMP_TARGET" <<'PY'
 import hashlib,json,pathlib,re,sys
-root=pathlib.Path(sys.argv[1]); v=root/'vendor/hermes-agent/0.20.5'
+root=pathlib.Path(sys.argv[1]); v=root/'vendor/hermes-agent/0.21.0'
 if json.loads((root/'SBOM.spdx.json').read_text()).get('spdxVersion')!='SPDX-2.3': raise SystemExit('invalid SBOM')
 json.loads((root/'RELEASE_PROVENANCE.json').read_text())
 sp=json.loads((v/'SOURCE_PROVENANCE.json').read_text())
-if (v/'SOURCE_TAG').read_text().strip()!='v2026.8.19' or sp.get('source_tag')!='v2026.8.19' or sp.get('version')!='0.20.5': raise SystemExit('Hermes production pin mismatch')
+if (v/'SOURCE_TAG').read_text().strip()!='v2026.8.31' or sp.get('source_tag')!='v2026.8.31' or sp.get('version')!='0.21.0': raise SystemExit('Hermes production pin mismatch')
 if not re.fullmatch(r'[0-9a-f]{40}', (v/'SOURCE_COMMIT').read_text().strip()): raise SystemExit('invalid Hermes source commit')
 dp=json.loads((v/'DEPENDENCY_LOCK_PROVENANCE.json').read_text()); sha=lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 if dp.get('mode')!='uv-export-locked-no-project': raise SystemExit('unexpected dependency lock mode')
@@ -137,7 +137,7 @@ fi
 
 if [[ "$TEST_MODE" != 1 ]]; then
   bash "$TARGET/scripts/ensure-node-runtime.sh"
-  VENDORED="$TARGET/vendor/hermes-agent/0.20.5"
+  VENDORED="$TARGET/vendor/hermes-agent/0.21.0"
   if [[ "$RUNTIME_PREVIOUS" != "$RUNTIME_TARGET" ]]; then
     rm -rf "$RUNTIME_TARGET"
     cp -a "$VENDORED" "$RUNTIME_TARGET"
@@ -192,6 +192,7 @@ Group=hermes
 WorkingDirectory=$RUNTIME_ACTIVE_LINK
 Environment=HOME=$VAR_ROOT
 Environment=HERMES_HOME=$VAR_ROOT/.hermes
+EnvironmentFile=-$VAR_ROOT/.config/hermes/runtime.env
 Environment=PATH=$VAR_ROOT/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=ORCA_CLI_COMMAND=/opt/orca/bin/orca-ide
 Environment=ORCA_USER_DATA_PATH=/var/lib/hermes/.config/hermes/orca-client/orca
@@ -251,7 +252,7 @@ import json, urllib.request
 try:
     with urllib.request.urlopen('http://127.0.0.1:9119/api/health', timeout=2) as r:
         body=json.load(r)
-    raise SystemExit(0 if body.get('ok') is True and body.get('version') == '0.20.5' else 1)
+    raise SystemExit(0 if body.get('ok') is True and body.get('version') == '0.21.0' else 1)
 except Exception:
     raise SystemExit(1)
 PYHEALTH

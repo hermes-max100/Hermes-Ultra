@@ -2,8 +2,8 @@
 set -euo pipefail
 SOURCE_DIR="${1:?source directory required}"
 DEST_DIR="${2:?destination directory required}"
-EXPECTED_VERSION='0.20.5'
-EXPECTED_TAG='v2026.8.19'
+EXPECTED_VERSION='0.21.0'
+EXPECTED_TAG='v2026.8.31'
 [[ -d "$SOURCE_DIR/.git" || -f "$SOURCE_DIR/.git" ]] || { echo 'Hermes source must be a git checkout' >&2; exit 1; }
 [[ -z "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=all)" ]] || { echo 'Hermes source checkout is dirty' >&2; exit 1; }
 VERSION="$(python3 - "$SOURCE_DIR/pyproject.toml" <<'PY'

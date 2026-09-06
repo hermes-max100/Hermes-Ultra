@@ -23,6 +23,7 @@ allowed = {
     'VENICE_API_KEY',
     'GOOGLE_API_KEY',
     'GEMINI_API_KEY',
+    'TAILSCALE_AUTH_KEY',
 }
 data = json.loads(raw.read_text())
 rows = []

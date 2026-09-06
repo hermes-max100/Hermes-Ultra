@@ -51,7 +51,7 @@ trap 'restore_current' ERR
 ln -s "$TARGET" "$TMP_LINK"
 mv -Tf "$TMP_LINK" "$CURRENT"
 if [[ -n "$RELAY_INSTALLER" ]]; then
-  if [[ -d "$TARGET/vendor/hermes-relay/server-v1.10.0" ]]; then mode='reconcile'; else mode='deactivate-code-only'; fi
+  if [[ -d "$TARGET/vendor/hermes-relay/server-v1.11.1" ]]; then mode='reconcile'; else mode='deactivate-code-only'; fi
   "$RELAY_INSTALLER" "$mode" --release-root "$TARGET" --runtime-python "$RUNTIME_PYTHON"     --hermes-home "$HERMES_HOME" --systemd-dir "$SYSTEMD_DIR"
 fi
 trap - ERR

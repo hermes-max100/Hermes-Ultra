@@ -32,7 +32,7 @@ dash_ok=dashboard.get('ok') is True
 relay_version=str(relay.get('version') or '')
 protocol=relay.get('protocol_schema',relay.get('schema_version',1))
 protocol_ok=protocol in (1,'1')
-server_ok=relay_version in ('','1.10.0')
+server_ok=relay_version in ('','1.11.1')
 unauthorized=grant_state in ('missing','expired','revoked','denied')
 stalled=relay.get('stalled') is True or relay.get('status')=='stalled'
 if unauthorized: status='unauthorized'
@@ -54,7 +54,7 @@ out={
  'dashboard':{'ok':dash_ok,'version':str(dashboard.get('version') or '')},
  'relay':{'ok':relay_ok,'version':relay_version,'clients':int(relay.get('clients') or 0),'sessions':int(relay.get('sessions') or 0)},
  'bind':{'host':bind_host,'port':8767,'tailnet_only':tailnet_only},
- 'compatibility':{'server_pin':'server-v1.10.0','protocol_ok':protocol_ok,'protocol_schema':protocol},
+ 'compatibility':{'server_pin':'server-v1.11.1','protocol_ok':protocol_ok,'protocol_schema':protocol},
  'grant_state':grant_state,
  'last_receipt':last,
 }
