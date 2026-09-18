@@ -1,0 +1,10 @@
+{
+  "schema_version": "atoz-connector-manifest-v1",
+  "connector_id": "contract-test-crm-calendar",
+  "live": false,
+  "reason": "Actual pilot CRM/calendar vendor, tenant identifiers, and credentials were not present in the inspected remote source.",
+  "permissions": ["crm.booking.write", "crm.booking.read", "calendar.event.write", "calendar.event.read"],
+  "idempotency": "Stable caller key maps to exactly one CRM/calendar object pair.",
+  "ambiguous_timeout_recovery": "Reconcile by idempotency key before retrying.",
+  "production_gate": ["name actual CRM/calendar", "provide authorized tenant/account", "configure credentials outside source", "complete live sandbox reconciliation test"]
+}
