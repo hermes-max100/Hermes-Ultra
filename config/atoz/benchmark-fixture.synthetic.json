@@ -1,0 +1,4 @@
+[
+  {"provider":"synthetic-harness","case_id":"noisy-en-address","measured_live":false,"booking_completed_correctly":true,"critical_fields_correct":5,"critical_fields_total":5,"unauthorized_tool_actions":0,"response_latency_ms":420,"transfer_required":false,"transfer_succeeded":false,"human_correction_seconds":0,"provider_cost_usd":"0.04","human_review_cost_usd":"0.00"},
+  {"provider":"synthetic-harness","case_id":"failed-transfer","measured_live":false,"booking_completed_correctly":false,"critical_fields_correct":3,"critical_fields_total":4,"unauthorized_tool_actions":0,"response_latency_ms":980,"transfer_required":true,"transfer_succeeded":false,"human_correction_seconds":45,"provider_cost_usd":"0.05","human_review_cost_usd":"0.40"}
+]
