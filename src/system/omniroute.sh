@@ -32,11 +32,13 @@ Usage:
   src/system/omniroute.sh receipt
   src/system/omniroute.sh env
   src/system/omniroute.sh mcp
+  src/system/omniroute.sh benchmark-astra <plan|evaluate> [args]
 
 Notes:
   - Dashboard: http://127.0.0.1:20128
   - OpenAI-compatible API: http://127.0.0.1:20128/v1
   - API key comes from OmniRoute Dashboard -> Endpoints/API Keys.
+  - benchmark-astra is benchmark-only and never changes the primary route.
 EOF
 }
 
@@ -159,6 +161,11 @@ select_omniroute() {
   "$PICKER" receipt
 }
 
+benchmark_astra() {
+  PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+    python3 -m hermes_ultra.astra_route_benchmark "$@"
+}
+
 import_nvidia() {
   local nvidia_key="${NVIDIA_API_KEY:-${NVIDIA_NIM_API_KEY:-}}"
   if [[ -z "$nvidia_key" ]]; then
@@ -230,6 +237,7 @@ case "$cmd" in
   models) models ;;
   sync) sync_models ;;
   select) select_omniroute "${1:-auto}" ;;
+  benchmark-astra) benchmark_astra "$@" ;;
   import-nvidia) import_nvidia ;;
   receipt) "$PICKER" receipt ;;
   env) env_hint ;;
