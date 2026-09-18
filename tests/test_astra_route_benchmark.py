@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -190,3 +193,38 @@ def test_report_is_json_serializable_for_evidence_receipts():
 
     assert '"primary_route_changed": false' in encoded
     assert payload["manifest"]["primary_route_change_allowed"] is False
+
+
+def test_omniroute_wrapper_plans_benchmark_without_mutating_model_selection(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    selection_file = tmp_path / "selection.env"
+    selection_file.write_text("SENTINEL=unchanged\n", encoding="utf-8")
+    env = os.environ.copy()
+    env["HERMES_CLOUD_MODEL_SELECTION_FILE"] = str(selection_file)
+
+    proc = subprocess.run(
+        [
+            str(root / "src/system/omniroute.sh"),
+            "benchmark-astra",
+            "plan",
+            "--repo-path",
+            str(root),
+            "--base-sha",
+            "f7a1581c6374217d46db247522cc0551b15c1d91",
+            "--task",
+            "inspect the same repository-scale task",
+        ],
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["manifest"]["primary_route_change_allowed"] is False
+    assert payload["routes"]["direct-astra"]["model_id"] == "gpt-6-astra"
+    assert payload["routes"]["bedrock-astra-us"]["model_id"] == "us.openai.gpt-6-astra"
+    assert all(not route["primary_eligible"] for route in payload["routes"].values())
+    assert selection_file.read_text(encoding="utf-8") == "SENTINEL=unchanged\n"
