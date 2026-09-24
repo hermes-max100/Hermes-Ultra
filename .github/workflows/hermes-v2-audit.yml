@@ -1,0 +1,192 @@
+name: Hermes v2 audit build
+
+on:
+  push:
+    branches: ["audit/hermes-v2"]
+    paths:
+      - ".ci/hermes-v2/**"
+      - ".github/workflows/hermes-v2-audit.yml"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+jobs:
+  audit-build:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hermes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hermes"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      SOURCE_SHA256: 62796553d4880b81105a6283c8ee30f794aeed9b8c5e4216ae6cec694fcdccf2
+      HERMES_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/hermes
+      HERMES_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact v2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p work evidence
+          cat .ci/hermes-v2/source.b64.part* | base64 -d > source.tar.gz
+          echo "$SOURCE_SHA256  source.tar.gz" | sha256sum -c - | tee evidence/source-hash.txt
+          tar -xzf source.tar.gz -C work
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: work/requirements.txt
+
+      - name: Install verification dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r work/requirements.txt pytest cfn-lint
+
+      - name: Full test suite including live PostgreSQL RLS and Redis isolation
+        working-directory: work
+        shell: bash
+        run: |
+          set -o pipefail
+          PYTHONPATH=. pytest -q 2>&1 | tee ../evidence/test-output.txt
+
+      - name: CloudFormation lint
+        shell: bash
+        run: |
+          set -o pipefail
+          cfn-lint work/deploy/aws/cloudformation.yaml 2>&1 | tee evidence/cfn-lint.txt
+
+      - name: Secret scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '(sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)' \
+              --exclude-dir=.git --exclude='*.md' work > evidence/secret-scan.txt; then
+            cat evidence/secret-scan.txt
+            echo 'potential secret material detected' >&2
+            exit 1
+          fi
+          echo 'secret-scan: clean' | tee evidence/secret-scan.txt
+
+      - name: Login to GHCR
+        shell: bash
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        id: image
+        shell: bash
+        env:
+          IMAGE_TAG: ghcr.io/hermes-max100/hermes-agent-v2:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          docker build --pull=false --progress=plain -t "$IMAGE_TAG" work 2>&1 | tee evidence/docker-build.log
+          docker push "$IMAGE_TAG" 2>&1 | tee evidence/docker-push.log
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE_TAG" | head -n1)
+          test -n "$DIGEST"
+          echo "$DIGEST" | tee evidence/image-digest.txt
+          echo "image_ref=$DIGEST" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.image.outputs.image_ref }}
+          format: spdx-json
+          output-file: evidence/sbom.spdx.json
+          upload-artifact: false
+
+      - name: Vulnerability report
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.image.outputs.image_ref }}
+          format: json
+          output: evidence/trivy.json
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+          ignore-unfixed: false
+
+      - name: Critical vulnerability release gate
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.image.outputs.image_ref }}
+          format: table
+          output: evidence/trivy-critical.txt
+          severity: CRITICAL
+          exit-code: "1"
+          ignore-unfixed: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.2
+
+      - name: Sign and verify immutable image
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          cosign sign --yes "$IMAGE_REF" 2>&1 | tee evidence/cosign-sign.txt
+          cosign verify "$IMAGE_REF" \
+            --certificate-identity-regexp '^https://github.com/hermes-max100/Hermes-Ultra/.github/workflows/hermes-v2-audit.yml@refs/heads/audit/hermes-v2$' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            2>&1 | tee evidence/cosign-verify.txt
+
+      - name: Staging smoke by exact digest
+        shell: bash
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          docker run -d --rm --name hermes-v2-staging --network host \
+            -e HERMES_DATABASE_URL="$HERMES_TEST_DATABASE_URL" \
+            -e HERMES_REDIS_URL="$HERMES_TEST_REDIS_URL" \
+            "$IMAGE_REF" | tee evidence/staging-container-id.txt
+          trap 'docker logs hermes-v2-staging > evidence/staging-container.log 2>&1 || true; docker stop hermes-v2-staging >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/ready | tee evidence/staging-ready.json; then
+              echo >> evidence/staging-ready.json
+              break
+            fi
+            sleep 2
+          done
+          grep -q '"status":"ready"' evidence/staging-ready.json
+
+      - name: Evidence hash manifest
+        if: always()
+        shell: bash
+        run: |
+          cd evidence
+          find . -maxdepth 1 -type f ! -name HASHES.sha256 -print0 | sort -z | xargs -0 sha256sum > HASHES.sha256
+
+      - name: Upload evidence pack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-v2-audit-evidence-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 90
