@@ -1,0 +1,13 @@
+{"rubric_version": "0.1.0", "content_sha256": "c77683c0944077b7744645cc618ab5f76a1fad2e49f141316ab4b592063fd27b", "drafter_context_id": "drafter-main", "scorer_context_id": "scorer-weak-B",
+ "scores": {
+  "objective_clarity": {"score": 2.0, "justification": "Objective is vague: no target component, defect, or measurable improvement named.", "evidence": "Line 4: \"Make the billing system better and more reliable.\""},
+  "source_discipline": {"score": 1.0, "justification": "Names no files, repos, specs, or authoritative sources to work from.", "evidence": "No source or input section anywhere in the candidate (lines 1-16)."},
+  "prerequisite_handling": {"score": 1.0, "justification": "Assumes prior knowledge instead of stating or checking prerequisites.", "evidence": "Line 16: \"ASSUMED: you know the billing system.\""},
+  "definition_of_done": {"score": 1.5, "justification": "Done criteria are subjective and untestable.", "evidence": "Line 7: \"Billing works well and the team is happy with it.\""},
+  "evidence_standard": {"score": 1.5, "justification": "No concrete artifact, test, or measurement required as proof.", "evidence": "Line 13: \"Show that it works.\""},
+  "failure_and_stop_path": {"score": 1.0, "justification": "No stop condition; directs open-ended fixing on failure.", "evidence": "Line 10: \"If something goes wrong, use your judgment and fix it.\""},
+  "safety_and_reversibility": {"score": 0.5, "justification": "No guardrails, rollback, or limits on changes to a billing (money-handling) system.", "evidence": "No safety or rollback text anywhere; line 10 authorizes unbounded fixes."},
+  "idempotence": {"score": 1.0, "justification": "Nothing addresses safe re-runs or detecting already-completed work.", "evidence": "No re-run or state-check language in lines 1-16."},
+  "structure_parseability": {"score": 6.0, "justification": "Uses clear headings for required sections, but sections contain no actionable structure.", "evidence": "Headings at lines 3, 6, 9, 12, 15."},
+  "token_economy": {"score": 5.0, "justification": "Short, but brevity comes from omitting needed content rather than efficient phrasing.", "evidence": "Entire candidate is 16 lines with one sentence per section."}
+ }}

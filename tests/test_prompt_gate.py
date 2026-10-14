@@ -71,6 +71,31 @@ class RubricTests(unittest.TestCase):
                 pg.load_rubric(path)
 
 
+    def write(self, tmp, rubric):
+        path = Path(tmp) / "r.json"
+        path.write_text(json.dumps(rubric))
+        return path
+
+    def test_gates_are_data_driven(self):
+        rubric = copy.deepcopy(RUBRIC)
+        rubric["gates"].append({"id": "G6", "label": "rollback stated", "required_heading": "rollback"})
+        with tempfile.TemporaryDirectory() as tmp:
+            loaded = pg.load_rubric(self.write(tmp, rubric))
+        self.assertEqual([g["id"] for g in pg.lint_gates(PROMPT, loaded) if not g["passed"]], ["G6"])
+
+    def test_gate_without_a_check_is_rejected(self):
+        for bad in (
+            {"id": "G6", "label": "no check"},
+            {"id": "G6", "label": "typo", "required_headng": "rollback"},
+            {"id": "G6", "label": "empty", "required_heading": " "},
+            {"id": "G6", "label": "empty", "forbidden_phrases": []},
+        ):
+            rubric = copy.deepcopy(RUBRIC)
+            rubric["gates"].append(bad)
+            with tempfile.TemporaryDirectory() as tmp, self.assertRaises(pg.GateError, msg=bad):
+                pg.load_rubric(self.write(tmp, rubric))
+
+
 class GateLintTests(unittest.TestCase):
     def test_complete_prompt_passes_all_gates(self):
         self.assertTrue(all(g["passed"] for g in pg.lint_gates(PROMPT, RUBRIC)))
@@ -95,6 +120,26 @@ class GateLintTests(unittest.TestCase):
         self.assertEqual(failed, ["G5"])
 
 
+class GateVocabularyTests(unittest.TestCase):
+    """Pins a known property: G1-G4 are a heading schema, not a substance check."""
+
+    OUTSIDER = PROMPT.replace("## Definition of done", "## Success criteria") \
+        .replace("## Failure and stop path", "## If things go wrong") \
+        .replace("## Evidence", "## Proof required") \
+        .replace("## Assumptions", "## What we're taking for granted")
+
+    def test_same_substance_other_vocabulary_is_vetoed(self):
+        failed = [g["id"] for g in pg.lint_gates(self.OUTSIDER, RUBRIC) if not g["passed"]]
+        self.assertEqual(failed, ["G1", "G2", "G3", "G4"])
+
+    def test_vague_bodies_under_house_headings_pass_gates(self):
+        vague = "\n".join(
+            f"## {h}\nTBD, use judgment." for h in
+            ("Objective", "Definition of done", "Failure and stop", "Evidence", "Assumptions")
+        )
+        self.assertTrue(all(g["passed"] for g in pg.lint_gates(vague, RUBRIC)))
+
+
 class EvaluateTests(unittest.TestCase):
     def test_pass(self):
         verdict = pg.evaluate(PROMPT, scorecard(), RUBRIC)
@@ -110,6 +155,30 @@ class EvaluateTests(unittest.TestCase):
         verdict = pg.evaluate(PROMPT, scorecard(scores=scores), RUBRIC)
         self.assertEqual(verdict["status"], pg.PASS, verdict)
         self.assertEqual(verdict["weighted"], 9.5)
+
+    def test_exact_bar_is_order_invariant(self):
+        # Float summation of this case flips sign with dimension order; integer math must not.
+        scores = dict(zip(DIM_IDS, [9.2, 9.5, 9.4, 9.5, 9.2, 9.6, 10.0, 9.8, 9.3, 9.9]))
+        weight = {d["id"]: d["weight_hundredths"] for d in RUBRIC["dimensions"]}
+        orders = {
+            "shipped": list(DIM_IDS),
+            "reversed": list(reversed(DIM_IDS)),
+            "weight_desc": sorted(DIM_IDS, key=lambda d: -weight[d]),
+            "weight_asc": sorted(DIM_IDS, key=lambda d: weight[d]),
+            "alphabetical": sorted(DIM_IDS),
+        }
+        float_signs = set()
+        for name, order in orders.items():
+            floaty = 0.0
+            for dim in order:
+                floaty += scores[dim] * (weight[dim] / 100)
+            float_signs.add(floaty >= 9.5)
+            rubric = copy.deepcopy(RUBRIC)
+            rubric["dimensions"] = [next(d for d in RUBRIC["dimensions"] if d["id"] == i) for i in order]
+            card = scorecard(scores=[scores[d] for d in DIM_IDS])
+            verdict = pg.evaluate(PROMPT, card, rubric)
+            self.assertEqual((name, verdict["status"], verdict["weighted"]), (name, pg.PASS, 9.5))
+        self.assertEqual(float_signs, {True, False})  # the hazard is real in float, absent here
 
     def test_floor_breach_blocks_high_average(self):
         scores = [10.0] * len(DIM_IDS)
@@ -137,6 +206,14 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(verdict["status"], pg.PASS)
         self.assertTrue(any("idempotence: 10.0 capped to 9.8" in n for n in verdict["notes"]))
         self.assertEqual(verdict["weighted"], 9.988)
+
+    def test_cap_boundary(self):
+        for raw, evidence, expected in ((9.9, "", 9.8), (9.8, "", 9.8), (9.9, "line 3", 9.9)):
+            card = scorecard()
+            card["scores"]["idempotence"].update(score=raw, evidence=evidence)
+            verdict = pg.evaluate(PROMPT, card, RUBRIC)
+            got = (96 * 94 + int(round(expected * 10)) * 6) / 1000
+            self.assertEqual(verdict["weighted"], got, (raw, evidence))
 
     def test_self_scoring_is_invalid(self):
         card = scorecard(scorer_context_id="draft-ctx-1")
@@ -221,6 +298,11 @@ class LibraryTests(unittest.TestCase):
 
         back = pg.rollback(self.lib, "test-summary")
         self.assertEqual((back["from"], back["to"]), (2, 1))
+        index = json.loads((self.lib / "index.json").read_text())
+        self.assertEqual(index["entries"]["test-summary"]["current"], 1)
+        pg.rollback(self.lib, "test-summary")
+        with self.assertRaises(pg.GateError):
+            pg.rollback(self.lib, "test-summary")
         self.assertTrue((self.lib / "entries" / "test-summary" / "v2.md").exists())
 
     def test_rubric_bump_marks_entries_stale(self):
@@ -233,6 +315,33 @@ class LibraryTests(unittest.TestCase):
     def test_slug_traversal_rejected(self):
         with self.assertRaises(pg.GateError):
             pg.promote(PROMPT, scorecard(), signed_rubric(), self.lib, "../escape")
+
+
+class DocConsistencyTests(unittest.TestCase):
+    DOC = (ROOT / "docs" / "graph-loop-prompting.md").read_text(encoding="utf-8")
+    CAL = ROOT / "prompt-library" / "calibration" / "rubric-0.1.0"
+
+    def test_doc_states_the_configured_thresholds(self):
+        promo = RUBRIC["promotion"]
+        for needle in (
+            f"min(dimension) ≥ {promo['floor_tenths'] / 10:.1f}",
+            f"weighted ≥ {promo['bar_thousandths'] / 1000:.1f}",
+            f"{promo['max_revisions']} failed revisions",
+            f"Rubric `{RUBRIC['version']}` is **pending sign-off**" if RUBRIC["status"] == "pending_signoff"
+            else f"Rubric `{RUBRIC['version']}` is **signed off**",
+        ):
+            self.assertIn(needle, self.DOC)
+
+    def test_calibration_table_matches_stored_scorecards(self):
+        rubric = copy.deepcopy(RUBRIC)
+        rubric["version"] = "0.1.0"
+        texts = {"weak": (self.CAL / "weak.md").read_text(),
+                 "strong": (self.CAL / "strong.md").read_text()}
+        for card_path in sorted(self.CAL.glob("card-*.json")):
+            kind, scorer = card_path.stem.split("-")[1:]
+            verdict = pg.evaluate(texts[kind], json.loads(card_path.read_text()), rubric)
+            row = f"| {scorer} | {verdict['weighted']:.3f} | {verdict['min']} | {verdict['status']} |"
+            self.assertIn(row, self.DOC, card_path.name)
 
 
 class CliTests(unittest.TestCase):

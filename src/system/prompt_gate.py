@@ -26,6 +26,8 @@ DEFAULT_RUBRIC = ROOT / "config" / "prompt-rubric.json"
 DEFAULT_LIBRARY = ROOT / "prompt-library"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$")
+GATE_CHECKS = frozenset({"required_heading", "forbidden_phrases"})
+GATE_KEYS = GATE_CHECKS | {"id", "label"}
 
 PASS = "PASS"
 BLOCK_GATE = "BLOCK_GATE"
@@ -59,6 +61,17 @@ def load_rubric(path: Path = DEFAULT_RUBRIC) -> dict:
     gate_ids = [g["id"] for g in rubric.get("gates") or []]
     if len(gate_ids) != len(set(gate_ids)) or not gate_ids:
         raise GateError("rubric gates missing or not unique")
+    for gate in rubric["gates"]:
+        unknown = set(gate) - GATE_KEYS
+        if unknown:
+            raise GateError(f"gate {gate['id']}: unknown keys {sorted(unknown)}")
+        checks = GATE_CHECKS & set(gate)
+        if not checks:
+            raise GateError(f"gate {gate['id']}: declares no check ({sorted(GATE_CHECKS)}); it would always pass")
+        if "required_heading" in gate and not str(gate["required_heading"]).strip():
+            raise GateError(f"gate {gate['id']}: required_heading is empty")
+        if "forbidden_phrases" in gate and not gate["forbidden_phrases"]:
+            raise GateError(f"gate {gate['id']}: forbidden_phrases is empty")
     return rubric
 
 
