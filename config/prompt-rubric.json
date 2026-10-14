@@ -1,0 +1,43 @@
+{
+  "version": "0.1.0",
+  "status": "pending_signoff",
+  "signed_off_by": null,
+  "signed_off_at": null,
+  "promotion": {
+    "floor_tenths": 90,
+    "bar_thousandths": 9500,
+    "unevidenced_cap_tenths": 98,
+    "max_revisions": 3,
+    "strategy_change_after_failed_revisions": 2
+  },
+  "gates": [
+    {"id": "G1", "label": "definition of done stated", "required_heading": "definition of done"},
+    {"id": "G2", "label": "failure and stop path stated", "required_heading": "failure and stop"},
+    {"id": "G3", "label": "evidence requirement stated", "required_heading": "evidence"},
+    {"id": "G4", "label": "assumptions explicitly labeled", "required_heading": "assumptions"},
+    {"id": "G5", "label": "self-contained, zero prior context", "forbidden_phrases": [
+      "as discussed",
+      "as mentioned",
+      "as above",
+      "see above",
+      "previous message",
+      "earlier in this conversation",
+      "you mentioned",
+      "the protocol i pasted",
+      "like before",
+      "same as last time"
+    ]}
+  ],
+  "dimensions": [
+    {"id": "objective_clarity", "label": "Objective clarity", "weight_hundredths": 12},
+    {"id": "source_discipline", "label": "Source discipline", "weight_hundredths": 13},
+    {"id": "prerequisite_handling", "label": "Prerequisite handling", "weight_hundredths": 10},
+    {"id": "definition_of_done", "label": "Definition of done", "weight_hundredths": 15},
+    {"id": "evidence_standard", "label": "Evidence standard", "weight_hundredths": 13},
+    {"id": "failure_and_stop_path", "label": "Failure and stop path", "weight_hundredths": 10},
+    {"id": "safety_and_reversibility", "label": "Safety and reversibility", "weight_hundredths": 9},
+    {"id": "idempotence", "label": "Idempotence", "weight_hundredths": 6},
+    {"id": "structure_parseability", "label": "Structure / parseability", "weight_hundredths": 6},
+    {"id": "token_economy", "label": "Token economy", "weight_hundredths": 6}
+  ]
+}

@@ -1,0 +1,49 @@
+name: prompt-gate-validate
+
+on:
+  push:
+    branches:
+      - 'ai/**'
+      - 'claude/**'
+    paths:
+      - '.github/workflows/prompt-gate-validate.yml'
+      - 'src/system/prompt_gate.py'
+      - 'src/system/prompt-gate.sh'
+      - 'config/prompt-rubric.json'
+      - 'prompt-library/**'
+      - 'docs/graph-loop-prompting.md'
+      - 'tests/test_prompt_gate.py'
+      - 'tests/test_prompt_gate.sh'
+  pull_request:
+    branches:
+      - main
+      - hermes-max-setup
+    paths:
+      - '.github/workflows/prompt-gate-validate.yml'
+      - 'src/system/prompt_gate.py'
+      - 'src/system/prompt-gate.sh'
+      - 'config/prompt-rubric.json'
+      - 'prompt-library/**'
+      - 'docs/graph-loop-prompting.md'
+      - 'tests/test_prompt_gate.py'
+      - 'tests/test_prompt_gate.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Prompt gate regression suite
+        run: bash tests/test_prompt_gate.sh
