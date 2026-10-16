@@ -50,15 +50,29 @@ def scorecard(text=PROMPT, scores=None, **overrides):
     return card
 
 
-def signed_rubric():
+def unsigned_rubric():
     rubric = copy.deepcopy(RUBRIC)
-    rubric["status"] = "signed_off"
+    rubric.update(status="pending_signoff", signed_off_fingerprint=None)
     return rubric
+
+
+def signed_rubric(rubric=None):
+    rubric = copy.deepcopy(rubric or RUBRIC)
+    rubric["status"] = "signed_off"
+    rubric["signed_off_fingerprint"] = pg.rubric_fingerprint(rubric)
+    return rubric
+
+
+def scores_with(base=10.0, **overrides):
+    return [overrides.get(dim, base) for dim in DIM_IDS]
 
 
 class RubricTests(unittest.TestCase):
     def test_shipped_rubric_is_pending_signoff_and_weights_sum_to_one(self):
-        self.assertEqual(RUBRIC["status"], "pending_signoff")
+        # Valid in both states, so the sign-off commit does not turn this red.
+        self.assertIn(RUBRIC["status"], ("pending_signoff", "signed_off"))
+        if RUBRIC["status"] == "signed_off":
+            self.assertEqual(RUBRIC["signed_off_fingerprint"], pg.rubric_fingerprint(RUBRIC), "re-sign after editing")
         self.assertEqual(sum(d["weight_hundredths"] for d in RUBRIC["dimensions"]), 100)
 
     def test_bad_weights_rejected(self):
@@ -113,6 +127,10 @@ class GateLintTests(unittest.TestCase):
     def test_heading_inside_code_fence_does_not_count(self):
         text = PROMPT.replace("## Assumptions\n", "```\n## Assumptions\n```\n")
         self.assertIn("G4", [g["id"] for g in pg.lint_gates(text, RUBRIC) if not g["passed"]])
+
+    def test_banned_phrase_split_across_lines_fails(self):
+        text = PROMPT + "\nUse the format as\ndiscussed.\n"
+        self.assertIn("G5", [g["id"] for g in pg.lint_gates(text, RUBRIC) if not g["passed"]])
 
     def test_context_reference_fails_self_containment(self):
         text = PROMPT + "\nUse the format as discussed.\n"
@@ -182,7 +200,7 @@ class EvaluateTests(unittest.TestCase):
 
     def test_floor_breach_blocks_high_average(self):
         scores = [10.0] * len(DIM_IDS)
-        scores[DIM_IDS.index("token_economy")] = 8.9
+        scores[DIM_IDS.index("idempotence")] = 8.9  # substantive floor 9.0; craft dims have 8.5
         verdict = pg.evaluate(PROMPT, scorecard(scores=scores), RUBRIC)
         self.assertEqual(verdict["status"], pg.BLOCK_FLOOR)
         self.assertGreaterEqual(verdict["weighted"], 9.5)
@@ -214,6 +232,12 @@ class EvaluateTests(unittest.TestCase):
             verdict = pg.evaluate(PROMPT, card, RUBRIC)
             got = (96 * 94 + int(round(expected * 10)) * 6) / 1000
             self.assertEqual(verdict["weighted"], got, (raw, evidence))
+
+    def test_near_threshold_flag(self):
+        flagged = (scores_with(9.6, idempotence=9.1), [9.5] * len(DIM_IDS))
+        for scores in flagged:
+            self.assertTrue(pg.evaluate(PROMPT, scorecard(scores=scores), RUBRIC)["near_threshold"], scores)
+        self.assertFalse(pg.evaluate(PROMPT, scorecard(scores=[9.8] * len(DIM_IDS)), RUBRIC)["near_threshold"])
 
     def test_self_scoring_is_invalid(self):
         card = scorecard(scorer_context_id="draft-ctx-1")
@@ -273,15 +297,48 @@ class LibraryTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_promotion_refused_until_signoff(self):
-        result = pg.promote(PROMPT, scorecard(), RUBRIC, self.lib, "test-summary")
-        self.assertEqual(result["status"], "refused")
-        self.assertFalse((self.lib / "index.json").exists())
+    def assert_refused(self, result, cause):
+        self.assertEqual((result["status"], result["cause"]), ("refused", cause), result)
+        self.assertEqual(list(self.lib.iterdir()), [], "a refusal must leave the library untouched")
 
-    def test_promotion_refused_when_not_passing(self):
-        scores = [9.0] * len(DIM_IDS)
-        result = pg.promote(PROMPT, scorecard(scores=scores), signed_rubric(), self.lib, "test-summary")
-        self.assertEqual(result["status"], "refused")
+    def test_promotion_refused_until_signoff(self):
+        self.assert_refused(pg.promote(PROMPT, scorecard(), unsigned_rubric(), self.lib, "test-summary"), "unsigned")
+
+    def test_refusal_causes_are_specific(self):
+        rubric = signed_rubric()
+        cases = (
+            ("revise", scorecard(scores=[9.0] * len(DIM_IDS))),  # floor clear, bar missed
+            ("block_floor", scorecard(scores=scores_with(safety_and_reversibility=8.0))),  # weighted 9.82
+            ("block_floor", scorecard(scores=scores_with(token_economy=8.0))),  # 9.88, under the 8.5 craft floor
+            ("invalid", scorecard(scorer_context_id="draft-ctx-1")),
+        )
+        for cause, card in cases:
+            self.assert_refused(pg.promote(PROMPT, card, rubric, self.lib, "test-summary"), cause)
+        vetoed = PROMPT.replace("## Evidence", "## Proof")
+        self.assert_refused(pg.promote(vetoed, scorecard(text=vetoed), rubric, self.lib, "x"), "block_gate")
+
+    def test_craft_floor_is_lower_than_substantive_floor(self):
+        rubric = signed_rubric()
+        ok = pg.promote(PROMPT, scorecard(scores=scores_with(token_economy=8.6)), rubric, self.lib, "craft")
+        self.assertEqual(ok["status"], "promoted")
+        card = scorecard(scores=scores_with(idempotence=8.6))
+        self.assertEqual(pg.evaluate(PROMPT, card, rubric)["status"], pg.BLOCK_FLOOR)
+
+    def test_editing_a_signed_rubric_voids_consent(self):
+        rubric = signed_rubric()
+        rubric["dimensions"][0]["weight_hundredths"] -= 1
+        rubric["dimensions"][1]["weight_hundredths"] += 1
+        result = pg.promote(PROMPT, scorecard(), rubric, self.lib, "test-summary")
+        self.assert_refused(result, "signoff_fingerprint_mismatch")
+
+    def test_two_entries_share_one_index(self):
+        rubric = signed_rubric()
+        other = PROMPT + "\n## Output\nCSV.\n"
+        pg.promote(PROMPT, scorecard(), rubric, self.lib, "alpha")
+        pg.promote(other, scorecard(text=other), rubric, self.lib, "beta")
+        pg.rollback(self.lib, "beta")
+        entries = json.loads((self.lib / "index.json").read_text())["entries"]
+        self.assertEqual((entries["alpha"]["current"], entries["beta"]["current"]), (1, None))
 
     def test_promote_idempotent_versioned_and_reversible(self):
         rubric = signed_rubric()
@@ -312,9 +369,19 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(pg.stale(self.lib, bumped)["stale"][0]["slug"], "test-summary")
         self.assertEqual(pg.stale(self.lib, signed_rubric())["stale"], [])
 
-    def test_slug_traversal_rejected(self):
-        with self.assertRaises(pg.GateError):
-            pg.promote(PROMPT, scorecard(), signed_rubric(), self.lib, "../escape")
+    def test_weight_edit_without_version_bump_is_stale(self):
+        pg.promote(PROMPT, scorecard(), signed_rubric(), self.lib, "test-summary")
+        edited = copy.deepcopy(RUBRIC)
+        edited["dimensions"][0]["weight_hundredths"] -= 1
+        edited["dimensions"][1]["weight_hundredths"] += 1
+        self.assertEqual(edited["version"], RUBRIC["version"])
+        self.assertEqual([e["slug"] for e in pg.stale(self.lib, edited)["stale"]], ["test-summary"])
+
+    def test_bad_slugs_rejected_without_residue(self):
+        for slug in ("../escape", "..", ".", "a/b", "a b", "UPPER", "a..b", "", "a" * 65, "héllo", "-lead"):
+            with self.assertRaises(pg.GateError, msg=slug):
+                pg.promote(PROMPT, scorecard(), signed_rubric(), self.lib, slug)
+        self.assertEqual(list(self.lib.iterdir()), [])
 
 
 class DocConsistencyTests(unittest.TestCase):
@@ -358,11 +425,17 @@ class CliTests(unittest.TestCase):
             prompt.write_text(PROMPT)
             card.write_text(json.dumps(scorecard()))
             self.assertEqual(self.run_cli("evaluate", "--prompt", str(prompt), "--scorecard", str(card))[0], 0)
+            unsigned = tmp / "rubric.json"
+            unsigned.write_text(json.dumps(unsigned_rubric()))
             code, out = self.run_cli(
-                "promote", "--prompt", str(prompt), "--scorecard", str(card), "--slug", "x", "--library", str(tmp / "lib")
+                "--rubric", str(unsigned),
+                "promote", "--prompt", str(prompt), "--scorecard", str(card), "--slug", "x", "--library", str(tmp / "lib"),
             )
-            self.assertEqual((code, out["status"]), (1, "refused"))
+            self.assertEqual((code, out["status"], out["cause"]), (1, "refused", "unsigned"))
             self.assertEqual(self.run_cli("lint", "--prompt", str(tmp / "missing.md"))[0], 2)
+            vague = tmp / "vague.md"
+            vague.write_text(PROMPT.replace("## Evidence", "## Proof"))
+            self.assertEqual(self.run_cli("lint", "--prompt", str(vague))[0], 1)
 
 
 if __name__ == "__main__":

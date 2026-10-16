@@ -4,7 +4,7 @@ A graph loop that drafts prompts, has an independent context score them, and adm
 
 ## Status
 
-Rubric `0.1.0` is **pending sign-off** (`config/prompt-rubric.json` → `"status": "pending_signoff"`). `promote` refuses every entry until the status is set to `signed_off`. That sign-off gate is enforced in code, not just stated in a doc.
+Rubric `0.2.0` is **pending sign-off** (`config/prompt-rubric.json` → `"status": "pending_signoff"`). `promote` refuses every entry until the status is `signed_off` **and** `signed_off_fingerprint` equals the rubric's current content fingerprint (`check-rubric` prints it). Editing any weight, floor, gate or threshold after signing changes the fingerprint and voids the sign-off (amendment A4). That gate is enforced in code, not just stated in a doc.
 
 ## Loop
 
@@ -17,12 +17,18 @@ N0 seed ─▶ N1 draft ─▶ N2 audit (lint G1–G5) ─▶ N3 score (independ
                     N6 diagnose ◀── diagnose (strategy must change) ───────────┤
                     escalate to human ◀── escalate ────────────────────────────┘
 INVALID scorecard ─▶ rescore (never edit the prompt for a broken scorecard)
-N9 regression: `stale` lists entries scored under an older rubric version
+N9 regression: `stale` lists entries scored under different rubric content
 ```
 
 ## Promotion rule
 
 All gates green **and** min(dimension) ≥ 9.0 **and** weighted ≥ 9.5. All arithmetic is integer: tenths × weight-hundredths = thousandths. The floor and bar comparisons are exact.
+
+Floors are per dimension (amendment A3): 9.0 on the eight substantive dimensions, 8.5 on the two craft dimensions, `structure_parseability` and `token_economy`. A dimension's `floor_tenths` overrides the global `floor_tenths`. ASSUMED: those two are the "craft" dimensions A3 meant; the amendment text named the count, not the ids.
+
+Every verdict carries `near_threshold: true` when any dimension is within 0.2 of its floor, or the weighted total within 0.02 of the bar. That margin is the observed scorer disagreement. A near-threshold verdict is noise-sized and should get a third independent score (median of three) before anyone acts on it. The flag is informational; it does not change the verdict.
+
+A refusal from `promote` carries a machine-readable `cause`: `unsigned`, `signoff_fingerprint_mismatch`, `revise`, `block_floor`, `block_gate` or `invalid`. Tests assert the cause, not just the refusal, and assert a refusal leaves the library directory untouched.
 
 ## Guard (one node)
 
@@ -38,7 +44,7 @@ All gates green **and** min(dimension) ≥ 9.0 **and** weighted ≥ 9.5. All ari
 1. **The escalation rule was unreachable.** v0 said "2nd forced strategy change → escalate" with a cap of 3 revisions. A 2nd strategy change needs a 4th failed revision, so the cap always fired first. v1 escalates at the cap and adds one more escalation trigger: a post-diagnose revision that reuses an earlier strategy.
 2. **Two nodes claimed to be the only library writer.** v0 named N4 in one place and N7 in another. Now N4 only emits a verdict and N7 is the only writer.
 3. **Float math made the verdict depend on dimension order.** The v0 simulator compared a float sum against 9.5. For a scorecard whose exact total is 9.5, the float total can land just below or just above 9.5, and which side it lands on depends on the order the dimensions are added. Example: `[9.2, 9.5, 9.4, 9.5, 9.2, 9.6, 10.0, 9.8, 9.3, 9.9]` comes out at 9.4999… (blocked) in the shipped order and in weight-descending order, but passes in weight-ascending order. Across random orders, about 22% of float sums for this case come out below 9.5. Reordering the `dimensions` array, which looks cosmetic, would therefore silently change verdicts. The hazard also depends on the Python version. From 3.12, the built-in `sum()` over floats uses compensated summation and returns exactly 9.5 for this case. On 3.10 and 3.11, which `requires-python` still allows, `sum()` is naive and returns 9.4999…. Mutation testing showed this directly: a float `sum()` mutant of the gate is caught on 3.11 and survives on 3.13, which is why CI runs on both 3.11 and 3.12. The gate sums integers, so its total is exact, independent of order, and independent of the Python version. A test asserts this across shipped, reversed, weight-sorted and alphabetical orders, and also asserts that float sums of the same case disagree.
-4. **Nothing stopped a context from scoring its own draft.** v0's anti-inflation rule relied on the scorer's honesty. A scorecard now must name both `drafter_context_id` and `scorer_context_id`, and they must differ. It must carry the `content_sha256` of the exact text it scored (so a score can't be reused on a different text) and the current `rubric_version` (so a score made under an old rubric is rejected).
+4. **Nothing stopped a context from scoring its own draft.** v0's anti-inflation rule relied on the scorer's honesty. A scorecard now must name both `drafter_context_id` and `scorer_context_id`, and they must differ. **Limit:** both ids are self-declared strings, so this catches accidental self-scoring, not a deliberate fake (`"d"` and `"s"` pass). Real independence needs the orchestrator to mint the ids when it spawns each context and the gate to check them against that log; that is not built. It must carry the `content_sha256` of the exact text it scored (so a score can't be reused on a different text) and the current `rubric_version` (so a score made under an old rubric is rejected).
 5. **Gates G1–G5 are checked mechanically.** G1–G4 check for required headings with non-empty bodies, and G5 checks a list of banned phrases. The gate list is data-driven: adding a gate to `config/prompt-rubric.json` changes behaviour with no code change. `check-rubric` rejects a gate that declares no check, has an unknown key (a typo such as `required_headng` would otherwise always pass), or has an empty check value.
 
 ## What the gates do and do not measure
@@ -51,7 +57,7 @@ Substance is judged only by the independent scorer. Treat a gate pass as "the pr
 
 ## Calibration evidence (rubric 0.1.0)
 
-Four blind scorers, each in its own context. Each candidate was scored twice to measure variance.
+Four scorer contexts in total: two candidates, each scored by two independent contexts (labelled A and B per candidate). These ran under rubric 0.1.0, before the A3 floors; the verdicts below are unchanged under 0.2.0 because the only breach is `idempotence`, a substantive dimension.
 
 | Candidate | Scorer | Weighted | Min | Verdict |
 |---|---|---|---|---|
@@ -90,11 +96,11 @@ Exit codes: 0 means pass or success, 1 means a non-passing verdict, a refusal, o
 
 ## Rollback and idempotence
 
-`promote` skips the write when the current version already has the same content hash. Every promote writes a new `v<N>` file with a `parent` pointer, and nothing is ever overwritten. `rollback` repoints `current` to the parent version and deletes nothing.
+`promote` skips the write when the current version already has the same content hash. Consequence: re-scoring identical text records nothing new, so a later independent re-score is not kept as evidence. That is intentional for now; if re-score lineage matters, the fix is a new evidence revision under the same text version. Every promote writes a new `v<N>` file with a `parent` pointer, and nothing is ever overwritten. `rollback` repoints `current` to the parent version and deletes nothing.
 
 ## Mutation coverage
 
-`tests/test_prompt_gate.py` kills 14 of 14 mutants on Python 3.11. They cover the floor, the cap boundary, the rollback pointer, slug validation, stale detection, the parent chain, the bar comparison, self-scoring, sign-off, diagnose, duplicate skip, check-less gates, and float accumulation in both its loop and `sum()` forms. On 3.12+, the `sum()` float mutant survives because compensated summation makes it equivalent in practice. The 3.11 CI leg catches it.
+`tests/test_prompt_gate.py` kills 20 of 20 mutants on Python 3.11. They cover the per-dimension floors, the A4 sign-off binding, fingerprint-based staleness (including a mutant that reverts to version-string staleness), G5 whitespace normalisation, refusal causes, the near-threshold flag, the cap boundary, the rollback pointer, slug validation, stale detection, the parent chain, the bar comparison, self-scoring, sign-off, diagnose, duplicate skip, check-less gates, and float accumulation in both its loop and `sum()` forms. On 3.12+, the `sum()` float mutant survives because compensated summation makes it equivalent in practice. The 3.11 CI leg catches it.
 
 ## Open decisions (owner: Carmelo)
 

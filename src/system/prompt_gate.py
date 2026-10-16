@@ -44,6 +44,12 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def rubric_fingerprint(rubric: Mapping[str, Any]) -> str:
+    """Hash of everything that changes a verdict. Sign-off metadata is excluded."""
+    material = {k: rubric[k] for k in ("version", "promotion", "gates", "dimensions")}
+    return sha256_text(json.dumps(material, sort_keys=True, separators=(",", ":")))
+
+
 def load_json(path: Path) -> Any:
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
@@ -58,6 +64,9 @@ def load_rubric(path: Path = DEFAULT_RUBRIC) -> dict:
     total = sum(int(d["weight_hundredths"]) for d in dims)
     if total != 100:
         raise GateError(f"rubric weights sum to {total}/100, expected 100")
+    for dim in dims:
+        if "floor_tenths" in dim and not 0 <= int(dim["floor_tenths"]) <= 100:
+            raise GateError(f"dimension {dim['id']}: floor_tenths out of range")
     gate_ids = [g["id"] for g in rubric.get("gates") or []]
     if len(gate_ids) != len(set(gate_ids)) or not gate_ids:
         raise GateError("rubric gates missing or not unique")
@@ -98,7 +107,7 @@ def _sections(text: str) -> dict[str, str]:
 def lint_gates(text: str, rubric: Mapping[str, Any]) -> list[dict]:
     """Binary gate checks. Necessary, not sufficient: quality is the scorer's job."""
     sections = _sections(text)
-    lowered = text.lower()
+    lowered = " ".join(text.lower().split())
     results = []
     for gate in rubric["gates"]:
         passed, reason = True, "ok"
@@ -195,15 +204,20 @@ def evaluate(text: str, scorecard: Mapping[str, Any], rubric: Mapping[str, Any])
     verdict["weakest"] = [{"id": d["id"], "score": t / 10} for t, d in low[:3]]
 
     failed_gates = [g for g in gates if not g["passed"]]
-    floor = int(promo["floor_tenths"])
+    floors = {d["id"]: int(d.get("floor_tenths", promo["floor_tenths"])) for d in rubric["dimensions"]}
+    breaches = [(t, d) for t, d in low if t < floors[d["id"]]]
+    margin = int(promo.get("near_threshold_tenths", 2))
+    verdict["near_threshold"] = any(abs(t - floors[d["id"]]) < margin for t, d in scored) or (
+        abs(weighted - int(promo["bar_thousandths"])) < margin * 10
+    )
     if failed_gates:
         verdict["status"] = BLOCK_GATE
         verdict["reasons"] = [f"{g['id']} {g['label']}: {g['reason']}" for g in failed_gates]
         verdict["reasons"].append("gate failures are absolute; the score is not consulted")
-    elif low[0][0] < floor:
+    elif breaches:
         verdict["status"] = BLOCK_FLOOR
-        below = [f"{d['id']} {t / 10:.1f}" for t, d in low if t < floor]
-        verdict["reasons"] = [f"below the {floor / 10:.1f} floor: {', '.join(below)}"]
+        below = [f"{d['id']} {t / 10:.1f} < {floors[d['id']] / 10:.1f}" for t, d in breaches]
+        verdict["reasons"] = [f"below floor: {', '.join(below)}"]
     elif weighted >= int(promo["bar_thousandths"]):
         verdict["status"] = PASS
         verdict["reasons"] = [f"all gates green, floor clear, weighted {weighted / 1000:.3f}"]
@@ -282,10 +296,16 @@ def promote(text: str, scorecard: Mapping[str, Any], rubric: Mapping[str, Any], 
     """The only library writer. Re-evaluates; never trusts a caller's verdict."""
     _check_slug(slug)
     if rubric.get("status") != "signed_off":
-        return {"status": "refused", "reason": f"rubric {rubric['version']} is {rubric.get('status')!r}, not signed_off"}
+        return {"status": "refused", "cause": "unsigned",
+                "reason": f"rubric {rubric['version']} is {rubric.get('status')!r}, not signed_off"}
+    fingerprint = rubric_fingerprint(rubric)
+    if rubric.get("signed_off_fingerprint") != fingerprint:
+        return {"status": "refused", "cause": "signoff_fingerprint_mismatch",
+                "reason": "rubric changed after sign-off; consent does not carry over", "fingerprint": fingerprint}
     verdict = evaluate(text, scorecard, rubric)
     if verdict["status"] != PASS:
-        return {"status": "refused", "reason": f"verdict {verdict['status']}", "verdict": verdict}
+        return {"status": "refused", "cause": verdict["status"].lower(),
+                "reason": f"verdict {verdict['status']}", "verdict": verdict}
 
     index = _load_index(library)
     entry = index["entries"].setdefault(slug, {"current": None, "versions": []})
@@ -306,6 +326,7 @@ def promote(text: str, scorecard: Mapping[str, Any], rubric: Mapping[str, Any], 
             "parent": entry["current"],
             "sha256": digest,
             "rubric_version": rubric["version"],
+            "rubric_fingerprint": fingerprint,
             "weighted": verdict["weighted"],
         }
     )
@@ -328,13 +349,18 @@ def rollback(library: Path, slug: str) -> dict:
 
 
 def stale(library: Path, rubric: Mapping[str, Any]) -> dict:
-    """N9 regression: current entries scored under another rubric version must be re-scored."""
+    """N9 regression: entries scored under different rubric content must be re-scored.
+
+    Keyed on the content fingerprint, not the version string, so an edited
+    weight with a forgotten version bump still marks entries stale.
+    """
+    fingerprint = rubric_fingerprint(rubric)
     out = []
     for slug, entry in sorted(_load_index(library)["entries"].items()):
         current = next((v for v in entry["versions"] if v["version"] == entry["current"]), None)
-        if current and current["rubric_version"] != rubric["version"]:
+        if current and current.get("rubric_fingerprint") != fingerprint:
             out.append({"slug": slug, "version": current["version"], "scored_under": current["rubric_version"]})
-    return {"rubric_version": rubric["version"], "stale": out}
+    return {"rubric_version": rubric["version"], "rubric_fingerprint": fingerprint, "stale": out}
 
 
 # ---------------------------------------------------------------- CLI
@@ -372,7 +398,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         rubric = load_rubric(args.rubric)
         if args.command == "check-rubric":
-            result, ok = {"status": "valid", "version": rubric["version"], "signoff": rubric.get("status")}, True
+            result, ok = {"status": "valid", "version": rubric["version"], "signoff": rubric.get("status"),
+                          "fingerprint": rubric_fingerprint(rubric)}, True
         elif args.command == "hash":
             result, ok = {"content_sha256": sha256_text(args.prompt.read_text(encoding="utf-8"))}, True
         elif args.command == "lint":
