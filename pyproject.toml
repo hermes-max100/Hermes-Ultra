@@ -14,9 +14,13 @@ test = ["pytest>=8.0"]
 legal-mcp = ["mcp>=2,<3"]
 legal-api = ["fastapi>=0.115,<1"]
 legal = ["mcp>=2,<3", "fastapi>=0.115,<1"]
+command-center = ["anthropic>=2,<3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"hermes_ultra.command_center" = ["static/*.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
