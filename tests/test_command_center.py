@@ -24,6 +24,7 @@ from hermes_ultra.command_center import (
 from hermes_ultra.command_center.__main__ import seed_demo
 from hermes_ultra.command_center.client import CommandCenterClient, CommandCenterClientError
 from hermes_ultra.command_center.providers import Availability, estimate_cost
+from hermes_ultra.command_center.store import TASK_TRANSITIONS
 from hermes_ultra.command_center.server import CommandCenterApp, CommandCenterServer
 
 
@@ -124,6 +125,30 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(Conflict):
             self.store.transition_task(task["id"], "running")
 
+    def test_concurrent_transitions_never_skip_validation(self):
+        for _ in range(20):
+            task = self.store.create_task("lane-build", title="race", state="queued")
+            self.store.transition_task(task["id"], "running")
+            barrier = threading.Barrier(2)
+
+            def move(to, **kw):
+                barrier.wait()
+                try:
+                    self.store.transition_task(task["id"], to, **kw)
+                except StoreError:
+                    pass
+
+            threads = [threading.Thread(target=move, args=("queued",)),
+                       threading.Thread(target=move, args=("done",), kwargs={"evidence": "e"})]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            events = self.store.task_detail(task["id"])["events"]
+            for prev, cur in zip(events, events[1:]):
+                self.assertEqual(cur["from_state"], prev["to_state"])
+                self.assertIn(cur["to_state"], TASK_TRANSITIONS[cur["from_state"]])
+
     def test_failed_requires_note(self):
         task = self.store.create_task("lane-ops", title="t", state="queued")
         with self.assertRaises(StoreError):
@@ -165,6 +190,10 @@ class StoreTests(unittest.TestCase):
             self.store.update_member("chatgpt", {"credential_env": "sk-123"})
 
     def test_experiment_requires_result_to_conclude(self):
+        with self.assertRaises(StoreError):
+            self.store.create_experiment("lane-hermes", title="H-0", status="concluded")
+        created = self.store.create_experiment("lane-hermes", title="H-0", status="concluded", result_summary="held")
+        self.assertEqual(created["result_summary"], "held")
         x = self.store.create_experiment("lane-hermes", title="H-1", hypothesis="h")
         with self.assertRaises(StoreError):
             self.store.update_experiment(x["id"], status="concluded")
@@ -234,6 +263,11 @@ class CouncilTests(unittest.TestCase):
         with self.assertRaises(StoreError):
             council.submit("hi", mode="everyone", run_async=False)
 
+    def test_mentioned_members_answer_in_rank_order(self):
+        council = self.council(FakeProvider())
+        self.assertEqual(council.submit("@chatgpt @claude", run_async=False)["responders"], ["claude", "chatgpt"])
+        self.assertEqual(council.submit("@hermes @meta-muse", run_async=False)["responders"], ["meta-muse", "hermes"])
+
     def test_reserved_member_ids_are_rejected(self):
         for reserved in ("council", "all", "lane-x"):
             with self.assertRaises(StoreError):
@@ -293,7 +327,7 @@ class ProviderTests(unittest.TestCase):
                                    content=[SimpleNamespace(type="thinking", thinking=""), SimpleNamespace(type="text", text="Hello.")])
 
         client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
-        reply = AnthropicProvider(lambda: client).complete(self.member, "sys", "prompt")
+        reply = AnthropicProvider(lambda api_key: client).complete(self.member, "sys", "prompt")
         self.assertEqual(reply.status, "ok")
         self.assertEqual(reply.text, "Hello.")
         self.assertEqual(captured["betas"], ["server-side-fallback-2026-07-01"])
@@ -302,11 +336,27 @@ class ProviderTests(unittest.TestCase):
         self.assertNotIn("thinking", captured)
         self.assertEqual(estimate_cost(self.member, reply.tokens_in, reply.tokens_out), 0.014)
 
+    def test_anthropic_client_uses_each_seats_credential_env(self):
+        made = []
+
+        def factory(api_key):
+            made.append(api_key)
+            return SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=lambda **k: SimpleNamespace(
+                model="claude-opus-5-5", stop_reason="end_turn", usage=None, content=[SimpleNamespace(type="text", text="ok")]))))
+
+        provider = AnthropicProvider(factory)
+        with mock.patch.dict(os.environ, {"CC_KEY_A": "key-a", "CC_KEY_B": "key-b"}):
+            provider.complete({**self.member, "credential_env": "CC_KEY_A"}, "s", "p")
+            provider.complete({**self.member, "credential_env": "CC_KEY_A"}, "s", "p")
+            provider.complete({**self.member, "credential_env": "CC_KEY_B"}, "s", "p")
+            provider.complete({**self.member, "credential_env": "CC_UNSET"}, "s", "p")
+        self.assertEqual(made, ["key-a", "key-b", None])  # cached per key; unset falls back to SDK resolution
+
     def test_anthropic_refusal_is_reported(self):
         response = SimpleNamespace(model="claude-opus-5-5", stop_reason="refusal", usage=None, content=[],
                                    stop_details=SimpleNamespace(category="cyber"))
         client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=lambda **k: response)))
-        reply = AnthropicProvider(lambda: client).complete(self.member, "s", "p")
+        reply = AnthropicProvider(lambda api_key: client).complete(self.member, "s", "p")
         self.assertEqual(reply.status, "refused")
         self.assertIn("cyber", reply.text)
 
@@ -365,7 +415,7 @@ class ProviderTests(unittest.TestCase):
         stub = HTTPServer(("127.0.0.1", 0), Stub)
         threading.Thread(target=stub.serve_forever, daemon=True).start()
         try:
-            factory = lambda: anthropic.Anthropic(api_key="test", base_url=f"http://127.0.0.1:{stub.server_port}", max_retries=0)
+            factory = lambda api_key: anthropic.Anthropic(api_key="test", base_url=f"http://127.0.0.1:{stub.server_port}", max_retries=0)
             reply = AnthropicProvider(factory).complete(self.member, "sys", "prompt")
         finally:
             stub.shutdown()

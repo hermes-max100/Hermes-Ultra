@@ -150,6 +150,7 @@ class CommandCenterApp:
         r("POST", "/api/experiments", lambda c: self.store.create_experiment(
             c.json().get("lane_id"), title=c.json().get("title"), kind=c.json().get("kind", "hypothesis"),
             hypothesis=c.json().get("hypothesis", ""), status=c.json().get("status", "planned"),
+            result_summary=c.json().get("result_summary", ""),
             metrics=c.json().get("metrics"), experiment_id=c.json().get("id"), actor=c.actor))
         r("GET", "/api/experiments/{experiment}", lambda c: self.store.experiment_detail(c.params["experiment"]))
         r("PATCH", "/api/experiments/{experiment}", lambda c: self.store.update_experiment(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -63,9 +64,11 @@ def estimate_cost(member: Mapping[str, Any], tokens_in: int | None, tokens_out: 
 class AnthropicProvider:
     """Calls Claude through the official ``anthropic`` SDK (optional dependency)."""
 
-    def __init__(self, client_factory: Callable[[], Any] | None = None) -> None:
+    def __init__(self, client_factory: Callable[[str | None], Any] | None = None) -> None:
+        # client_factory(api_key) -> client; api_key is None when the SDK should resolve credentials itself.
         self._client_factory = client_factory
-        self._client = None
+        self._clients: dict[str | None, Any] = {}
+        self._clients_lock = threading.Lock()
 
     def availability(self, member: Mapping[str, Any]) -> Availability:
         if self._client_factory is None:
@@ -78,15 +81,20 @@ class AnthropicProvider:
             return Availability(True, f"{env} unset; relying on SDK credential resolution (ant auth profile)")
         return Availability(True, "ready")
 
-    def _get_client(self) -> Any:
-        if self._client is None:
-            if self._client_factory is not None:
-                self._client = self._client_factory()
-            else:
-                import anthropic
+    def _get_client(self, member: Mapping[str, Any]) -> Any:
+        """One client per credential env var, so each seat bills to the key it names."""
+        env = member.get("credential_env")
+        api_key = os.environ.get(env) if env else None
+        cache_key = env if api_key else None
+        with self._clients_lock:
+            if cache_key not in self._clients:
+                if self._client_factory is not None:
+                    self._clients[cache_key] = self._client_factory(api_key)
+                else:
+                    import anthropic
 
-                self._client = anthropic.Anthropic()
-        return self._client
+                    self._clients[cache_key] = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
+            return self._clients[cache_key]
 
     def complete(self, member: Mapping[str, Any], system: str, prompt: str) -> ProviderReply:
         model = str(member["model"])
@@ -98,7 +106,7 @@ class AnthropicProvider:
             "output_config": {"effort": member.get("effort") or "medium"},
         }
         started = time.monotonic()
-        client = self._get_client()
+        client = self._get_client(member)
         try:
             if model in CLAUDE_FALLBACK_MODELS:
                 response = client.beta.messages.create(betas=[CLAUDE_FALLBACK_BETA], fallbacks="default", **request)

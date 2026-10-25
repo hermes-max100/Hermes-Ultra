@@ -97,7 +97,8 @@ class Council:
         mentioned, lanes = parse_mentions(body, set(by_id))
         if any(word in mentioned for word in COUNCIL_WORDS):
             mode = "council"
-        named = [by_id[mid] for mid in mentioned if mid in by_id]
+        # Roster order is council by rank, then bench by rank; mention order never overrides it.
+        named = [m for m in roster if m["id"] in mentioned]
         if mode == "council":
             return seated + [m for m in named if m["seat"] != "council"], lanes, mode
         if named:

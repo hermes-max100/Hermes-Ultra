@@ -538,10 +538,7 @@ class CommandCenterStore:
         progress: Any = None,
     ) -> dict[str, Any]:
         to_state = _check_choice(to_state, TASK_STATES, "state")
-        task = self.get_task(task_id)
-        from_state = task["state"]
-        if to_state not in TASK_TRANSITIONS[from_state]:
-            raise Conflict(f"task {task_id} cannot move {from_state} -> {to_state}")
+        self.get_task(task_id)  # 404 before field validation
         if to_state == "blocked" and not (blocker or "").strip():
             raise StoreError("blocked requires a blocker description")
         if to_state == "done" and not (evidence or "").strip():
@@ -551,21 +548,26 @@ class CommandCenterStore:
         pct = _opt_float(progress, "progress")
         if pct is not None and pct > 1:
             raise StoreError("progress must be between 0 and 1")
-        now = utc_now()
-        fields: dict[str, Any] = {"state": to_state, "updated_at": now}
-        fields["blocker"] = blocker.strip() if to_state == "blocked" else None
-        if to_state == "running" and not task["started_at"]:
-            fields["started_at"] = now
-        if to_state in ("done", "failed"):
-            fields["finished_at"] = now
-        if to_state == "done":
-            fields["evidence"] = _text(evidence, "evidence", limit=4000)
-            fields["progress"] = 1.0
-        elif to_state == "backlog":
-            fields["finished_at"] = None
-        if pct is not None and to_state != "done":
-            fields["progress"] = pct
         with self._tx() as conn:
+            # Read and validate inside the write lock so concurrent moves cannot both pass on stale state.
+            task = dict(conn.execute("SELECT * FROM tasks WHERE id=?", (str(task_id),)).fetchone())
+            from_state = task["state"]
+            if to_state not in TASK_TRANSITIONS[from_state]:
+                raise Conflict(f"task {task_id} cannot move {from_state} -> {to_state}")
+            now = utc_now()
+            fields: dict[str, Any] = {"state": to_state, "updated_at": now}
+            fields["blocker"] = blocker.strip() if to_state == "blocked" else None
+            if to_state == "running" and not task["started_at"]:
+                fields["started_at"] = now
+            if to_state in ("done", "failed"):
+                fields["finished_at"] = now
+            if to_state == "done":
+                fields["evidence"] = _text(evidence, "evidence", limit=4000)
+                fields["progress"] = 1.0
+            elif to_state == "backlog":
+                fields["finished_at"] = None
+            if pct is not None and to_state != "done":
+                fields["progress"] = pct
             assignments = ", ".join(f"{key}=?" for key in fields)
             conn.execute(f"UPDATE tasks SET {assignments} WHERE id=?", (*fields.values(), task["id"]))
             conn.execute(
@@ -793,27 +795,33 @@ class CommandCenterStore:
         kind: str = "hypothesis",
         hypothesis: str = "",
         status: str = "planned",
+        result_summary: str = "",
         metrics: Mapping[str, Any] | None = None,
         experiment_id: str | None = None,
         actor: str = "operator",
         demo: bool = False,
     ) -> dict[str, Any]:
         lane = self.get_lane(lane_id)
+        status = _check_choice(status, EXPERIMENT_STATUSES, "status")
+        result_summary = _text(result_summary, "result_summary", required=False, limit=8000)
+        if status == "concluded" and not result_summary.strip():
+            raise StoreError("concluding an experiment requires a result_summary")
         experiment_id = _check_id(experiment_id, "experiment id") if experiment_id else "x-" + uuid.uuid4().hex[:10]
         now = utc_now()
         with self._tx() as conn:
             if conn.execute("SELECT 1 FROM experiments WHERE id=?", (experiment_id,)).fetchone():
                 raise Conflict(f"experiment {experiment_id} already exists")
             conn.execute(
-                """INSERT INTO experiments(id,lane_id,kind,title,hypothesis,status,metrics_json,demo,created_at,updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT INTO experiments(id,lane_id,kind,title,hypothesis,status,result_summary,metrics_json,demo,
+                   created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     experiment_id,
                     lane["id"],
                     _check_choice(kind, EXPERIMENT_KINDS, "kind"),
                     _text(title, "title", limit=300),
                     _text(hypothesis, "hypothesis", required=False, limit=8000),
-                    _check_choice(status, EXPERIMENT_STATUSES, "status"),
+                    status,
+                    result_summary,
                     json.dumps(dict(metrics or {}), sort_keys=True),
                     1 if demo else 0,
                     now,

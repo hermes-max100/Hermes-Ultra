@@ -483,8 +483,10 @@ function laneButton(l) {
     h("span", {class: "meta"}, `${l.health.toUpperCase()} · ${running} run · ${queued} q${blocked ? ` · ${blocked} blocked` : ""} · ${ago(l.last_output_at)}`),
     mixbar(l.work_mix));
 }
+let lanesGen = 0, boardGen = 0;
 async function renderLanes() {
   if (!S.state) return; renderLaneList();
+  const gen = ++lanesGen;
   const lane = laneById(S.lane); if (!lane) { clear($("feed")).append(h("div", {class: "empty"}, "No lanes yet.")); return; }
   const head = clear($("feed-head"));
   head.append(h("div", {}, h("h2", {}, "#" + lane.id), h("div", {class: "muted", style: {fontSize: "12px", display: "flex", gap: "6px", marginTop: "4px", flexWrap: "wrap"}},
@@ -499,6 +501,7 @@ async function renderLanes() {
   filters.append(h("button", {onclick: () => { switchTab("mission"); S.boardLane = lane.id; renderMission(); }}, "OPEN ON BOARD →"));
   let msgs;
   try { msgs = await api(`/api/lanes/${encodeURIComponent(lane.id)}/messages?limit=150${S.workFilter ? "&work_type=" + S.workFilter : ""}`); } catch (e) { return; }
+  if (gen !== lanesGen) return; // a newer lane or filter was selected while this request was in flight
   const feed = clear($("feed"));
   if (!msgs.length) feed.append(h("div", {class: "empty"}, `No outputs in #${lane.id} yet. Agents report with POST /api/lanes/${lane.id}/messages or `, h("span", {class: "mono"}, `python -m hermes_ultra.command_center post ${lane.id} "title"`), "."));
   for (const m of msgs.slice().reverse()) feed.append(messageCard(m));
@@ -606,8 +609,10 @@ function renderThread() {
 }
 async function sendCouncil(text) {
   text = (text || "").trim(); if (!text) return;
-  await act(() => api("/api/council/messages", {body: {body: text, mode: S.wholeCouncil ? "council" : "lead"}}));
-  $("council-input").value = "";
+  const sent = await act(() => api("/api/council/messages", {body: {body: text, mode: S.wholeCouncil ? "council" : "lead"}}));
+  if (!sent) return false; // keep the draft so the operator can retry
+  const input = $("council-input");
+  if (input.value.trim() === text) input.value = ""; // leave anything typed while the request was pending
   await loadCouncil();
 }
 S.wholeCouncil = store("cc.wholecouncil") === "1";
@@ -682,7 +687,9 @@ function renderMission() {
   renderBoard();
 }
 async function renderBoard() {
+  const gen = ++boardGen;
   let tasks; try { tasks = await api("/api/tasks" + (S.boardLane ? "?lane=" + encodeURIComponent(S.boardLane) : "")); } catch (e) { return; }
+  if (gen !== boardGen) return;
   const board = clear($("board"));
   for (const state of TASK_STATES) {
     const items = tasks.filter(t => t.state === state);

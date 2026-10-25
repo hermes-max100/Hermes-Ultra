@@ -61,8 +61,8 @@ def seed_demo(store: CommandCenterStore) -> int:
 
     match = store.create_experiment("lane-arena", kind="arena_match", title="Match #441 creative coding",
                                     hypothesis="Hermes divergence beats grounded models on open-ended creative tasks.",
-                                    status="concluded", metrics={"hermes": 8.7, "claude": 8.2}, actor="demo", demo=True)
-    store.update_experiment(match["id"], result_summary="Hermes won creative (8.7 vs 8.2); lost factual (6.1 vs 8.9).")
+                                    status="concluded", metrics={"hermes": 8.7, "claude": 8.2}, actor="demo", demo=True,
+                                    result_summary="Hermes won creative (8.7 vs 8.2); lost factual (6.1 vs 8.9).")
     store.log_experiment(match["id"], "Judge GPT-5 scored 12 prompts", level="info")
     store.log_experiment(match["id"], "Hermes 8.7 / Claude 8.2", level="result")
     h29 = store.create_experiment("lane-hermes", kind="hypothesis", title="H-29 rotating council seat",
