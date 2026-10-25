@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lane Command Center</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #0b0e13; --panel: #11161e; --panel-2: #161c26; --line: #222b38; --text: #e3e8ef; --muted: #8b97a8;
+  --faint: #5b6678; --accent: #5aa9ff; --ok: #3ccf8e; --warn: #f2b84b; --bad: #ff6b6b; --info: #a78bfa;
+  --idle: #6b7686; --chip: #1c2431; --shadow: 0 10px 30px rgba(0,0,0,.45);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f0f3f7; --line: #dde3ea; --text: #17202b; --muted: #5b6676;
+    --faint: #8a95a5; --chip: #e9eef4; --shadow: 0 10px 30px rgba(20,30,45,.15); --accent: #1f6fd1; --ok: #108a5a;
+    --warn: #a86b00; --bad: #c93c3c; --info: #6d4fd6; --idle: #8a95a5;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f4f6f9; --panel: #ffffff; --panel-2: #f0f3f7; --line: #dde3ea; --text: #17202b; --muted: #5b6676;
+  --faint: #8a95a5; --chip: #e9eef4; --shadow: 0 10px 30px rgba(20,30,45,.15); --accent: #1f6fd1; --ok: #108a5a;
+  --warn: #a86b00; --bad: #c93c3c; --info: #6d4fd6; --idle: #8a95a5;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+.app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; }
+header { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: var(--panel); flex-wrap: wrap; }
+.brand { font: 600 13px var(--mono); letter-spacing: .08em; white-space: nowrap; }
+.brand small { color: var(--muted); font-weight: 400; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); display: inline-block; margin-right: 6px; }
+.pulse.live { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ping 2s infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(60,207,142,.6);} 70% { box-shadow: 0 0 0 7px rgba(60,207,142,0);} 100% {box-shadow:0 0 0 0 rgba(60,207,142,0);} }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border: 1px solid var(--line);
+  border-radius: 999px; font: 500 11px var(--mono); letter-spacing: .04em; text-transform: uppercase; background: var(--panel-2); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--idle); flex: none; }
+.dot.active, .dot.ok, .dot.running, .dot.concluded { background: var(--ok); }
+.dot.queued, .dot.planned { background: var(--accent); }
+.dot.blocked, .dot.warn { background: var(--warn); }
+.dot.offline, .dot.failed, .dot.error, .dot.abandoned { background: var(--bad); }
+nav.tabs { display: flex; gap: 2px; margin-left: auto; overflow-x: auto; }
+nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px;
+  font: 600 12px var(--mono); letter-spacing: .08em; color: var(--muted); white-space: nowrap; }
+nav.tabs button[aria-selected="true"] { color: var(--text); border-color: var(--accent); }
+main { min-height: 0; min-width: 0; position: relative; }
+section.view { display: none; height: 100%; min-height: 0; }
+section.view.on { display: grid; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.label { font: 600 11px var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 5px; background: var(--chip);
+  font: 600 10.5px var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.chip.demo { background: transparent; border: 1px dashed var(--warn); color: var(--warn); }
+.chip.code { color: #7cc4ff; } .chip.research { color: #c4a3ff; } .chip.draft { color: #ffb37c; } .chip.test { color: #7fe0b1; }
+.chip.plan { color: #f2d06b; } .chip.ops { color: #9fb3c8; } .chip.eval { color: #ff8fb1; } .chip.note { color: var(--text); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .chip.code { color: #1d63c0; } :root:not([data-theme="dark"]) .chip.research { color: #6d3fd0; }
+  :root:not([data-theme="dark"]) .chip.draft { color: #b45309; } :root:not([data-theme="dark"]) .chip.test { color: #0f7a4f; }
+  :root:not([data-theme="dark"]) .chip.plan { color: #8a6100; } :root:not([data-theme="dark"]) .chip.ops { color: #475569; } :root:not([data-theme="dark"]) .chip.eval { color: #be185d; } }
+:root[data-theme="light"] .chip.code { color: #1d63c0; } :root[data-theme="light"] .chip.research { color: #6d3fd0; } :root[data-theme="light"] .chip.draft { color: #b45309; }
+:root[data-theme="light"] .chip.test { color: #0f7a4f; } :root[data-theme="light"] .chip.plan { color: #8a6100; } :root[data-theme="light"] .chip.ops { color: #475569; } :root[data-theme="light"] .chip.eval { color: #be185d; }
+.btn { border: 1px solid var(--line); background: var(--panel-2); border-radius: 7px; padding: 6px 11px; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.btn.small { padding: 3px 8px; font-size: 12px; }
+.btn.ghost { background: none; }
+.btn.danger { color: var(--bad); }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+input, select, textarea { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; min-width: 0; }
+textarea { resize: vertical; }
+input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.scroll { overflow: auto; min-height: 0; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+
+/* Lanes */
+#view-lanes { grid-template-columns: 270px 1fr; }
+.sidebar { border-right: 1px solid var(--line); background: var(--panel); padding: 12px 10px; display: flex; flex-direction: column; gap: 14px; }
+.lane-btn { width: 100%; text-align: left; display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; }
+.lane-btn:hover { background: var(--panel-2); }
+.lane-btn[aria-current="true"] { background: var(--panel-2); border-color: var(--line); }
+.lane-btn .name { font: 500 13px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-btn .meta { grid-column: 2 / 4; font-size: 11px; color: var(--faint); }
+.mixbar { grid-column: 2 / 4; display: flex; height: 3px; border-radius: 2px; overflow: hidden; background: var(--chip); }
+.mixbar span { display: block; height: 100%; }
+.feed-wrap { display: grid; grid-template-rows: auto auto 1fr auto; min-height: 0; }
+.feed-head { padding: 14px 18px 8px; display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.feed-head h2 { margin: 0; font: 600 17px var(--mono); }
+.stats { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
+.stat b { display: block; font: 600 15px var(--mono); }
+.stat span { font-size: 11px; color: var(--muted); }
+.filters { padding: 0 18px 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { border: 1px solid var(--line); background: none; border-radius: 6px; padding: 2px 9px; font: 600 11px var(--mono); color: var(--muted); }
+.filters button[aria-pressed="true"] { color: var(--text); border-color: var(--accent); }
+.feed { padding: 4px 18px 18px; display: flex; flex-direction: column; gap: 10px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card.clickable { cursor: pointer; }
+.card.clickable:hover { border-color: var(--accent); }
+.card-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.avatar { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; font: 700 12px var(--mono); color: #fff; flex: none; }
+.card h3 { margin: 6px 0 4px; font-size: 14px; font-weight: 600; }
+.card p { margin: 0; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.metrics { display: flex; gap: 14px; margin-top: 8px; font: 11px var(--mono); color: var(--faint); flex-wrap: wrap; }
+.composer { border-top: 1px solid var(--line); padding: 10px 18px; display: grid; grid-template-columns: 130px 1fr auto; gap: 8px; background: var(--panel); }
+.composer textarea { grid-column: 1 / 3; min-height: 38px; }
+
+/* Council */
+#view-council { grid-template-columns: 1fr 370px; }
+.thread-wrap { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+.thread { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.msg { display: grid; grid-template-columns: 30px 1fr; gap: 10px; max-width: 900px; }
+.msg .bubble { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.msg.operator .bubble { border-color: var(--accent); }
+.msg.system .bubble { background: none; border-style: dashed; color: var(--muted); }
+.msg .who { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 3px; flex-wrap: wrap; }
+.msg .who b { font-size: 13px; }
+.msg .text { white-space: pre-wrap; word-break: break-word; }
+.typing { color: var(--muted); font-size: 12px; padding: 0 20px 6px; min-height: 18px; }
+.council-composer { border-top: 1px solid var(--line); padding: 10px 16px; background: var(--panel); display: grid; gap: 8px; }
+.council-composer .row { display: flex; gap: 8px; align-items: flex-end; }
+.council-composer textarea { flex: 1; min-height: 44px; max-height: 180px; }
+.voicebar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+.mic { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); display: grid; place-items: center; flex: none; }
+.mic.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+.wave { display: inline-flex; gap: 2px; align-items: center; height: 18px; }
+.wave i { width: 3px; background: var(--accent); border-radius: 2px; height: 4px; }
+.wave.on i { animation: wave 0.9s infinite ease-in-out; }
+.wave i:nth-child(2) { animation-delay: .1s } .wave i:nth-child(3) { animation-delay: .2s } .wave i:nth-child(4) { animation-delay: .3s } .wave i:nth-child(5) { animation-delay: .4s }
+@keyframes wave { 0%,100% { height: 4px } 50% { height: 18px } }
+.interim { color: var(--muted); font-style: italic; }
+.roster { border-left: 1px solid var(--line); background: var(--panel); padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.member { border: 1px solid var(--line); border-radius: 9px; padding: 9px 10px; background: var(--panel-2); display: grid; gap: 6px; }
+.member.dragging { opacity: .4; }
+.member.drop-target { border-color: var(--accent); }
+.member-top { display: flex; align-items: center; gap: 8px; }
+.member-top .handle { cursor: grab; color: var(--faint); font-family: var(--mono); user-select: none; }
+.member-top .rank { font: 600 11px var(--mono); color: var(--muted); }
+.member-top b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .sub { font: 11px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .reason { font-size: 11px; color: var(--muted); }
+.member .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.member form { display: grid; gap: 6px; }
+
+/* Mission control */
+#view-mission { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr; overflow: auto; padding: 14px 16px; gap: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; }
+.kpi { padding: 10px 12px; border-left: 3px solid var(--line); }
+.kpi b { display: block; font: 600 22px var(--mono); }
+.kpi span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi.running { border-left-color: var(--ok); } .kpi.queued { border-left-color: var(--accent); }
+.kpi.blocked { border-left-color: var(--warn); } .kpi.failed { border-left-color: var(--bad); }
+.matrix-head { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 10.5px var(--mono); letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-2); }
+tbody tr[aria-selected="true"] { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+td.num { font-family: var(--mono); text-align: right; }
+th.num { text-align: right; }
+.granular { display: none; }
+.show-granular .granular { display: table-cell; }
+.board-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(190px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; min-height: 160px; display: flex; flex-direction: column; gap: 8px; }
+.col-head { display: flex; align-items: center; gap: 6px; padding: 2px 4px 6px; border-bottom: 1px solid var(--line); }
+.col-head .count { margin-left: auto; font: 600 12px var(--mono); color: var(--muted); }
+.tcard { border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 8px 9px; cursor: pointer; display: grid; gap: 4px; }
+.tcard:hover { border-color: var(--accent); }
+.tcard b { font-size: 13px; font-weight: 600; }
+.tcard .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--faint); }
+.progress { height: 4px; border-radius: 2px; background: var(--chip); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--ok); }
+.note-line { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.note-line.warn { color: var(--warn); } .note-line.bad { color: var(--bad); } .note-line.ok { color: var(--ok); }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* R&D */
+#view-rnd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; overflow: auto; padding: 14px 16px; gap: 14px; }
+.now { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.now .panel { padding: 12px 14px; display: grid; gap: 6px; align-content: start; }
+.rnd-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; min-height: 0; }
+.rnd-col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.xgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+/* Drawer */
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 20; }
+.drawer-backdrop.on { display: block; }
+.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(560px, 100vw); background: var(--panel); border-left: 1px solid var(--line);
+  box-shadow: var(--shadow); transform: translateX(100%); transition: transform .18s ease, visibility .18s; visibility: hidden; z-index: 21; display: grid; grid-template-rows: auto 1fr; }
+.drawer.on { transform: none; visibility: visible; }
+.drawer-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.drawer-head h2 { margin: 0; font-size: 15px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drawer-body { padding: 14px 16px; overflow: auto; display: grid; gap: 14px; align-content: start; }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); font: 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding-top: 2px; }
+.kv dd { margin: 0; word-break: break-word; }
+pre.body { white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 0; font: 12.5px/1.5 var(--mono); max-height: 50vh; overflow: auto; }
+.timeline { display: grid; gap: 8px; border-left: 2px solid var(--line); padding-left: 12px; }
+.timeline div { font-size: 12.5px; }
+.timeline time { display: block; font: 11px var(--mono); color: var(--faint); }
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line);
+  padding: 8px 14px; border-radius: 8px; box-shadow: var(--shadow); z-index: 30; display: none; max-width: calc(100vw - 32px); }
+.toast.on { display: block; }
+.toast.bad { border-color: var(--bad); color: var(--bad); }
+.token-gate { position: fixed; inset: 0; display: none; place-items: center; background: var(--bg); z-index: 40; }
+.token-gate.on { display: grid; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100vh; }
+  #view-lanes, #view-council { grid-template-columns: minmax(0, 1fr); }
+  .rnd-grid { grid-template-columns: minmax(0, 1fr); }
+  header { gap: 8px 12px; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; overflow: auto; }
+  .roster { border-left: 0; border-top: 1px solid var(--line); }
+  nav.tabs { margin-left: 0; width: 100%; }
+  .composer { grid-template-columns: 1fr; padding: 10px 16px; }
+  .composer textarea { grid-column: auto; }
+  .feed-head, .filters, .feed { padding-left: 16px; padding-right: 16px; }
+  section.view { height: auto; }
+  .thread { max-height: 60vh; overflow: auto; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span class="pulse" id="pulse" title="Live stream"></span>COMMAND CENTER <small id="version"></small></div>
+    <div class="muted mono" id="headline" style="font-size:12px"></div>
+    <div class="pills" id="pills"></div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="lanes" aria-selected="true">LANES</button>
+      <button role="tab" data-tab="council" aria-selected="false">ORCHESTRATORS</button>
+      <button role="tab" data-tab="mission" aria-selected="false">MISSION CONTROL</button>
+      <button role="tab" data-tab="rnd" aria-selected="false">ARENA / HERMES</button>
+    </nav>
+    <button class="btn small ghost" id="theme" title="Toggle theme">◐</button>
+  </header>
+  <main>
+    <section class="view on" id="view-lanes" role="tabpanel">
+      <aside class="sidebar scroll" id="lane-list"></aside>
+      <div class="feed-wrap">
+        <div class="feed-head" id="feed-head"></div>
+        <div class="filters" id="feed-filters"></div>
+        <div class="feed scroll" id="feed"></div>
+        <form class="composer" id="lane-composer">
+          <select name="work_type" aria-label="Work type"></select>
+          <input name="title" placeholder="Post to this lane: title" aria-label="Title" required>
+          <button class="btn primary" type="submit">Post</button>
+          <textarea name="body" placeholder="Details (optional)" aria-label="Body"></textarea>
+        </form>
+      </div>
+    </section>
+
+    <section class="view" id="view-council" role="tabpanel">
+      <div class="thread-wrap">
+        <div class="feed-head">
+          <h2>Orchestrator Council</h2>
+          <span class="muted" style="font-size:12px">The lead answers by default. <b>Whole council</b> or <span class="mono">@council</span> brings in every seat in rank order. <span class="mono">@name</span> asks one member, including the bench. <span class="mono">#lane-id</span> pulls that lane's outputs in.</span>
+        </div>
+        <div class="thread scroll" id="thread"></div>
+        <div>
+          <div class="typing" id="typing"></div>
+          <form class="council-composer" id="council-composer">
+            <div class="row">
+              <button class="mic" type="button" id="mic" title="Talk (Ctrl+M)" aria-label="Start voice input">🎙</button>
+              <textarea name="body" id="council-input" placeholder="Ask the lead — or @council, @chatgpt, #lane-build…" aria-label="Council message"></textarea>
+              <button class="btn primary" type="submit">Send</button>
+            </div>
+            <div class="voicebar">
+              <span class="wave" id="wave"><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="interim" id="interim"></span>
+              <span style="margin-left:auto"></span>
+              <button class="btn small" type="button" id="wholecouncil" aria-pressed="false" title="Every seated member answers, in rank order">Whole council</button>
+              <button class="btn small" type="button" id="handsfree" aria-pressed="false" title="Keep listening and send each finished sentence">Hands-free</button>
+              <button class="btn small" type="button" id="autosend" aria-pressed="true" title="Send when you stop talking">Auto-send</button>
+              <button class="btn small" type="button" id="readaloud" aria-pressed="false" title="Speak council replies aloud">Read replies</button>
+              <span class="faint" id="voice-support"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+      <aside class="roster scroll" id="roster"></aside>
+    </section>
+
+    <section class="view" id="view-mission" role="tabpanel">
+      <div class="kpis" id="kpis"></div>
+      <div class="panel" id="matrix-panel">
+        <div class="matrix-head">
+          <span class="label">Lane health matrix</span>
+          <span class="faint" style="font-size:12px">Click a lane to filter the board</span>
+          <span style="margin-left:auto"></span>
+          <button class="btn small" id="granular" aria-pressed="false">Granular view</button>
+        </div>
+        <div class="scroll"><table id="matrix"></table></div>
+      </div>
+      <div>
+        <div class="board-head">
+          <span class="label">Work board</span>
+          <span class="chip" id="board-filter"></span>
+          <span style="margin-left:auto"></span>
+          <form class="inline-form" id="task-form">
+            <select name="lane_id" aria-label="Lane"></select>
+            <input name="title" placeholder="New task title" required aria-label="Task title">
+            <select name="priority" aria-label="Priority"><option value="1">P1</option><option value="2">P2</option><option value="3" selected>P3</option><option value="4">P4</option><option value="5">P5</option></select>
+            <select name="state" aria-label="Initial state"><option value="backlog">Backlog</option><option value="queued">Queue</option></select>
+            <button class="btn primary" type="submit">Add</button>
+          </form>
+        </div>
+        <div class="board" id="board"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-rnd" role="tabpanel">
+      <div class="now" id="now"></div>
+      <div class="rnd-grid">
+        <div class="rnd-col">
+          <div class="board-head"><span class="label">R&amp;D live feed</span><span class="faint" style="font-size:12px" id="rnd-lanes"></span></div>
+          <div class="feed" id="rnd-feed" style="padding:0"></div>
+        </div>
+        <div class="rnd-col">
+          <div class="board-head">
+            <span class="label">Experiments</span>
+            <span style="margin-left:auto"></span>
+            <select id="x-filter" aria-label="Filter experiments"><option value="">All statuses</option><option>running</option><option>planned</option><option>concluded</option><option>abandoned</option></select>
+          </div>
+          <div class="xgrid" id="xgrid"></div>
+          <form class="inline-form panel" id="x-form" style="padding:10px">
+            <span class="label" style="width:100%">New experiment</span>
+            <select name="lane_id" aria-label="Lane"></select>
+            <select name="kind" aria-label="Kind"><option value="hypothesis">Hypothesis</option><option value="arena_match">Arena match</option><option value="benchmark">Benchmark</option><option value="ablation">Ablation</option></select>
+            <input name="title" placeholder="Title" required aria-label="Experiment title" style="flex:1">
+            <textarea name="hypothesis" placeholder="Hypothesis" aria-label="Hypothesis" style="width:100%"></textarea>
+            <button class="btn primary" type="submit">Create</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="drawer-backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head"><h2 id="drawer-title"></h2><button class="btn small" id="drawer-close" aria-label="Close">✕</button></div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+<div class="toast" id="toast" role="status"></div>
+<div class="token-gate" id="token-gate">
+  <form class="panel" id="token-form" style="padding:20px;display:grid;gap:10px;width:min(380px,calc(100vw - 32px))">
+    <b>Access token required</b>
+    <span class="muted" style="font-size:13px">This command center was started with HERMES_CC_TOKEN. Enter it to continue.</span>
+    <input name="token" type="password" autocomplete="current-password" aria-label="Access token" required>
+    <button class="btn primary" type="submit">Unlock</button>
+  </form>
+</div>
+
+<script>
+"use strict";
+const WORK_TYPES = ["code","research","draft","test","plan","ops","eval","note","other"];
+const TASK_STATES = ["backlog","queued","running","blocked","done","failed"];
+const STATE_LABEL = {backlog:"Backlog", queued:"Queue", running:"Running", blocked:"Blocked", done:"Done", failed:"Failed"};
+const TRANSITIONS = {backlog:["queued","running","blocked","failed"], queued:["running","backlog","blocked","failed"],
+  running:["done","failed","blocked","queued"], blocked:["queued","running","backlog","failed"], done:["backlog"], failed:["queued","backlog"]};
+const WT_COLOR = {code:"#4d9fff",research:"#a78bfa",draft:"#ff9d5c",test:"#3ccf8e",plan:"#f2c94c",ops:"#8aa0b6",eval:"#ff7aa2",note:"#cfd6df",other:"#6b7686"};
+const PALETTE = ["#d9773a","#10a37f","#0866ff","#8b5cf6","#e11d48","#0ea5e9","#ca8a04","#16a34a"];
+
+const S = { tab: "lanes", lane: null, workFilter: "", boardLane: "", granular: false, state: null, council: [],
+  lastCouncilId: 0, seenCouncil: new Set(), xFilter: "" };
+
+// ---------- utilities
+function store(key, value) { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch (e) { return null; } }
+let TOKEN = null;
+(function initToken() {
+  const m = location.hash.match(/token=([^&]+)/);
+  if (m) { TOKEN = decodeURIComponent(m[1]); store("cc.token", TOKEN); history.replaceState(null, "", location.pathname + location.search); }
+  else TOKEN = store("cc.token");
+})();
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "dataset") Object.assign(el.dataset, v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) { if (kid === null || kid === undefined || kid === false) continue; el.append(kid instanceof Node ? kid : String(kid)); }
+  return el;
+}
+const $ = (id) => document.getElementById(id);
+function clear(el) { while (el.firstChild) el.firstChild.remove(); return el; }
+function colorFor(id) { let n = 0; for (const c of String(id)) n = (n * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[n % PALETTE.length]; }
+function avatar(id, label) { return h("span", {class: "avatar", style: {background: colorFor(id)}, "aria-hidden": "true"}, (label || id || "?").slice(0, 1).toUpperCase()); }
+function ago(ts) {
+  if (!ts) return "—"; const s = Math.max(0, (Date.now() - Date.parse(ts)) / 1000);
+  if (s < 60) return Math.floor(s) + "s ago"; if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago"; return Math.floor(s / 86400) + "d ago";
+}
+const fmtInt = (n) => n === null || n === undefined ? "—" : Number(n).toLocaleString();
+const fmtCost = (n) => n === null || n === undefined ? "—" : "$" + Number(n).toFixed(n < 1 ? 3 : 2);
+const fmtMs = (n) => n === null || n === undefined ? "—" : (n >= 1000 ? (n / 1000).toFixed(1) + "s" : Math.round(n) + "ms");
+function toast(msg, bad) { const t = $("toast"); t.textContent = msg; t.className = "toast on" + (bad ? " bad" : ""); clearTimeout(toast.t); toast.t = setTimeout(() => t.className = "toast", 3500); }
+async function api(path, opts = {}) {
+  const headers = {"Accept": "application/json"};
+  if (TOKEN) headers["X-CC-Token"] = TOKEN;
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, {method: opts.method || (opts.body !== undefined ? "POST" : "GET"), headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined});
+  if (res.status === 401) { $("token-gate").classList.add("on"); throw new Error("access token required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
+}
+async function act(fn, okMsg) { try { const r = await fn(); if (okMsg) toast(okMsg); await refresh(); return r; } catch (e) { toast(e.message, true); } }
+function workChip(wt) { return h("span", {class: "chip " + wt}, wt); }
+function demoChip(row) { return row && row.demo ? h("span", {class: "chip demo", title: "Sample record from --demo"}, "demo") : null; }
+function laneById(id) { return (S.state?.lanes || []).find(l => l.id === id); }
+function memberById(id) { return (S.state?.council || []).find(m => m.id === id); }
+
+// ---------- drawer
+function openDrawer(title, build) {
+  $("drawer-title").textContent = title; const body = clear($("drawer-body")); build(body);
+  $("drawer").classList.add("on"); $("drawer").setAttribute("aria-hidden", "false"); $("backdrop").classList.add("on");
+  S.drawerRefresh = () => { if ($("drawer").classList.contains("on")) { const b = clear($("drawer-body")); build(b); } };
+}
+function closeDrawer() { $("drawer").classList.remove("on"); $("drawer").setAttribute("aria-hidden", "true"); $("backdrop").classList.remove("on"); S.drawerRefresh = null; }
+$("drawer-close").onclick = closeDrawer; $("backdrop").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+function kv(pairs) { return h("dl", {class: "kv"}, pairs.filter(Boolean).flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v ?? "—")])); }
+
+// ---------- header
+function renderHeader() {
+  const st = S.state; if (!st) return;
+  $("version").textContent = "v" + st.version;
+  const lanes = st.lanes, live = lanes.filter(l => l.health === "active").length;
+  const seated = st.council.filter(m => m.seat === "council");
+  $("headline").textContent = `${lanes.length} lanes · ${live} active · ${seated.length} seated`;
+  const pills = clear($("pills"));
+  for (const m of seated) pills.append(h("span", {class: "pill", title: m.availability_reason}, h("span", {class: "dot " + (m.available ? "ok" : "offline")}), m.display_name));
+  const rnd = lanes.filter(l => l.kind === "rnd");
+  if (rnd.length) pills.append(h("span", {class: "pill"}, h("span", {class: "dot " + (rnd.some(l => l.health === "active") ? "ok" : "")}), "R&D"));
+}
+
+// ---------- lanes tab
+function renderLaneList() {
+  const list = clear($("lane-list")); const lanes = S.state.lanes;
+  if (!S.lane || !laneById(S.lane)) S.lane = (lanes.find(l => l.kind === "production") || lanes[0] || {}).id;
+  for (const [title, own] of [["Owned lanes", "owned"], ["Observed lanes", "observed"]]) {
+    const group = lanes.filter(l => l.ownership === own);
+    list.append(h("div", {}, h("div", {class: "label", style: {padding: "0 10px 6px"}}, `${title} · ${group.length}`),
+      group.length ? group.map(laneButton) : h("div", {class: "faint", style: {padding: "4px 10px", fontSize: "12px"}}, "None")));
+  }
+  list.append(h("details", {style: {padding: "0 10px"}}, h("summary", {class: "label", style: {cursor: "pointer"}}, "Add lane"),
+    h("form", {style: {display: "grid", gap: "6px", marginTop: "8px"}, onsubmit: (e) => { e.preventDefault(); const f = new FormData(e.target);
+      act(() => api("/api/lanes", {body: Object.fromEntries(f)}), "Lane created").then(() => e.target.reset()); }},
+      h("input", {name: "id", placeholder: "lane-id", required: true, pattern: "[a-z0-9][a-z0-9_.\\-]*"}),
+      h("input", {name: "name", placeholder: "Display name"}),
+      h("select", {name: "ownership"}, h("option", {value: "owned"}, "Owned"), h("option", {value: "observed"}, "Observed")),
+      h("select", {name: "kind"}, h("option", {value: "production"}, "Production"), h("option", {value: "rnd"}, "R&D")),
+      h("button", {class: "btn small", type: "submit"}, "Create"))));
+}
+function mixbar(mix) {
+  const total = Object.values(mix || {}).reduce((a, b) => a + b, 0);
+  return h("span", {class: "mixbar", title: Object.entries(mix || {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "no outputs"},
+    total ? Object.entries(mix).map(([k, v]) => h("span", {style: {width: (100 * v / total) + "%", background: WT_COLOR[k]}})) : null);
+}
+function laneButton(l) {
+  const running = l.tasks.running, queued = l.tasks.queued, blocked = l.tasks.blocked;
+  return h("button", {class: "lane-btn", "aria-current": String(l.id === S.lane), onclick: () => { S.lane = l.id; S.workFilter = ""; renderLanes(); }},
+    h("span", {class: "dot " + l.health, title: l.health}), h("span", {class: "name"}, "#" + l.id),
+    h("span", {class: "chip"}, fmtInt(l.messages)),
+    h("span", {class: "meta"}, `${l.health.toUpperCase()} · ${running} run · ${queued} q${blocked ? ` · ${blocked} blocked` : ""} · ${ago(l.last_output_at)}`),
+    mixbar(l.work_mix));
+}
+let lanesGen = 0, boardGen = 0;
+async function renderLanes() {
+  if (!S.state) return; renderLaneList();
+  const gen = ++lanesGen;
+  const lane = laneById(S.lane); if (!lane) { clear($("feed")).append(h("div", {class: "empty"}, "No lanes yet.")); return; }
+  const head = clear($("feed-head"));
+  head.append(h("div", {}, h("h2", {}, "#" + lane.id), h("div", {class: "muted", style: {fontSize: "12px", display: "flex", gap: "6px", marginTop: "4px", flexWrap: "wrap"}},
+    h("span", {class: "chip"}, lane.ownership), h("span", {class: "chip"}, lane.kind === "rnd" ? "R&D" : "production"),
+    h("span", {class: "chip"}, h("span", {class: "dot " + lane.health}), lane.health), lane.description ? h("span", {}, lane.description) : null)),
+    h("div", {class: "stats"}, [["Outputs 24h", fmtInt(lane.outputs_24h)], ["Tokens 24h", fmtInt(lane.tokens_24h)], ["Cost 24h", fmtCost(lane.cost_24h)],
+      ["Avg latency", fmtMs(lane.avg_latency_ms)], ["Open tasks", fmtInt(lane.tasks.backlog + lane.tasks.queued + lane.tasks.running + lane.tasks.blocked)]]
+      .map(([k, v]) => h("div", {class: "stat"}, h("b", {}, v), h("span", {}, k)))));
+  const filters = clear($("feed-filters"));
+  filters.append(h("button", {"aria-pressed": String(!S.workFilter), onclick: () => { S.workFilter = ""; renderLanes(); }}, "ALL"));
+  for (const wt of WORK_TYPES) if ((lane.work_mix || {})[wt]) filters.append(h("button", {"aria-pressed": String(S.workFilter === wt), onclick: () => { S.workFilter = wt; renderLanes(); }}, `${wt.toUpperCase()} ${lane.work_mix[wt]}`));
+  filters.append(h("button", {onclick: () => { switchTab("mission"); S.boardLane = lane.id; renderMission(); }}, "OPEN ON BOARD →"));
+  let msgs;
+  try { msgs = await api(`/api/lanes/${encodeURIComponent(lane.id)}/messages?limit=150${S.workFilter ? "&work_type=" + S.workFilter : ""}`); } catch (e) { return; }
+  if (gen !== lanesGen) return; // a newer lane or filter was selected while this request was in flight
+  const feed = clear($("feed"));
+  if (!msgs.length) feed.append(h("div", {class: "empty"}, `No outputs in #${lane.id} yet. Agents report with POST /api/lanes/${lane.id}/messages or `, h("span", {class: "mono"}, `python -m hermes_ultra.command_center post ${lane.id} "title"`), "."));
+  for (const m of msgs.slice().reverse()) feed.append(messageCard(m));
+}
+function messageCard(m, showLane) {
+  return h("article", {class: "card clickable", tabindex: "0", onclick: () => openMessage(m), onkeydown: (e) => { if (e.key === "Enter") openMessage(m); }},
+    h("div", {class: "card-top"}, avatar(m.author), h("b", {}, m.author), m.model ? h("span", {class: "faint mono", style: {fontSize: "12px"}}, m.model) : null,
+      workChip(m.work_type), showLane ? h("span", {class: "chip"}, "#" + m.lane_id) : null, demoChip(m), h("span", {class: "faint", style: {marginLeft: "auto", fontSize: "12px"}}, ago(m.created_at))),
+    h("h3", {}, m.title), m.body ? h("p", {}, m.body.length > 420 ? m.body.slice(0, 420) + "…" : m.body) : null,
+    h("div", {class: "metrics"}, h("span", {}, "tokens " + fmtInt(m.tokens_in === null && m.tokens_out === null ? null : (m.tokens_in || 0) + (m.tokens_out || 0))),
+      h("span", {}, "cost " + fmtCost(m.cost_usd)), h("span", {}, "latency " + fmtMs(m.latency_ms)), m.task_id ? h("span", {}, "task " + m.task_id) : null, h("span", {style: {marginLeft: "auto"}}, "Dive deep →")));
+}
+function openMessage(m) {
+  openDrawer(m.title, (b) => {
+    b.append(kv([["Lane", "#" + m.lane_id], ["Author", m.author], ["Model", m.model], ["Work type", m.work_type], ["Posted", `${m.created_at} (${ago(m.created_at)})`],
+      ["Tokens in/out", `${fmtInt(m.tokens_in)} / ${fmtInt(m.tokens_out)}`], ["Cost", fmtCost(m.cost_usd)], ["Latency", fmtMs(m.latency_ms)],
+      m.task_id && ["Task", h("button", {class: "btn small", onclick: () => openTask(m.task_id)}, m.task_id + " →")], m.demo && ["Record", "DEMO sample"]]));
+    b.append(h("div", {class: "label"}, "Output"), h("pre", {class: "body"}, m.body || "(no body)"));
+  });
+}
+$("lane-composer").querySelector("select").append(...WORK_TYPES.map(w => h("option", {value: w, selected: w === "note"}, w)));
+$("lane-composer").addEventListener("submit", (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+  act(() => api(`/api/lanes/${encodeURIComponent(S.lane)}/messages`, {body: {...f, author: "operator"}}), "Posted").then(() => { e.target.title.value = ""; e.target.body.value = ""; }); });
+
+// ---------- council tab
+function renderRoster() {
+  const roster = clear($("roster")); const members = S.state.council;
+  const seated = members.filter(m => m.seat === "council"), bench = members.filter(m => m.seat === "bench");
+  roster.append(h("div", {}, h("div", {class: "label"}, `Council roster`), h("div", {class: "faint", style: {fontSize: "12px"}}, "Drag or use ↑↓ to set speaking order. Promote and demote take effect on the next message.")));
+  roster.append(h("div", {class: "label", style: {color: "var(--ok)"}}, `Lead orchestrators · ${seated.length}`));
+  const seatedBox = h("div", {style: {display: "grid", gap: "8px"}}, seated.map((m, i) => memberCard(m, i, seated)));
+  roster.append(seatedBox);
+  roster.append(h("div", {class: "label"}, `Bench · ${bench.length}`));
+  roster.append(h("div", {style: {display: "grid", gap: "8px"}}, bench.length ? bench.map((m, i) => memberCard(m, i, bench)) : h("div", {class: "faint"}, "Empty")));
+  roster.append(h("details", {}, h("summary", {class: "label", style: {cursor: "pointer"}}, "Add model to roster"), memberForm(null)));
+}
+function memberCard(m, i, group) {
+  const card = h("div", {class: "member", draggable: "true", dataset: {id: m.id}},
+    h("div", {class: "member-top"}, h("span", {class: "handle", title: "Drag to reorder"}, "⠿"), h("span", {class: "rank"}, "#" + m.rank), avatar(m.id, m.display_name),
+      h("b", {}, m.display_name), m.seat === "council" && i === 0 ? h("span", {class: "chip", style: {color: "var(--ok)"}}, "lead") : null,
+      h("span", {class: "dot " + (m.available ? "ok" : "offline"), title: m.availability_reason})),
+    h("div", {class: "sub", title: `${m.provider} · ${m.model}`}, `${m.provider} · ${m.model}${m.home_lane_id ? " · home #" + m.home_lane_id : ""}`),
+    h("div", {class: "reason"}, m.available ? "● " + m.availability_reason : "○ " + m.availability_reason),
+    h("div", {class: "actions"},
+      m.seat === "council" ? h("button", {class: "btn small danger", onclick: () => act(() => api(`/api/council/members/${m.id}/demote`, {body: {}}), `${m.display_name} demoted to lane`)}, "Demote to lane ↓")
+        : h("button", {class: "btn small", style: {color: "var(--ok)"}, onclick: () => act(() => api(`/api/council/members/${m.id}/promote`, {body: {}}), `${m.display_name} promoted to council`)}, "Promote to council ↑"),
+      h("button", {class: "btn small ghost", disabled: i === 0, "aria-label": "Move up", onclick: () => move(group, i, -1)}, "↑"),
+      h("button", {class: "btn small ghost", disabled: i === group.length - 1, "aria-label": "Move down", onclick: () => move(group, i, 1)}, "↓"),
+      h("button", {class: "btn small ghost", onclick: () => { const ex = card.querySelector("form"); if (ex) ex.remove(); else card.append(memberForm(m)); }}, "Configure")));
+  card.addEventListener("dragstart", (e) => { card.classList.add("dragging"); e.dataTransfer.setData("text/plain", m.id); S.dragSeat = m.seat; });
+  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  card.addEventListener("dragover", (e) => { if (S.dragSeat === m.seat) { e.preventDefault(); card.classList.add("drop-target"); } });
+  card.addEventListener("dragleave", () => card.classList.remove("drop-target"));
+  card.addEventListener("drop", (e) => { e.preventDefault(); card.classList.remove("drop-target"); const from = e.dataTransfer.getData("text/plain");
+    const order = group.map(x => x.id).filter(x => x !== from); order.splice(order.indexOf(m.id), 0, from);
+    act(() => api("/api/council/reorder", {body: {seat: m.seat, order}}), "Order updated"); });
+  return card;
+}
+function move(group, i, d) { const order = group.map(x => x.id); [order[i], order[i + d]] = [order[i + d], order[i]];
+  act(() => api("/api/council/reorder", {body: {seat: group[0].seat, order}}), "Order updated"); }
+function memberForm(m) {
+  const lanes = S.state.lanes;
+  const f = h("form", {style: {display: "grid", gap: "6px", marginTop: "6px"}, onsubmit: (e) => { e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target)); data.enabled = e.target.enabled.checked;
+    if (m) act(() => api(`/api/council/members/${m.id}`, {method: "PATCH", body: data}), "Saved");
+    else { delete data.enabled; act(() => api("/api/council/members", {body: data}), "Added to bench"); } }},
+    m ? null : h("input", {name: "id", placeholder: "id (e.g. grok)", required: true}),
+    m ? null : h("input", {name: "display_name", placeholder: "Display name", required: true}),
+    h("select", {name: "provider"}, ["anthropic", "openai", "openai_compatible", "manual"].map(p => h("option", {value: p, selected: m ? m.provider === p : p === "openai_compatible"}, p))),
+    h("input", {name: "model", placeholder: "model id", value: m?.model || "", required: true}),
+    h("input", {name: "base_url", placeholder: "base URL (OpenAI-compatible)", value: m?.base_url || ""}),
+    h("input", {name: "credential_env", placeholder: "credential env var NAME (not the key)", value: m?.credential_env || "", pattern: "[A-Z][A-Z0-9_]*"}),
+    h("select", {name: "home_lane_id"}, h("option", {value: ""}, "no home lane"), lanes.map(l => h("option", {value: l.id, selected: m?.home_lane_id === l.id}, "#" + l.id))),
+    h("input", {name: "effort", placeholder: "effort (Claude: low/medium/high/xhigh/max)", value: m?.effort || ""}),
+    h("label", {style: {fontSize: "12px", display: m ? "flex" : "none", gap: "6px", alignItems: "center"}}, h("input", {type: "checkbox", name: "enabled", checked: m ? !!m.enabled : true}), "enabled"),
+    h("button", {class: "btn small primary", type: "submit"}, m ? "Save" : "Add to bench"));
+  return f;
+}
+async function loadCouncil(full) {
+  let rows;
+  try { rows = await api(full || !S.lastCouncilId ? "/api/council/messages?limit=200" : `/api/council/messages?after=${S.lastCouncilId}`); } catch (e) { return; }
+  const firstLoad = !S.lastCouncilId;
+  for (const r of rows) { if (S.seenCouncil.has(r.id)) continue; S.seenCouncil.add(r.id); S.council.push(r); S.lastCouncilId = Math.max(S.lastCouncilId, r.id);
+    if (!firstLoad && r.speaker_kind === "model" && Voice.readAloud) Voice.speak(r); }
+  renderThread();
+}
+function renderThread() {
+  const thread = $("thread"); const atBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80; clear(thread);
+  if (!S.council.length) thread.append(h("div", {class: "empty"}, "The council is quiet. Ask a question, or hold the mic and talk."));
+  for (const r of S.council) {
+    const member = memberById(r.speaker_id);
+    const name = r.speaker_kind === "operator" ? "You" : r.speaker_kind === "system" ? "System" : (member?.display_name || r.speaker_id);
+    thread.append(h("div", {class: "msg " + r.speaker_kind},
+      r.speaker_kind === "system" ? h("span", {class: "avatar", style: {background: "var(--chip)", color: "var(--muted)"}}, "!") : avatar(r.speaker_kind === "operator" ? "operator" : r.speaker_id, name),
+      h("div", {class: "bubble"}, h("div", {class: "who"}, h("b", {}, name), r.model ? h("span", {class: "faint mono"}, r.model) : null,
+        r.status !== "ok" ? h("span", {class: "chip", style: {color: r.status === "offline" ? "var(--muted)" : "var(--bad)"}}, r.status) : null,
+        h("span", {class: "faint"}, ago(r.created_at)),
+        r.tokens_out !== null ? h("span", {class: "faint mono"}, `${fmtInt((r.tokens_in || 0) + (r.tokens_out || 0))} tok · ${fmtCost(r.cost_usd)} · ${fmtMs(r.latency_ms)}`) : null,
+        r.speaker_kind === "model" && Voice.ttsSupported ? h("button", {class: "btn small ghost", title: "Read aloud", onclick: () => Voice.speak(r, true)}, "🔊") : null),
+        h("div", {class: "text"}, r.body))));
+  }
+  if (atBottom || S.council.length < 3) thread.scrollTop = thread.scrollHeight;
+  const active = S.state?.active_rounds?.length;
+  $("typing").textContent = active ? (S.wholeCouncil ? "Council deliberating… members reply in rank order." : "Waiting on a reply…") : "";
+}
+async function sendCouncil(text) {
+  text = (text || "").trim(); if (!text) return;
+  const sent = await act(() => api("/api/council/messages", {body: {body: text, mode: S.wholeCouncil ? "council" : "lead"}}));
+  if (!sent) return false; // keep the draft so the operator can retry
+  const input = $("council-input");
+  if (input.value.trim() === text) input.value = ""; // leave anything typed while the request was pending
+  await loadCouncil();
+}
+S.wholeCouncil = store("cc.wholecouncil") === "1";
+$("wholecouncil").setAttribute("aria-pressed", String(S.wholeCouncil));
+$("wholecouncil").onclick = (e) => { S.wholeCouncil = !S.wholeCouncil; store("cc.wholecouncil", S.wholeCouncil ? "1" : "0"); e.target.setAttribute("aria-pressed", String(S.wholeCouncil)); };
+$("council-composer").addEventListener("submit", (e) => { e.preventDefault(); sendCouncil($("council-input").value); });
+$("council-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCouncil(e.target.value); } });
+
+// ---------- voice
+const Voice = {
+  Rec: window.SpeechRecognition || window.webkitSpeechRecognition, ttsSupported: "speechSynthesis" in window,
+  rec: null, listening: false, handsFree: false, autoSend: true, readAloud: store("cc.readaloud") === "1", buffer: "",
+  init() {
+    const support = [];
+    if (!this.Rec) { support.push("voice input not supported in this browser (use Chrome/Edge)"); $("mic").disabled = true; }
+    if (!window.isSecureContext) support.push("voice input needs https or localhost");
+    if (!this.ttsSupported) { support.push("speech output unavailable"); $("readaloud").disabled = true; }
+    $("voice-support").textContent = support.join(" · ");
+    $("readaloud").setAttribute("aria-pressed", String(this.readAloud));
+    $("mic").onclick = () => this.listening ? this.stop(true) : this.start();
+    $("handsfree").onclick = (e) => { this.handsFree = !this.handsFree; e.target.setAttribute("aria-pressed", String(this.handsFree)); if (this.handsFree && !this.listening) this.start(); if (!this.handsFree && this.listening) this.stop(false); };
+    $("autosend").onclick = (e) => { this.autoSend = !this.autoSend; e.target.setAttribute("aria-pressed", String(this.autoSend)); };
+    $("readaloud").onclick = (e) => { this.readAloud = !this.readAloud; store("cc.readaloud", this.readAloud ? "1" : "0"); e.target.setAttribute("aria-pressed", String(this.readAloud)); if (!this.readAloud) speechSynthesis.cancel(); };
+    document.addEventListener("keydown", (e) => { if (e.ctrlKey && (e.key === "m" || e.key === "M")) { e.preventDefault(); if (S.tab !== "council") switchTab("council"); $("mic").click(); } });
+  },
+  start() {
+    if (!this.Rec) return; if (this.ttsSupported) speechSynthesis.cancel();
+    const rec = new this.Rec(); rec.lang = navigator.language || "en-US"; rec.interimResults = true; rec.continuous = true;
+    this.buffer = ""; this.rec = rec;
+    rec.onresult = (ev) => { let interim = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i];
+        if (r.isFinal) { const said = r[0].transcript.trim(); if (this.handsFree && this.autoSend) sendCouncil(said); else { this.buffer = (this.buffer + " " + said).trim(); $("council-input").value = this.buffer; } }
+        else interim += r[0].transcript; }
+      $("interim").textContent = interim; };
+    rec.onerror = (ev) => { if (ev.error !== "no-speech" && ev.error !== "aborted") toast("Voice: " + ev.error, true); };
+    rec.onend = () => { if (this.listening && this.handsFree) { try { rec.start(); } catch (e) {} return; } this.setUi(false); };
+    try { rec.start(); this.listening = true; this.setUi(true); } catch (e) { toast("Voice: " + e.message, true); }
+  },
+  stop(send) { this.listening = false; if (this.rec) this.rec.stop(); this.setUi(false);
+    setTimeout(() => { if (send && this.autoSend && $("council-input").value.trim()) sendCouncil($("council-input").value); }, 350); },
+  setUi(on) { $("mic").classList.toggle("on", on); $("mic").setAttribute("aria-label", on ? "Stop voice input" : "Start voice input"); $("wave").classList.toggle("on", on); if (!on) $("interim").textContent = ""; },
+  voiceFor(id) { const voices = speechSynthesis.getVoices().filter(v => v.lang && v.lang.startsWith((navigator.language || "en").slice(0, 2)));
+    if (!voices.length) return null; let n = 0; for (const c of String(id)) n = (n * 31 + c.charCodeAt(0)) >>> 0; return voices[n % voices.length]; },
+  speak(r, now) { if (!this.ttsSupported) return; if (now) speechSynthesis.cancel(); const name = memberById(r.speaker_id)?.display_name || r.speaker_id;
+    const u = new SpeechSynthesisUtterance(`${name}. ${r.body}`); const v = this.voiceFor(r.speaker_id); if (v) u.voice = v; u.rate = 1.05; speechSynthesis.speak(u); },
+};
+
+// ---------- mission control
+function renderMission() {
+  if (!S.state) return; const st = S.state, sm = st.summary;
+  const kpis = clear($("kpis"));
+  const tiles = [["running", "Running", sm.tasks.running], ["queued", "In queue", sm.tasks.queued], ["blocked", "Blocked", sm.tasks.blocked],
+    ["failed", "Failed", sm.tasks.failed], ["", "Backlog", sm.tasks.backlog], ["", "Done 24h", sm.done_24h], ["", "Outputs 24h", sm.outputs_24h],
+    ["", "Tokens 24h", fmtInt(sm.tokens_24h)], ["", "Cost 24h", fmtCost(sm.cost_24h)]];
+  for (const [cls, label, value] of tiles) kpis.append(h("div", {class: "panel kpi " + cls, role: cls ? "button" : null, tabindex: cls ? "0" : null, style: {cursor: cls ? "pointer" : "default"},
+    onclick: cls ? () => { document.querySelector(`.col[data-state="${cls}"]`)?.scrollIntoView({behavior: "smooth", block: "nearest", inline: "center"}); } : null}, h("b", {}, value), h("span", {}, label)));
+  const table = clear($("matrix"));
+  table.append(h("thead", {}, h("tr", {}, ["Lane", "Own", "Health", ...TASK_STATES.map(s => STATE_LABEL[s])].map((c, i) => h("th", {class: i > 2 ? "num" : ""}, c)),
+    ["Outputs 24h", "Tokens 24h", "Cost 24h", "Avg latency", "Last output", "Work mix"].map((c, i) => h("th", {class: "granular" + (i < 4 ? " num" : "")}, c)))));
+  const tbody = h("tbody");
+  for (const l of st.lanes) tbody.append(h("tr", {"aria-selected": String(S.boardLane === l.id), onclick: () => { S.boardLane = S.boardLane === l.id ? "" : l.id; renderMission(); }},
+    h("td", {class: "mono"}, "#" + l.id), h("td", {}, l.ownership), h("td", {}, h("span", {style: {display: "inline-flex", gap: "6px", alignItems: "center"}}, h("span", {class: "dot " + l.health}), l.health)),
+    TASK_STATES.map(s => h("td", {class: "num", style: {color: l.tasks[s] && s === "blocked" ? "var(--warn)" : l.tasks[s] && s === "failed" ? "var(--bad)" : null}}, l.tasks[s])),
+    h("td", {class: "num granular"}, fmtInt(l.outputs_24h)), h("td", {class: "num granular"}, fmtInt(l.tokens_24h)), h("td", {class: "num granular"}, fmtCost(l.cost_24h)),
+    h("td", {class: "num granular"}, fmtMs(l.avg_latency_ms)), h("td", {class: "granular"}, ago(l.last_output_at)), h("td", {class: "granular", style: {minWidth: "120px"}}, mixbar(l.work_mix))));
+  table.append(tbody);
+  $("matrix-panel").classList.toggle("show-granular", S.granular);
+  $("board-filter").textContent = S.boardLane ? "#" + S.boardLane + " ✕" : "all lanes";
+  $("board-filter").style.cursor = S.boardLane ? "pointer" : "default";
+  $("board-filter").onclick = () => { S.boardLane = ""; renderMission(); };
+  const laneSel = $("task-form").lane_id; const prev = laneSel.value; clear(laneSel).append(...st.lanes.map(l => h("option", {value: l.id, selected: (S.boardLane || prev) === l.id}, "#" + l.id)));
+  renderBoard();
+}
+async function renderBoard() {
+  const gen = ++boardGen;
+  let tasks; try { tasks = await api("/api/tasks" + (S.boardLane ? "?lane=" + encodeURIComponent(S.boardLane) : "")); } catch (e) { return; }
+  if (gen !== boardGen) return;
+  const board = clear($("board"));
+  for (const state of TASK_STATES) {
+    const items = tasks.filter(t => t.state === state);
+    board.append(h("div", {class: "col", dataset: {state}}, h("div", {class: "col-head"}, h("span", {class: "dot " + state}), h("span", {class: "label"}, STATE_LABEL[state]), h("span", {class: "count"}, items.length)),
+      items.length ? items.map(taskCard) : h("div", {class: "faint", style: {fontSize: "12px", padding: "6px"}}, "—")));
+  }
+}
+function taskCard(t) {
+  return h("div", {class: "tcard", tabindex: "0", onclick: () => openTask(t.id), onkeydown: (e) => { if (e.key === "Enter") openTask(t.id); }},
+    h("b", {}, t.title), h("div", {class: "row"}, h("span", {class: "chip"}, "P" + t.priority), h("span", {class: "mono"}, "#" + t.lane_id), t.assignee ? h("span", {}, "@" + t.assignee) : null, demoChip(t), h("span", {style: {marginLeft: "auto"}}, ago(t.updated_at))),
+    t.progress !== null && t.state !== "done" ? h("div", {class: "progress", title: Math.round(t.progress * 100) + "%"}, h("span", {style: {width: (t.progress * 100) + "%"}})) : null,
+    t.state === "blocked" && t.blocker ? h("div", {class: "note-line warn"}, "⚠ " + t.blocker) : null,
+    t.state === "done" && t.evidence ? h("div", {class: "note-line ok"}, "✓ " + t.evidence) : null);
+}
+async function openTask(id) {
+  let t; try { t = await api("/api/tasks/" + encodeURIComponent(id)); } catch (e) { return toast(e.message, true); }
+  openDrawer(t.title, (b) => {
+    b.append(kv([["Task", h("span", {class: "mono"}, t.id)], ["Lane", h("button", {class: "btn small", onclick: () => { closeDrawer(); S.lane = t.lane_id; switchTab("lanes"); }}, "#" + t.lane_id + " channel →")],
+      ["State", h("span", {style: {display: "inline-flex", gap: "6px", alignItems: "center"}}, h("span", {class: "dot " + t.state}), STATE_LABEL[t.state])], ["Priority", "P" + t.priority],
+      ["Assignee", t.assignee], ["Progress", t.progress === null ? "—" : Math.round(t.progress * 100) + "%"], ["Created", t.created_at], ["Started", t.started_at], ["Finished", t.finished_at],
+      t.blocker && ["Blocker", h("span", {style: {color: "var(--warn)"}}, t.blocker)], t.evidence && ["Evidence", h("span", {style: {color: "var(--ok)"}}, t.evidence)], t.demo && ["Record", "DEMO sample"]]));
+    if (t.detail) b.append(h("pre", {class: "body"}, t.detail));
+    const reason = h("input", {placeholder: "note / blocker / evidence", style: {flex: "1"}, "aria-label": "Transition note"});
+    b.append(h("div", {}, h("div", {class: "label", style: {marginBottom: "6px"}}, "Move to"), h("div", {class: "inline-form"}, reason,
+      TRANSITIONS[t.state].map(to => h("button", {class: "btn small", onclick: async () => {
+        const v = reason.value.trim(); const body = {to, note: v};
+        if (to === "blocked") body.blocker = v; if (to === "done") body.evidence = v;
+        if ((to === "blocked" || to === "done" || to === "failed") && !v) { reason.focus(); return toast(to === "done" ? "Done needs evidence: test output, artifact path, URL or commit" : to === "blocked" ? "Describe the blocker" : "Describe the failure", true); }
+        await act(() => api(`/api/tasks/${encodeURIComponent(t.id)}/transition`, {body}), `${t.id} → ${to}`); openTask(t.id); }}, STATE_LABEL[to]))),
+      h("div", {class: "faint", style: {fontSize: "12px", marginTop: "4px"}}, "Done requires evidence. Blocked requires a blocker. Failed requires a note.")));
+    b.append(h("div", {class: "label"}, "Timeline"), h("div", {class: "timeline"}, t.events.map(e => h("div", {}, h("time", {}, `${e.created_at} · ${e.actor}`),
+      `${e.from_state ? STATE_LABEL[e.from_state] + " → " : ""}${STATE_LABEL[e.to_state]}${e.note && e.note !== "created" ? " — " + e.note : ""}`))));
+    b.append(h("div", {class: "label"}, `Linked lane outputs · ${t.messages.length}`), t.messages.length ? h("div", {style: {display: "grid", gap: "8px"}}, t.messages.map(m => messageCard(m, true))) : h("div", {class: "faint"}, "None reported against this task."));
+  });
+}
+$("granular").onclick = (e) => { S.granular = !S.granular; e.target.setAttribute("aria-pressed", String(S.granular)); renderMission(); };
+$("task-form").addEventListener("submit", (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.priority = Number(f.priority);
+  act(() => api("/api/tasks", {body: f}), "Task added").then(() => { e.target.title.value = ""; }); });
+
+// ---------- R&D
+async function renderRnd() {
+  if (!S.state) return; const rndLanes = S.state.lanes.filter(l => l.kind === "rnd");
+  $("rnd-lanes").textContent = rndLanes.map(l => "#" + l.id).join(" · ") || "Mark a lane as R&D to see it here";
+  for (const sel of [$("x-form").lane_id]) { const prev = sel.value; clear(sel).append(...rndLanes.map(l => h("option", {value: l.id, selected: prev === l.id}, "#" + l.id))); }
+  let feeds = [], experiments = [], tasks = [];
+  try {
+    feeds = (await Promise.all(rndLanes.map(l => api(`/api/lanes/${encodeURIComponent(l.id)}/messages?limit=40`)))).flat();
+    experiments = (await api("/api/experiments")).filter(x => rndLanes.some(l => l.id === x.lane_id));
+    tasks = (await api("/api/tasks?state=running")).filter(t => rndLanes.some(l => l.id === t.lane_id));
+  } catch (e) { return; }
+  feeds.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const hermes = rndLanes.find(l => l.id.includes("hermes")) || rndLanes[0];
+  const now = clear($("now"));
+  const hermesTask = tasks.find(t => hermes && t.lane_id === hermes.id);
+  const hermesX = experiments.find(x => hermes && x.lane_id === hermes.id && x.status === "running");
+  const hermesOut = feeds.find(m => hermes && m.lane_id === hermes.id);
+  now.append(h("div", {class: "panel"}, h("span", {class: "label"}, "Hermes is doing"), hermesTask ? h("b", {class: "clickable", style: {cursor: "pointer"}, onclick: () => openTask(hermesTask.id)}, hermesTask.title)
+    : h("span", {class: "muted"}, "No running task in " + (hermes ? "#" + hermes.id : "an R&D lane")),
+    hermesTask && hermesTask.progress !== null ? h("div", {class: "progress"}, h("span", {style: {width: hermesTask.progress * 100 + "%"}})) : null,
+    hermesTask ? h("span", {class: "faint", style: {fontSize: "12px"}}, `started ${ago(hermesTask.started_at)} · @${hermesTask.assignee || "unassigned"}`) : null));
+  now.append(h("div", {class: "panel"}, h("span", {class: "label"}, "Live hypothesis"), hermesX ? h("b", {style: {cursor: "pointer"}, onclick: () => openExperiment(hermesX.id)}, hermesX.title) : h("span", {class: "muted"}, "No running experiment"),
+    hermesX ? h("span", {class: "muted", style: {fontSize: "12.5px"}}, hermesX.hypothesis) : null));
+  now.append(h("div", {class: "panel"}, h("span", {class: "label"}, "Latest output"), hermesOut ? h("b", {style: {cursor: "pointer"}, onclick: () => openMessage(hermesOut)}, hermesOut.title) : h("span", {class: "muted"}, "Nothing reported yet"),
+    hermesOut ? h("span", {class: "faint", style: {fontSize: "12px"}}, `${hermesOut.author} · ${ago(hermesOut.created_at)}`) : null));
+  const counts = {running: 0, planned: 0, concluded: 0, abandoned: 0}; experiments.forEach(x => counts[x.status]++);
+  now.append(h("div", {class: "panel"}, h("span", {class: "label"}, "Experiments"), h("div", {class: "stats", style: {marginLeft: 0}}, Object.entries(counts).map(([k, v]) => h("div", {class: "stat"}, h("b", {}, v), h("span", {}, k)))),
+    h("span", {class: "faint", style: {fontSize: "12px"}}, `${tasks.length} running R&D task${tasks.length === 1 ? "" : "s"}`)));
+  const feed = clear($("rnd-feed"));
+  if (!feeds.length) feed.append(h("div", {class: "empty panel"}, "No R&D outputs yet."));
+  feeds.slice(0, 40).forEach(m => feed.append(messageCard(m, true)));
+  const grid = clear($("xgrid")); const shown = experiments.filter(x => !S.xFilter || x.status === S.xFilter);
+  if (!shown.length) grid.append(h("div", {class: "empty panel"}, "No experiments."));
+  for (const x of shown) grid.append(h("div", {class: "card clickable", tabindex: "0", onclick: () => openExperiment(x.id), onkeydown: (e) => { if (e.key === "Enter") openExperiment(x.id); }},
+    h("div", {class: "card-top"}, h("span", {class: "dot " + x.status}), h("span", {class: "chip"}, x.kind.replace("_", " ")), h("span", {class: "chip"}, "#" + x.lane_id), demoChip(x)),
+    h("h3", {}, x.title), h("p", {}, (x.result_summary || x.hypothesis || "").slice(0, 200)),
+    h("div", {class: "metrics"}, Object.entries(x.metrics || {}).slice(0, 4).map(([k, v]) => h("span", {}, `${k} ${v}`)), h("span", {style: {marginLeft: "auto"}}, ago(x.updated_at)))));
+}
+async function openExperiment(id) {
+  let x; try { x = await api("/api/experiments/" + encodeURIComponent(id)); } catch (e) { return toast(e.message, true); }
+  openDrawer(x.title, (b) => {
+    b.append(kv([["Experiment", h("span", {class: "mono"}, x.id)], ["Lane", "#" + x.lane_id], ["Kind", x.kind], ["Status", h("span", {style: {display: "inline-flex", gap: "6px", alignItems: "center"}}, h("span", {class: "dot " + x.status}), x.status)],
+      ["Updated", `${x.updated_at} (${ago(x.updated_at)})`], x.demo && ["Record", "DEMO sample"]]));
+    b.append(h("div", {class: "label"}, "Hypothesis"), h("pre", {class: "body"}, x.hypothesis || "—"));
+    if (x.result_summary) b.append(h("div", {class: "label"}, "Result"), h("pre", {class: "body"}, x.result_summary));
+    const m = Object.entries(x.metrics || {});
+    if (m.length) b.append(h("div", {class: "label"}, "Metrics"), h("table", {}, h("tbody", {}, m.map(([k, v]) => h("tr", {}, h("td", {class: "mono"}, k), h("td", {class: "num"}, typeof v === "object" ? JSON.stringify(v) : v))))));
+    const summary = h("input", {placeholder: "result summary (required to conclude)", value: x.result_summary || "", style: {flex: "1"}});
+    b.append(h("div", {class: "inline-form"}, summary, ["running", "concluded", "abandoned", "planned"].filter(s => s !== x.status).map(s =>
+      h("button", {class: "btn small", onclick: async () => { await act(() => api("/api/experiments/" + x.id, {method: "PATCH", body: {status: s, result_summary: summary.value}}), `${x.id} → ${s}`); openExperiment(x.id); }}, s))));
+    const logIn = h("input", {placeholder: "log an observation", style: {flex: "1"}}); const level = h("select", {}, ["info", "warn", "error", "result"].map(l => h("option", {}, l)));
+    b.append(h("div", {class: "label"}, `Run log · ${x.events.length}`), h("div", {class: "timeline"}, x.events.map(e => h("div", {style: {color: e.level === "error" ? "var(--bad)" : e.level === "warn" ? "var(--warn)" : e.level === "result" ? "var(--ok)" : null}},
+      h("time", {}, `${e.created_at} · ${e.level}`), e.message))),
+      h("form", {class: "inline-form", onsubmit: async (e) => { e.preventDefault(); if (!logIn.value.trim()) return; await act(() => api(`/api/experiments/${x.id}/events`, {body: {message: logIn.value, level: level.value}})); openExperiment(x.id); }}, logIn, level, h("button", {class: "btn small", type: "submit"}, "Log")));
+  });
+}
+$("x-filter").onchange = (e) => { S.xFilter = e.target.value; renderRnd(); };
+$("x-form").addEventListener("submit", (e) => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+  act(() => api("/api/experiments", {body: f}), "Experiment created").then(() => e.target.reset()); });
+
+// ---------- tabs, refresh, stream
+function switchTab(tab) {
+  S.tab = tab; store("cc.tab", tab);
+  document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  document.querySelectorAll("section.view").forEach(s => s.classList.toggle("on", s.id === "view-" + tab));
+  renderTab();
+}
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+function renderTab() {
+  if (!S.state) return; renderHeader();
+  if (S.tab === "lanes") renderLanes();
+  else if (S.tab === "council") { if (!editingRoster()) renderRoster(); renderThread(); } else if (S.tab === "mission") renderMission(); else renderRnd();
+}
+function editingRoster() {
+  const el = document.activeElement;
+  return !!el && $("roster").contains(el) && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName);
+}
+async function refresh() {
+  try { S.state = await api("/api/state"); } catch (e) { return; }
+  renderTab();
+}
+let pending = null, councilDirty = false;
+function scheduleRefresh() { if (pending) return; pending = setTimeout(async () => { pending = null; await refresh(); if (councilDirty) { councilDirty = false; await loadCouncil(); } }, 250); }
+function connect() {
+  const url = "/api/stream?after=" + (S.state?.summary?.seq || 0) + (TOKEN ? "&token=" + encodeURIComponent(TOKEN) : "");
+  const es = new EventSource(url);
+  es.addEventListener("open", () => $("pulse").classList.add("live"));
+  es.addEventListener("activity", (ev) => { const row = JSON.parse(ev.data); if (row.topic === "council.message") councilDirty = true; scheduleRefresh(); });
+  es.addEventListener("error", () => { $("pulse").classList.remove("live"); });
+}
+$("theme").onclick = () => { const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  const next = cur === "light" ? "dark" : "light"; document.documentElement.dataset.theme = next; store("cc.theme", next); };
+$("token-form").addEventListener("submit", (e) => { e.preventDefault(); TOKEN = e.target.token.value; store("cc.token", TOKEN); $("token-gate").classList.remove("on"); boot(); });
+async function boot() {
+  const theme = store("cc.theme"); if (theme) document.documentElement.dataset.theme = theme;
+  await refresh(); if (!S.state) return;
+  await loadCouncil(true);
+  switchTab(store("cc.tab") || "lanes");
+  connect();
+  setInterval(() => { if (S.tab !== "council") renderTab(); }, 30000); // keep "ago" labels honest
+}
+Voice.init();
+boot();
+</script>
+</body>
+</html>
