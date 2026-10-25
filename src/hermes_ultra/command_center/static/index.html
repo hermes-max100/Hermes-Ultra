@@ -266,7 +266,7 @@ pre.body { white-space: pre-wrap; word-break: break-word; background: var(--pane
       <div class="thread-wrap">
         <div class="feed-head">
           <h2>Orchestrator Council</h2>
-          <span class="muted" style="font-size:12px">Seated members answer in rank order. <span class="mono">@name</span> addresses specific members, <span class="mono">#lane-id</span> pulls that lane's outputs in.</span>
+          <span class="muted" style="font-size:12px">The lead answers by default. <b>Whole council</b> or <span class="mono">@council</span> brings in every seat in rank order. <span class="mono">@name</span> asks one member, including the bench. <span class="mono">#lane-id</span> pulls that lane's outputs in.</span>
         </div>
         <div class="thread scroll" id="thread"></div>
         <div>
@@ -274,13 +274,14 @@ pre.body { white-space: pre-wrap; word-break: break-word; background: var(--pane
           <form class="council-composer" id="council-composer">
             <div class="row">
               <button class="mic" type="button" id="mic" title="Talk (Ctrl+M)" aria-label="Start voice input">🎙</button>
-              <textarea name="body" id="council-input" placeholder="Message the council — @claude @chatgpt @meta-muse, #lane-build…" aria-label="Council message"></textarea>
+              <textarea name="body" id="council-input" placeholder="Ask the lead — or @council, @chatgpt, #lane-build…" aria-label="Council message"></textarea>
               <button class="btn primary" type="submit">Send</button>
             </div>
             <div class="voicebar">
               <span class="wave" id="wave"><i></i><i></i><i></i><i></i><i></i></span>
               <span class="interim" id="interim"></span>
               <span style="margin-left:auto"></span>
+              <button class="btn small" type="button" id="wholecouncil" aria-pressed="false" title="Every seated member answers, in rank order">Whole council</button>
               <button class="btn small" type="button" id="handsfree" aria-pressed="false" title="Keep listening and send each finished sentence">Hands-free</button>
               <button class="btn small" type="button" id="autosend" aria-pressed="true" title="Send when you stop talking">Auto-send</button>
               <button class="btn small" type="button" id="readaloud" aria-pressed="false" title="Speak council replies aloud">Read replies</button>
@@ -601,14 +602,17 @@ function renderThread() {
   }
   if (atBottom || S.council.length < 3) thread.scrollTop = thread.scrollHeight;
   const active = S.state?.active_rounds?.length;
-  $("typing").textContent = active ? "Council deliberating… members reply in rank order." : "";
+  $("typing").textContent = active ? (S.wholeCouncil ? "Council deliberating… members reply in rank order." : "Waiting on a reply…") : "";
 }
 async function sendCouncil(text) {
   text = (text || "").trim(); if (!text) return;
-  await act(() => api("/api/council/messages", {body: {body: text}}));
+  await act(() => api("/api/council/messages", {body: {body: text, mode: S.wholeCouncil ? "council" : "lead"}}));
   $("council-input").value = "";
   await loadCouncil();
 }
+S.wholeCouncil = store("cc.wholecouncil") === "1";
+$("wholecouncil").setAttribute("aria-pressed", String(S.wholeCouncil));
+$("wholecouncil").onclick = (e) => { S.wholeCouncil = !S.wholeCouncil; store("cc.wholecouncil", S.wholeCouncil ? "1" : "0"); e.target.setAttribute("aria-pressed", String(S.wholeCouncil)); };
 $("council-composer").addEventListener("submit", (e) => { e.preventDefault(); sendCouncil($("council-input").value); });
 $("council-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCouncil(e.target.value); } });
 

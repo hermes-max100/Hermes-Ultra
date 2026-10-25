@@ -171,7 +171,7 @@ class CommandCenterApp:
             return self.store.post_council_message(
                 round_id=body.get("round_id") or "external", speaker_kind="model", speaker_id=member["id"],
                 body=body.get("body"), model=body.get("model") or member["model"])
-        result = self.council.submit(body.get("body"), speaker_id=c.actor)
+        result = self.council.submit(body.get("body"), speaker_id=c.actor, mode=body.get("mode") or "lead")
         return result, HTTPStatus.ACCEPTED
 
     def state(self) -> dict[str, Any]:

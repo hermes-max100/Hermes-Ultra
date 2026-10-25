@@ -290,7 +290,7 @@ Economic orchestration additionally defines explicit `AUTHORITY_REQUIRED`, `INSU
 
 ## Lane Command Center
 
-Operator console with one channel per lane (owned and observed), an orchestrator council (Claude, ChatGPT, Meta Muse; promote or demote any model) with voice in and out, Mission Control (running / queued / blocked / backlog, with drill-down to task timelines and evidence) and an Arena/Hermes R&D view. It ships with the standard library and one HTML page.
+Operator console with one channel per lane (owned and observed), an orchestrator council (Claude, ChatGPT, Meta Muse; the lead answers by default and the whole council on request; promote or demote any model) with voice in and out, Mission Control (running / queued / blocked / backlog, with drill-down to task timelines and evidence) and an Arena/Hermes R&D view. It ships with the standard library and one HTML page.
 
 ```bash
 python -m hermes_ultra.command_center serve --demo   # http://127.0.0.1:4710

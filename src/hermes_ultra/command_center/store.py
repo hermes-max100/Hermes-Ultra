@@ -603,6 +603,8 @@ class CommandCenterStore:
         actor: str = "operator",
     ) -> dict[str, Any]:
         member_id = _check_id(member_id, "member id")
+        if member_id in ("council", "all", "operator", "system") or member_id.startswith("lane-"):
+            raise StoreError(f"member id {member_id!r} is reserved")
         seat = _check_choice(seat, SEATS, "seat")
         if home_lane_id:
             home_lane_id = self.get_lane(home_lane_id)["id"]

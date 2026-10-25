@@ -194,7 +194,7 @@ class CouncilTests(unittest.TestCase):
 
     def test_members_reply_in_rank_order_and_see_earlier_replies(self):
         provider = FakeProvider({"claude": "Ship the bus first.", "chatgpt": "Agree with Claude.", "meta-muse": "Draft copy now."})
-        result = self.council(provider).submit("What next?", run_async=False)
+        result = self.council(provider).submit("What next?", mode="council", run_async=False)
         self.assertEqual(result["responders"], ["claude", "chatgpt", "meta-muse"])
         self.assertEqual([c[0] for c in provider.calls], ["claude", "chatgpt", "meta-muse"])
         self.assertIn("Claude: Ship the bus first.", provider.calls[1][2])
@@ -211,6 +211,33 @@ class CouncilTests(unittest.TestCase):
         self.assertEqual(result["responders"], ["hermes"])  # bench members can be invited ad hoc
         self.assertEqual(result["lanes"], ["lane-build"])
         self.assertIn("[CODE] gpt: isolated bus merged", provider.calls[0][2])
+
+    def test_default_round_is_answered_by_the_lead_only(self):
+        provider = FakeProvider()
+        result = self.council(provider).submit("What next?", run_async=False)
+        self.assertEqual((result["responders"], result["mode"]), (["claude"], "lead"))
+        self.assertEqual([c[0] for c in provider.calls], ["claude"])
+
+    def test_lead_falls_back_to_next_available_seat(self):
+        provider = FakeProvider()
+        provider.availability = lambda m: Availability(m["id"] != "claude", "no key" if m["id"] == "claude" else "ready")
+        result = self.council(provider).submit("What next?", run_async=False)
+        self.assertEqual(result["responders"], ["chatgpt"])
+        self.assertEqual([r["speaker_id"] for r in self.store.council_messages()], ["operator", "chatgpt"])
+
+    def test_council_mention_calls_every_seat_plus_invited_bench(self):
+        council = self.council(FakeProvider())
+        self.assertEqual(council.submit("@council weigh in", run_async=False)["responders"], ["claude", "chatgpt", "meta-muse"])
+        result = council.submit("@all and @hermes too", run_async=False)
+        self.assertEqual((result["responders"], result["mode"]), (["claude", "chatgpt", "meta-muse", "hermes"], "council"))
+        self.assertEqual(council.submit("@chatgpt only", run_async=False)["mode"], "direct")
+        with self.assertRaises(StoreError):
+            council.submit("hi", mode="everyone", run_async=False)
+
+    def test_reserved_member_ids_are_rejected(self):
+        for reserved in ("council", "all", "lane-x"):
+            with self.assertRaises(StoreError):
+                self.store.add_member(reserved, display_name="X", provider="manual", model="m")
 
     def test_parse_mentions(self):
         members, lanes = parse_mentions("@Claude and @meta-muse, see @lane-ops and #lane-build. email a@b.com", {"claude", "meta-muse"})
@@ -230,7 +257,7 @@ class CouncilTests(unittest.TestCase):
             "claude": RuntimeError("boom"),
             "chatgpt": ProviderReply("refused", "Declined", "gpt-5"),
         })
-        self.council(provider).submit("go", run_async=False)
+        self.council(provider).submit("go", mode="council", run_async=False)
         rows = {r["speaker_id"]: r for r in self.store.council_messages()[1:]}
         self.assertEqual(rows["claude"]["status"], "error")
         self.assertEqual(rows["chatgpt"]["status"], "refused")
@@ -418,9 +445,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/council/members/claude/demote", {})[1]["seat"], "bench")
         status, accepted = self.request("POST", "/api/council/messages", {"body": "status?"})
         self.assertEqual(status, 202)
+        self.assertEqual(accepted["responders"], ["chatgpt"])  # lead only by default
+        status, accepted = self.request("POST", "/api/council/messages", {"body": "debate it", "mode": "council"})
         self.assertEqual(accepted["responders"], ["chatgpt", "meta-muse", "gemini"])
         rows = self.request("GET", "/api/council/messages")[1]
-        self.assertEqual([r["speaker_id"] for r in rows], ["operator", "chatgpt", "meta-muse", "gemini"])
+        self.assertEqual([r["speaker_id"] for r in rows], ["operator", "chatgpt", "operator", "chatgpt", "meta-muse", "gemini"])
+        self.assertEqual(self.request("POST", "/api/council/messages", {"body": "x", "mode": "loud"})[0], 400)
         self.assertEqual(self.request("GET", "/api/nope")[0], 404)
 
     def test_keep_alive_connection_survives_bodies_handlers_ignore(self):

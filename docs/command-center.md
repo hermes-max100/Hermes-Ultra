@@ -22,14 +22,15 @@ Remote access (phone, tailnet): set `HERMES_CC_TOKEN`, bind `--host 0.0.0.0`, an
 | Tab | What it answers | Drill path |
 |---|---|---|
 | **Lanes** | What each lane is producing | Owned/observed lane list → isolated feed with a filter per work type (`code`, `research`, `draft`, `test`, `plan`, `ops`, `eval`) → output drawer with model, tokens, cost, latency, linked task |
-| **Orchestrators** | One room with your lead models | Council thread on the left; roster on the right with promote/demote, drag or ↑↓ for speaking order, and per-model configuration |
+| **Orchestrators** | One room with your lead models | Lead answers by default, Whole council for a debate. Council thread on the left; roster on the right with promote/demote, drag or ↑↓ for speaking order, and per-model configuration |
 | **Mission Control** | What's running, not running, queued, in backlog, blocked | KPI tiles → lane health matrix (Granular view adds outputs, tokens, cost, latency, last output, work mix) → click a lane to filter the board → task drawer with timeline, evidence, linked outputs and state moves |
 | **Arena / Hermes** | What Hermes is doing right now | "Hermes is doing" / live hypothesis / latest output → R&D feed → experiment drawer with hypothesis, metrics, result and run log |
 
 ### Council rules
 
-- Seated members answer in rank order, one after another, so each sees what the earlier ones said.
-- `@claude` / `@hermes` addresses specific members, including bench models invited for one question. `#lane-build` (or `@lane-build`) attaches that lane's latest outputs as context.
+- **The lead answers by default.** The lead is the top-ranked seated model that can run; if #1 is offline, #2 answers. This keeps everyday questions to one model's cost and one model's wait.
+- **Whole council** (the toggle, which stays set) or `@council` / `@all` brings in every seated member in rank order. Each sees what the earlier ones said, so use it to get a debate. API: `"mode": "council"`.
+- `@claude` / `@hermes` asks specific members, including bench models invited for one question. Replies are asked to stay under about 150 words unless you ask for depth. `#lane-build` (or `@lane-build`) attaches that lane's latest outputs as context.
 - A member that can't run (missing key, SDK not installed, disabled) produces an **offline notice**, never an invented reply. Errors and refusals are labelled the same way and left out of later transcripts.
 - At least one member must stay seated. Promotions and demotions are logged in the activity feed.
 - Keys stay in the server environment. The roster stores only the environment variable's *name*, and the store rejects anything that looks like a key.
