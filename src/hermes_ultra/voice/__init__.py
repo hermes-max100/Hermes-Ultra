@@ -28,6 +28,18 @@ from .model import (
     VoicePolicyConfig,
 )
 from .policy import VoicePolicyEngine
+from .floor import (
+    AsyncFloor,
+    FloorConfig,
+    FloorController,
+    FloorDecision,
+    FloorError,
+    FloorEvent,
+    FloorMode,
+    ParticipantKind,
+    handle_floor_command,
+    make_gated_pcm_source,
+)
 from .handoff import (
     TransferUrgency,
     WarmTransferPacket,
@@ -47,6 +59,16 @@ from .state_machine import (
 )
 
 __all__ = [
+    "AsyncFloor",
+    "FloorConfig",
+    "FloorController",
+    "FloorDecision",
+    "FloorError",
+    "FloorEvent",
+    "FloorMode",
+    "ParticipantKind",
+    "handle_floor_command",
+    "make_gated_pcm_source",
     "CallContext",
     "CallFacts",
     "ContactChannel",
